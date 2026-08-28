@@ -1,0 +1,10 @@
+.vs/
+Source/bin/
+Source/obj/
+*.user
+*.suo
+*.pdb
+
+# Stray solution file left over from the earlier TechTreeProgression project,
+# which lives in its own repo (Cruesoe/TechTreeProgression).
+TechTreeProgression.slnx

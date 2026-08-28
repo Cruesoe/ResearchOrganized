@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+
+	<ResearchOrganized.ResearchOrganizedConfig>
+		<defName>MainTechTreeConfig</defName>
+
+		<xStep>1.0</xStep>
+		<yStep>0.63</yStep>
+		<maxNodesPerColumn>10</maxNodesPerColumn>
+		
+		<ignoredTabs>
+			<li>VGE_Gravtech</li>
+		</ignoredTabs>
+
+		<tabOrder>
+			<li>Main</li>
+			<li>TabAnimal</li>
+			<li>TabNeolithic</li>
+			<li>TabMedieval</li>
+			<li>TabIndustrial</li>
+			<li>TabHighIndustrial</li>
+			<li>TabLateIndustrial</li>
+			<li>TabSpacer</li>
+			<li>TabUltra</li>
+			<li>TabArchotech</li>
+			<li>VGE_Gravtech</li>
+			<li>Anomaly</li>
+			<li>TabMisc</li>
+		</tabOrder>
+		
+		<tabThemes>
+			<li>
+				<tabName>VGE_Gravtech</tabName>
+				<techLevel>Spacer</techLevel>
+			</li>
+		</tabThemes>
+		
+	</ResearchOrganized.ResearchOrganizedConfig>
+
+</Defs>
