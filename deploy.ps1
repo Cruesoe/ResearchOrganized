@@ -43,9 +43,17 @@ if ($WhatIf) {
 
 if (-not (Test-Path $Target)) { New-Item -ItemType Directory -Path $Target -Force | Out-Null }
 
+# RimWorld keeps the mod assembly loaded, so deploying over a running game blocks on a
+# locked file. Say so up front rather than letting robocopy sit on its retry loop.
+if (Get-Process -Name RimWorldWin64 -ErrorAction SilentlyContinue) {
+    throw "RimWorld is running and holds 1.6\Assemblies\ResearchOrganized.dll - close the game and re-run."
+}
+
 foreach ($item in $Ship) {
-    robocopy (Join-Path $Repo $item) (Join-Path $Target $item) /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
-    if ($LASTEXITCODE -ge 8) { throw "robocopy failed on '$item' (exit $LASTEXITCODE)" }
+    # /R:2 /W:2 instead of robocopy's default one million retries at 30s apart, which turns
+    # any locked file into an effectively infinite hang.
+    robocopy (Join-Path $Repo $item) (Join-Path $Target $item) /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS /NP | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "robocopy failed on '$item' (exit $LASTEXITCODE) - is the game running?" }
 }
 
 # strip anything the Workshop should not carry

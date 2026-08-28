@@ -50,6 +50,9 @@ namespace ResearchOrganized.Layout
     /// </summary>
     public static class SugiyamaLayout
     {
+        /// <summary>Width of a column that contains only edge routing, as a fraction of xStep.</summary>
+        private const float DummyColumnFraction = 0.3f;
+
         public static LayoutResult Compute(LayoutGraph graph, LayoutOptions options)
         {
             if (options == null) options = new LayoutOptions();
@@ -87,7 +90,7 @@ namespace ResearchOrganized.Layout
             float xStep = options.xStep > 0f ? options.xStep : 1f;
             for (int node = 0; node < graph.NodeCount; node++)
             {
-                result.Layer[node] = (int)Math.Round(result.X[node] / xStep);
+                result.Layer[node] = (int)Math.Floor(result.X[node] / xStep + 0.5f);
             }
 
             return result;
@@ -134,10 +137,29 @@ namespace ResearchOrganized.Layout
                 Y = new float[sub.NodeCount]
             };
 
+            // A layer holding nothing but dummies draws no cards, only lines passing
+            // through, so it does not need a full column of width. Real columns still end
+            // up at least xStep apart, because the layer they sit in contributes a full step.
+            var hasRealNode = new bool[layered.LayerCount];
+            for (int l = 0; l < layered.LayerCount; l++)
+            {
+                var contents = layered.Layers[l];
+                for (int i = 0; i < contents.Count; i++)
+                {
+                    if (!layered.IsDummy(contents[i])) { hasRealNode[l] = true; break; }
+                }
+            }
+
+            var layerX = new float[layered.LayerCount];
+            for (int l = 1; l < layered.LayerCount; l++)
+            {
+                layerX[l] = layerX[l - 1] + (hasRealNode[l] ? options.xStep : options.xStep * DummyColumnFraction);
+            }
+
             float maxX = 0f, minY = float.MaxValue, maxY = float.MinValue;
             for (int local = 0; local < sub.NodeCount; local++)
             {
-                layout.X[local] = layerOf[local] * options.xStep;
+                layout.X[local] = layerX[layerOf[local]];
                 layout.Y[local] = y[local];
 
                 if (layout.X[local] > maxX) maxX = layout.X[local];
