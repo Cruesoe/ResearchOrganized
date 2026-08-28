@@ -10,22 +10,18 @@ namespace ResearchOrganized.Layout
     /// straight, without ever reordering a layer - the ordering stage already decided that,
     /// and undoing it here would reintroduce crossings.
     ///
-    /// This is the "priority method": dummy nodes pull hardest, so long edges come out
-    /// straight, then real nodes in descending degree order.
+    /// HARD RULE: a component is never taller than maxNodesPerColumn rows. The research
+    /// window does not scroll comfortably in Y, so a tab that grows downward runs off the
+    /// bottom. Overflow has to go sideways instead, which is what the column cap in
+    /// <see cref="Layering"/> arranges and what <see cref="EnforceBounds"/> guarantees here.
     /// </summary>
     public static class CoordinateAssigner
     {
         /// <summary>
-        /// Vertical space a dummy node occupies, as a fraction of a real node's row.
-        ///
-        /// A dummy stands for an edge passing through a column, so it needs about the width
-        /// of a line, not the height of a research card. Giving dummies a full row makes
-        /// every long edge inflate every column it crosses, which is what pushed real nodes
-        /// apart and left large gaps down a column.
+        /// Assigns Y positions. Real nodes stay at least yStep apart; the whole component
+        /// stays within (maxNodesPerColumn - 1) * yStep.
         /// </summary>
-        private const float DummyRowFraction = 0.22f;
-
-        public static void Assign(LayeredGraph graph, float yStep, int sweeps, out float[] y)
+        public static void Assign(LayeredGraph graph, float yStep, int maxNodesPerColumn, int sweeps, out float[] y)
         {
             var positions = new float[graph.TotalNodeCount];
             var gaps = new List<float[]>(graph.LayerCount);
@@ -33,20 +29,20 @@ namespace ResearchOrganized.Layout
             for (int l = 0; l < graph.LayerCount; l++)
             {
                 var layer = graph.Layers[l];
-                var layerGaps = new float[layer.Count];
+                var layerGaps = ComputeGaps(graph, layer, yStep);
 
                 float cursor = 0f;
                 for (int i = 0; i < layer.Count; i++)
                 {
-                    if (i > 0)
-                    {
-                        layerGaps[i] = Separation(graph, layer[i - 1], layer[i], yStep);
-                        cursor += layerGaps[i];
-                    }
+                    cursor += layerGaps[i];
                     positions[layer[i]] = cursor;
                 }
                 gaps.Add(layerGaps);
             }
+
+            // Layering caps real nodes per layer, so the required height is always
+            // achievable; a value of 0 or less means the caller wants no cap at all.
+            float cap = maxNodesPerColumn > 0 ? (maxNodesPerColumn - 1) * yStep : float.MaxValue;
 
             if (sweeps < 1) sweeps = 1;
 
@@ -56,30 +52,82 @@ namespace ResearchOrganized.Layout
 
                 if (downward)
                 {
-                    for (int l = 1; l < graph.LayerCount; l++) RefineLayer(graph, l, positions, graph.Up, gaps[l]);
+                    for (int l = 1; l < graph.LayerCount; l++) RefineLayer(graph, l, positions, graph.Up, gaps[l], cap);
                 }
                 else
                 {
-                    for (int l = graph.LayerCount - 2; l >= 0; l--) RefineLayer(graph, l, positions, graph.Down, gaps[l]);
+                    for (int l = graph.LayerCount - 2; l >= 0; l--) RefineLayer(graph, l, positions, graph.Down, gaps[l], cap);
                 }
             }
+
+            for (int l = 0; l < graph.LayerCount; l++) EnforceBounds(graph.Layers[l], positions, gaps[l], cap);
 
             Normalize(positions);
             y = positions;
         }
 
-        /// <summary>Required space between two vertically adjacent nodes in one layer.</summary>
-        private static float Separation(LayeredGraph graph, int above, int below, float yStep)
+        /// <summary>
+        /// Minimum spacing between each node and the one above it in the same layer.
+        ///
+        /// Only real nodes reserve height: consecutive cards are always a full yStep apart,
+        /// and any routed edges sitting between them share that one row rather than each
+        /// claiming their own. So a column's height depends on how many cards it holds and
+        /// not at all on how many edges pass through it.
+        ///
+        /// Splitting the row between the dummies matters - giving them zero spacing lets two
+        /// cards with an edge routed between them land on the same coordinate and overlap.
+        /// </summary>
+        private static float[] ComputeGaps(LayeredGraph graph, List<int> layer, float yStep)
         {
-            return (Footprint(graph, above, yStep) + Footprint(graph, below, yStep)) * 0.5f;
+            var gaps = new float[layer.Count];
+
+            int previousReal = -1;
+            for (int i = 0; i < layer.Count; i++)
+            {
+                if (graph.IsDummy(layer[i])) continue;
+
+                if (previousReal >= 0)
+                {
+                    int steps = i - previousReal;
+                    float share = yStep / steps;
+                    for (int k = previousReal + 1; k <= i; k++) gaps[k] = share;
+                }
+                previousReal = i;
+            }
+
+            // Dummies before the first card or after the last one cost nothing at all.
+            return gaps;
         }
 
-        private static float Footprint(LayeredGraph graph, int node, float yStep)
+        /// <summary>
+        /// Restores the two invariants after the sweeps: every pair keeps its required gap,
+        /// and nothing sits outside [0, cap]. Forward pass pushes down, backward pass pulls
+        /// back up. Since the gaps in a layer sum to at most cap, both always succeed.
+        /// </summary>
+        private static void EnforceBounds(List<int> layer, float[] y, float[] gaps, float cap)
         {
-            return graph.IsDummy(node) ? yStep * DummyRowFraction : yStep;
+            if (layer.Count == 0) return;
+
+            if (y[layer[0]] < 0f) y[layer[0]] = 0f;
+            for (int i = 1; i < layer.Count; i++)
+            {
+                float minimum = y[layer[i - 1]] + gaps[i];
+                if (y[layer[i]] < minimum) y[layer[i]] = minimum;
+            }
+
+            if (cap == float.MaxValue) return;
+
+            if (y[layer[layer.Count - 1]] > cap) y[layer[layer.Count - 1]] = cap;
+            for (int i = layer.Count - 2; i >= 0; i--)
+            {
+                float maximum = y[layer[i + 1]] - gaps[i + 1];
+                if (y[layer[i]] > maximum) y[layer[i]] = maximum;
+            }
+
+            if (y[layer[0]] < 0f) y[layer[0]] = 0f;
         }
 
-        private static void RefineLayer(LayeredGraph graph, int layerIndex, float[] y, List<int>[] neighbours, float[] gaps)
+        private static void RefineLayer(LayeredGraph graph, int layerIndex, float[] y, List<int>[] neighbours, float[] gaps, float cap)
         {
             var layer = graph.Layers[layerIndex];
             if (layer.Count == 0) return;
@@ -110,7 +158,12 @@ namespace ResearchOrganized.Layout
 
                 float sum = 0f;
                 for (int i = 0; i < linked.Count; i++) sum += y[linked[i]];
-                MoveTo(layer, y, settled, index, sum / linked.Count, gaps);
+
+                float desired = sum / linked.Count;
+                if (desired < 0f) desired = 0f;
+                if (desired > cap) desired = cap;
+
+                MoveTo(layer, y, settled, index, desired, gaps);
                 settled[index] = true;
             }
         }

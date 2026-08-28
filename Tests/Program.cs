@@ -29,11 +29,12 @@ namespace ResearchOrganized.Tests
             Run("dependents stay near their parents", DependentsStayNearParents);
             Run("loose nodes pack tightly", LooseNodesPackTightly);
             Run("routed edges do not inflate columns", RoutedEdgesDoNotInflateColumns);
+            Run("height never exceeds the column cap", HeightNeverExceedsColumnCap);
             Run("scale benchmark", ScaleBenchmark);
 
             Console.WriteLine();
             Console.WriteLine(failures == 0
-                ? string.Format("PASS - {0} checks across 14 tests", checks)
+                ? string.Format("PASS - {0} checks across 15 tests", checks)
                 : string.Format("FAIL - {0} failed check(s) of {1}", failures, checks));
             return failures == 0 ? 0 : 1;
         }
@@ -315,6 +316,64 @@ namespace ResearchOrganized.Tests
             // 14 nodes at 4 per column needs about 4 rows. Allow generous slack for
             // straightening, but not the runaway growth a full-height dummy causes.
             IsTrue(rows <= 8f, string.Format("layout is {0:0.#} rows tall for a 4-row-deep graph", rows));
+        }
+
+        /// <summary>
+        /// The research window does not scroll comfortably in Y, so a tab must never grow
+        /// taller than maxNodesPerColumn rows - overflow goes sideways instead. The original
+        /// engine guaranteed this by only ever placing nodes at row indices below the cap;
+        /// the rewrite lost it and tabs ran off the bottom of the window.
+        /// </summary>
+        private static void HeightNeverExceedsColumnCap()
+        {
+            var cases = new[]
+            {
+                // one hub fanning very wide - the classic overflow case
+                MakeFan(60),
+                // a tab that is mostly loose nodes
+                new LayoutGraph(120),
+                // long chains that generate routed edges through many columns
+                MakeLadder(40),
+                // a dense random graph
+                RandomDag(200, 500, seed: 31337)
+            };
+
+            var options = new LayoutOptions { maxNodesPerColumn = 10 };
+            float cap = options.maxNodesPerColumn * options.yStep;
+
+            for (int c = 0; c < cases.Length; c++)
+            {
+                var result = SugiyamaLayout.Compute(cases[c], options);
+
+                float minY = float.MaxValue, maxY = float.MinValue;
+                for (int i = 0; i < cases[c].NodeCount; i++)
+                {
+                    if (result.Y[i] < minY) minY = result.Y[i];
+                    if (result.Y[i] > maxY) maxY = result.Y[i];
+                }
+
+                float rows = (maxY - minY) / options.yStep;
+                Console.WriteLine(string.Format("         case {0}: {1} nodes -> {2:0.#} rows tall (cap {3})",
+                    c, cases[c].NodeCount, rows, options.maxNodesPerColumn));
+
+                IsTrue(maxY - minY <= cap + 0.001f,
+                    string.Format("case {0} is {1:0.#} rows tall, cap is {2}", c, rows, options.maxNodesPerColumn));
+            }
+        }
+
+        private static LayoutGraph MakeFan(int children)
+        {
+            var graph = new LayoutGraph(children + 1);
+            for (int i = 1; i <= children; i++) graph.AddEdge(0, i);
+            return graph;
+        }
+
+        private static LayoutGraph MakeLadder(int rungs)
+        {
+            var graph = new LayoutGraph(rungs * 2);
+            for (int i = 0; i + 1 < rungs; i++) graph.AddEdge(i, i + 1);
+            for (int i = 0; i < rungs; i++) graph.AddEdge(i, rungs + i);
+            return graph;
         }
 
         // ---- helpers --------------------------------------------------------------
