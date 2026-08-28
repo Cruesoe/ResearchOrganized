@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{7B2C1E44-9A55-4E13-B0D7-6C21A3F5E118}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ResearchOrganized.Tests</RootNamespace>
+    <AssemblyName>ResearchOrganized.Tests</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+  </ItemGroup>
+  <ItemGroup>
+    <!--
+      The layout core is linked in rather than referenced, because the mod assembly itself
+      references RimWorld and Unity and could not load in a plain console host. Everything
+      under Source\Layout is deliberately free of those dependencies so it can be tested here.
+    -->
+    <Compile Include="..\Source\Layout\LayoutGraph.cs">
+      <Link>Layout\LayoutGraph.cs</Link>
+    </Compile>
+    <Compile Include="..\Source\Layout\CycleBreaker.cs">
+      <Link>Layout\CycleBreaker.cs</Link>
+    </Compile>
+    <Compile Include="..\Source\Layout\Layering.cs">
+      <Link>Layout\Layering.cs</Link>
+    </Compile>
+    <Compile Include="..\Source\Layout\LayeredGraph.cs">
+      <Link>Layout\LayeredGraph.cs</Link>
+    </Compile>
+    <Compile Include="..\Source\Layout\Ordering.cs">
+      <Link>Layout\Ordering.cs</Link>
+    </Compile>
+    <Compile Include="..\Source\Layout\CoordinateAssigner.cs">
+      <Link>Layout\CoordinateAssigner.cs</Link>
+    </Compile>
+    <Compile Include="..\Source\Layout\SugiyamaLayout.cs">
+      <Link>Layout\SugiyamaLayout.cs</Link>
+    </Compile>
+    <Compile Include="Program.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

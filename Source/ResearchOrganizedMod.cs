@@ -7,8 +7,6 @@ namespace ResearchOrganized
     public class ResearchOrganizedSettings : ModSettings
     {
         public bool combineIndustrial = false;
-        public int minorAnchorChildThreshold = 3;
-        public int majorAnchorChildThreshold = 7;
         public bool disableCustomColors = false;
 
         public Color colorUndefined = new Color(0.60f, 0.60f, 0.60f);
@@ -25,8 +23,6 @@ namespace ResearchOrganized
         {
             base.ExposeData();
             Scribe_Values.Look(ref combineIndustrial, "combineIndustrial", false);
-            Scribe_Values.Look(ref minorAnchorChildThreshold, "minorAnchorChildThreshold", 3);
-            Scribe_Values.Look(ref majorAnchorChildThreshold, "majorAnchorChildThreshold", 7);
             Scribe_Values.Look(ref disableCustomColors, "disableCustomColors", false);
             Scribe_Values.Look(ref colorUndefined, "colorUndefined", new Color(0.60f, 0.60f, 0.60f));
             Scribe_Values.Look(ref colorAnimal, "colorAnimal", new Color(0.45f, 0.33f, 0.24f));
@@ -42,8 +38,6 @@ namespace ResearchOrganized
         public void CopyFrom(ResearchOrganizedSettings defaults)
         {
             combineIndustrial = defaults.combineIndustrial;
-            minorAnchorChildThreshold = defaults.minorAnchorChildThreshold;
-            majorAnchorChildThreshold = defaults.majorAnchorChildThreshold;
             disableCustomColors = defaults.disableCustomColors;
             colorUndefined = defaults.colorUndefined;
             colorAnimal = defaults.colorAnimal;
@@ -61,8 +55,6 @@ namespace ResearchOrganized
     {
         public static ResearchOrganizedSettings settings;
 
-        private string minorThresholdBuffer;
-        private string majorThresholdBuffer;
 
         private static readonly Color[] Palette = new Color[]
         {
@@ -72,14 +64,37 @@ namespace ResearchOrganized
             new Color(0.30f, 0.00f, 0.30f), new Color(0.60f, 0.30f, 0.60f), new Color(0.30f, 0.30f, 0.30f), new Color(0.60f, 0.60f, 0.60f)
         };
 
+        /// <summary>Last value the layout was actually built with, so we know when to redo it.</summary>
+        private bool appliedCombineIndustrial;
+
         public ResearchOrganizedMod(ModContentPack content) : base(content)
         {
             settings = GetSettings<ResearchOrganizedSettings>();
-            minorThresholdBuffer = settings.minorAnchorChildThreshold.ToString();
-            majorThresholdBuffer = settings.majorAnchorChildThreshold.ToString();
+            appliedCombineIndustrial = settings.combineIndustrial;
         }
 
         public override string SettingsCategory() => "Research: Organized";
+
+        /// <summary>
+        /// Reapplies the layout when a setting that changes structure has been touched.
+        ///
+        /// Previously the organiser only ever ran from the static constructor, so
+        /// "Combine Industrial" appeared in this window, saved correctly, and then did
+        /// nothing at all until the game was restarted.
+        /// </summary>
+        public override void WriteSettings()
+        {
+            bool structureChanged = settings.combineIndustrial != appliedCombineIndustrial;
+
+            base.WriteSettings();
+            ResearchOrganizedMain.RefreshColors();
+
+            if (structureChanged)
+            {
+                appliedCombineIndustrial = settings.combineIndustrial;
+                ResearchOrganizedMain.OrganizeTabsAndLayout();
+            }
+        }
 
         public override void DoSettingsWindowContents(Rect inRect)
         {
@@ -90,20 +105,6 @@ namespace ResearchOrganized
                 "Merges High and Late Industrial technologies back into the main Industrial tab.");
 
             listing.Gap();
-
-            Rect minorRect = listing.GetRect(24f);
-            Widgets.Label(new Rect(minorRect.x, minorRect.y, minorRect.width - 60f, minorRect.height), "Minimum Children for Minor Anchor:");
-            Widgets.TextFieldNumeric(new Rect(minorRect.xMax - 50f, minorRect.y, 50f, minorRect.height), ref settings.minorAnchorChildThreshold, ref minorThresholdBuffer, 1f, 99f);
-
-            Rect majorRect = listing.GetRect(24f);
-            Widgets.Label(new Rect(majorRect.x, majorRect.y, majorRect.width - 60f, majorRect.height), "Minimum Children for Major Anchor (Forces New Column):");
-            Widgets.TextFieldNumeric(new Rect(majorRect.xMax - 50f, majorRect.y, 50f, majorRect.height), ref settings.majorAnchorChildThreshold, ref majorThresholdBuffer, 2f, 99f);
-
-            Text.Font = GameFont.Tiny;
-            GUI.color = new Color(0.7f, 0.7f, 0.7f);
-            listing.Label("  Note: All structural changes above require a game restart to take effect.");
-            GUI.color = Color.white;
-            Text.Font = GameFont.Small;
 
             listing.GapLine();
 
@@ -135,8 +136,6 @@ namespace ResearchOrganized
             if (listing.ButtonText("Reset to Defaults"))
             {
                 settings.CopyFrom(new ResearchOrganizedSettings());
-                minorThresholdBuffer = settings.minorAnchorChildThreshold.ToString();
-                majorThresholdBuffer = settings.majorAnchorChildThreshold.ToString();
             }
 
             listing.End();
