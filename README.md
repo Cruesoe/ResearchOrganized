@@ -5,7 +5,8 @@ RimWorld 1.6 mod. Sorts research projects into **tech-level tabs** and lays each
 - Projects are mapped to Primitive, Neolithic, Medieval, Industrial, High/Late Industrial, Spacer, Ultra, Archotech, Anomaly, or Miscellaneous tabs.
 - Each tab gets a generated, non-overlapping layout instead of the vanilla scatter, with columns capped by `maxNodesPerColumn`.
 - Nodes are tinted by tech level, with finished/available/unavailable brightness levels. Colours are configurable, or can be turned off entirely.
-- Connection lines that would cross between tabs are suppressed, and empty tabs are hidden.
+- Empty tabs are removed from the def database and the rest are re-sorted into a configured order.
+- Projects caught in a circular dependency are drawn with a red border and named in the log, so a broken modlist diagnoses itself.
 - `virtualLinks` add prerequisite relationships for layout purposes only; `visibleLinks` also draw the connector.
 
 Requires [Harmony](https://steamcommunity.com/sharedfiles/filedetails/?id=2009463077).
