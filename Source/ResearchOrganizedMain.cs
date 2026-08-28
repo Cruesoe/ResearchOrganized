@@ -121,6 +121,18 @@ namespace ResearchOrganized
                     var projects = DefDatabase<ResearchProjectDef>.AllDefs.Where(p => p.tab == tab).ToList();
                     if (projects.Count > 0) ResearchOrganizedLayout.ApplyLayout(projects, tab.defName);
                 }
+
+                // REQUIRED, and not for the reason its name suggests. The research window
+                // renders from ResearchProjectDef.ResearchViewX/Y, which are properties over
+                // private fields x/y - and this method is the only thing that copies
+                // researchViewX/researchViewY into them. Without this call every coordinate
+                // written above is ignored and the tree draws at its authored XML positions.
+                //
+                // Its actual de-overlap pass is a no-op for us: it only nudges projects on
+                // the same tab that are within 0.5 in x AND 0.25 in y, while this layout
+                // keeps real columns at least xStep (1.0) apart and rows at least yStep
+                // (0.63) apart.
+                ResearchProjectDef.GenerateNonOverlappingCoordinates();
             }
             catch (Exception ex) { Log.Error($"[Research: Organized] Master Organizer Error: {ex}"); }
         }

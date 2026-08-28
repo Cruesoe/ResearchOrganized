@@ -15,13 +15,37 @@ namespace ResearchOrganized.Layout
     /// </summary>
     public static class CoordinateAssigner
     {
+        /// <summary>
+        /// Vertical space a dummy node occupies, as a fraction of a real node's row.
+        ///
+        /// A dummy stands for an edge passing through a column, so it needs about the width
+        /// of a line, not the height of a research card. Giving dummies a full row makes
+        /// every long edge inflate every column it crosses, which is what pushed real nodes
+        /// apart and left large gaps down a column.
+        /// </summary>
+        private const float DummyRowFraction = 0.22f;
+
         public static void Assign(LayeredGraph graph, float yStep, int sweeps, out float[] y)
         {
             var positions = new float[graph.TotalNodeCount];
+            var gaps = new List<float[]>(graph.LayerCount);
+
             for (int l = 0; l < graph.LayerCount; l++)
             {
                 var layer = graph.Layers[l];
-                for (int i = 0; i < layer.Count; i++) positions[layer[i]] = i * yStep;
+                var layerGaps = new float[layer.Count];
+
+                float cursor = 0f;
+                for (int i = 0; i < layer.Count; i++)
+                {
+                    if (i > 0)
+                    {
+                        layerGaps[i] = Separation(graph, layer[i - 1], layer[i], yStep);
+                        cursor += layerGaps[i];
+                    }
+                    positions[layer[i]] = cursor;
+                }
+                gaps.Add(layerGaps);
             }
 
             if (sweeps < 1) sweeps = 1;
@@ -32,11 +56,11 @@ namespace ResearchOrganized.Layout
 
                 if (downward)
                 {
-                    for (int l = 1; l < graph.LayerCount; l++) RefineLayer(graph, l, positions, graph.Up, yStep);
+                    for (int l = 1; l < graph.LayerCount; l++) RefineLayer(graph, l, positions, graph.Up, gaps[l]);
                 }
                 else
                 {
-                    for (int l = graph.LayerCount - 2; l >= 0; l--) RefineLayer(graph, l, positions, graph.Down, yStep);
+                    for (int l = graph.LayerCount - 2; l >= 0; l--) RefineLayer(graph, l, positions, graph.Down, gaps[l]);
                 }
             }
 
@@ -44,7 +68,18 @@ namespace ResearchOrganized.Layout
             y = positions;
         }
 
-        private static void RefineLayer(LayeredGraph graph, int layerIndex, float[] y, List<int>[] neighbours, float yStep)
+        /// <summary>Required space between two vertically adjacent nodes in one layer.</summary>
+        private static float Separation(LayeredGraph graph, int above, int below, float yStep)
+        {
+            return (Footprint(graph, above, yStep) + Footprint(graph, below, yStep)) * 0.5f;
+        }
+
+        private static float Footprint(LayeredGraph graph, int node, float yStep)
+        {
+            return graph.IsDummy(node) ? yStep * DummyRowFraction : yStep;
+        }
+
+        private static void RefineLayer(LayeredGraph graph, int layerIndex, float[] y, List<int>[] neighbours, float[] gaps)
         {
             var layer = graph.Layers[layerIndex];
             if (layer.Count == 0) return;
@@ -75,7 +110,7 @@ namespace ResearchOrganized.Layout
 
                 float sum = 0f;
                 for (int i = 0; i < linked.Count; i++) sum += y[linked[i]];
-                MoveTo(layer, y, settled, index, sum / linked.Count, yStep);
+                MoveTo(layer, y, settled, index, sum / linked.Count, gaps);
                 settled[index] = true;
             }
         }
@@ -92,7 +127,7 @@ namespace ResearchOrganized.Layout
         /// settled node and dragging unsettled neighbours along to preserve the minimum gap.
         /// Order within the layer is never changed.
         /// </summary>
-        private static void MoveTo(List<int> layer, float[] y, bool[] settled, int index, float desired, float gap)
+        private static void MoveTo(List<int> layer, float[] y, bool[] settled, int index, float desired, float[] gaps)
         {
             int node = layer[index];
             float current = y[node];
@@ -104,7 +139,9 @@ namespace ResearchOrganized.Layout
                 {
                     if (settled[j])
                     {
-                        limit = y[layer[j]] - gap * (j - index);
+                        float required = 0f;
+                        for (int k = index + 1; k <= j; k++) required += gaps[k];
+                        limit = y[layer[j]] - required;
                         break;
                     }
                 }
@@ -115,7 +152,7 @@ namespace ResearchOrganized.Layout
                 y[node] = target;
                 for (int j = index + 1; j < layer.Count && !settled[j]; j++)
                 {
-                    float minimum = y[layer[j - 1]] + gap;
+                    float minimum = y[layer[j - 1]] + gaps[j];
                     if (y[layer[j]] < minimum) y[layer[j]] = minimum;
                     else break;
                 }
@@ -127,7 +164,9 @@ namespace ResearchOrganized.Layout
                 {
                     if (settled[j])
                     {
-                        limit = y[layer[j]] + gap * (index - j);
+                        float required = 0f;
+                        for (int k = j + 1; k <= index; k++) required += gaps[k];
+                        limit = y[layer[j]] + required;
                         break;
                     }
                 }
@@ -138,7 +177,7 @@ namespace ResearchOrganized.Layout
                 y[node] = target;
                 for (int j = index - 1; j >= 0 && !settled[j]; j--)
                 {
-                    float maximum = y[layer[j + 1]] - gap;
+                    float maximum = y[layer[j + 1]] - gaps[j + 1];
                     if (y[layer[j]] > maximum) y[layer[j]] = maximum;
                     else break;
                 }

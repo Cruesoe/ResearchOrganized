@@ -28,11 +28,12 @@ namespace ResearchOrganized.Tests
             Run("disconnected components all get placed", DisconnectedComponents);
             Run("dependents stay near their parents", DependentsStayNearParents);
             Run("loose nodes pack tightly", LooseNodesPackTightly);
+            Run("routed edges do not inflate columns", RoutedEdgesDoNotInflateColumns);
             Run("scale benchmark", ScaleBenchmark);
 
             Console.WriteLine();
             Console.WriteLine(failures == 0
-                ? string.Format("PASS - {0} checks across 13 tests", checks)
+                ? string.Format("PASS - {0} checks across 14 tests", checks)
                 : string.Format("FAIL - {0} failed check(s) of {1}", failures, checks));
             return failures == 0 ? 0 : 1;
         }
@@ -278,6 +279,42 @@ namespace ResearchOrganized.Tests
 
             Console.WriteLine(string.Format("         80 loose nodes packed into {0} columns (ideal 8)", columns));
             IsTrue(columns <= 8, string.Format("used {0} columns for 80 nodes at 10 per column", columns));
+        }
+
+        /// <summary>
+        /// A long edge crossing a column becomes a dummy node in that column. A dummy is a
+        /// line passing through, not a research card, so it must not push the real nodes in
+        /// that column a whole row apart. This is what left large vertical gaps between
+        /// cards that sat in the same column.
+        /// </summary>
+        private static void RoutedEdgesDoNotInflateColumns()
+        {
+            // A hub fanning to 8 nodes placed far to the right, so every intermediate
+            // column carries 8 routed edges, plus 4 real cards sharing one of those columns.
+            var graph = new LayoutGraph(14);
+            for (int i = 1; i <= 8; i++) graph.AddEdge(0, i);
+            for (int i = 1; i <= 8; i++) graph.AddEdge(i, 9);
+            graph.AddEdge(9, 10);
+            graph.AddEdge(10, 11);
+            graph.AddEdge(11, 12);
+            graph.AddEdge(12, 13);
+
+            var options = new LayoutOptions { maxNodesPerColumn = 4 };
+            var result = SugiyamaLayout.Compute(graph, options);
+
+            float minY = float.MaxValue, maxY = float.MinValue;
+            for (int i = 0; i < graph.NodeCount; i++)
+            {
+                if (result.Y[i] < minY) minY = result.Y[i];
+                if (result.Y[i] > maxY) maxY = result.Y[i];
+            }
+
+            float rows = (maxY - minY) / options.yStep;
+            Console.WriteLine(string.Format("         14 nodes, cap 4: vertical extent {0:0.#} rows", rows));
+
+            // 14 nodes at 4 per column needs about 4 rows. Allow generous slack for
+            // straightening, but not the runaway growth a full-height dummy causes.
+            IsTrue(rows <= 8f, string.Format("layout is {0:0.#} rows tall for a 4-row-deep graph", rows));
         }
 
         // ---- helpers --------------------------------------------------------------
