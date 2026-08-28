@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Patch>
+
+	<Operation Class="PatchOperationFindMod">
+		<mods>
+			<li>vanillaexpanded.gravship</li>
+		</mods>
+		<match Class="PatchOperationConditional">
+			<xpath>Defs/ResearchProjectDef[defName="OrbitalTech"]/techLevel</xpath>
+			<match Class="PatchOperationReplace">
+				<xpath>Defs/ResearchProjectDef[defName="OrbitalTech"]/techLevel</xpath>
+				<value>
+					<techLevel>Spacer</techLevel>
+				</value>
+			</match>
+		</match>
+	</Operation>
+
+</Patch>

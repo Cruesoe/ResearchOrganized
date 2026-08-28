@@ -7,7 +7,7 @@
 		<xStep>1.0</xStep>
 		<yStep>0.63</yStep>
 		<maxNodesPerColumn>10</maxNodesPerColumn>
-		
+
 		<ignoredTabs>
 			<li>VGE_Gravtech</li>
 		</ignoredTabs>
@@ -27,14 +27,67 @@
 			<li>Anomaly</li>
 			<li>TabMisc</li>
 		</tabOrder>
-		
+
 		<tabThemes>
 			<li>
 				<tabName>VGE_Gravtech</tabName>
 				<techLevel>Spacer</techLevel>
 			</li>
 		</tabThemes>
-		
+
+		<!--
+			Virtual links steer layout only. They are never added to a project's real
+			prerequisites, so they change where a node is drawn and nothing else.
+			Migrated here from the old per-tech-level config files.
+		-->
+		<virtualLinks>
+			<li MayRequire="OskarPotocki.VFE.Classical">
+				<parent>Smithing</parent>
+				<children>
+					<li>VFEC_Togas</li>
+					<li>VFEC_TemperatureControl</li>
+					<li>VFEC_MeatDrying</li>
+					<li>VFEC_Mosaics</li>
+					<li>VFEC_Thermaebath</li>
+					<li>VFEC_DramaAndComedy</li>
+					<li>VFEC_BronzeWorking</li>
+					<li>VFEC_CraftingBench</li>
+					<li>VFEC_CementMaking</li>
+					<li>VFEC_WoodfiredCrematorium</li>
+					<li>VFEC_TyrianProduction</li>
+					<li>VFEC_RoadBuilding</li>
+					<li>VFEC_HeavyShieldMaking</li>
+					<li>VFEC_LegionaryArmaments</li>
+					<li>VFEC_LegionnaireArmor</li>
+					<li>VFEC_CenturionArmor</li>
+					<li>VFEC_Scorpion</li>
+					<li>VFEC_Beacons</li>
+				</children>
+			</li>
+			<li MayRequire="OskarPotocki.VFE.Medieval2">
+				<parent>DankPyon_RusticFurniture</parent>
+				<children>
+					<li>VFEM2_MedievalArchitecture</li>
+				</children>
+			</li>
+		</virtualLinks>
+
+	</ResearchOrganized.ResearchOrganizedConfig>
+
+	<!--
+		Per-tab spacing override. A config with targetTabs applies its steps only to those
+		tabs; the def above, having none, sets the global defaults.
+	-->
+	<ResearchOrganized.ResearchOrganizedConfig>
+		<defName>AnimalTabLayout</defName>
+
+		<targetTabs>
+			<li>TabAnimal</li>
+		</targetTabs>
+
+		<xStep>1.2</xStep>
+		<yStep>1.0</yStep>
+
 	</ResearchOrganized.ResearchOrganizedConfig>
 
 </Defs>
