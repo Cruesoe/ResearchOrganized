@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<ModMetaData>
+	<name>Research: Organized</name>
+	<author>Cruesoe</author>
+	<packageId>cruesoe.research.organized</packageId>
+	<description>This mod sorts research into their appropriate tech level tabs.</description>
+	<supportedVersions>
+		<li>1.6</li>
+	</supportedVersions>
+	<modDependencies>
+		<li>
+			<packageId>brrainz.harmony</packageId>
+			<displayName>Harmony</displayName>
+			<steamWorkshopUrl>steam://url/CommunityFilePage/2009463077</steamWorkshopUrl>
+			<downloadUrl>https://github.com/pardeike/HarmonyRimWorld/releases/latest</downloadUrl>
+		</li>
+	</modDependencies>
+	<incompatibleWith>
+		<li>GonDragon.TechTree</li>
+		<li>Aelanna.ResearchTabColors</li>
+		<li>zenlor.OrganizedResearchTech</li>
+		<li>Mlie.OrganizedResearchTab</li>
+		<li>Leo.CleanResearchSort</li>
+		<li>GonDragon.TTPF</li>
+		<li>cruesoe.eotrtechtree</li>
+	</incompatibleWith>
+	<loadBefore>
+		<li>ferny.noderesearch</li>
+	</loadBefore>
+	<loadAfter>
+		<li>OskarPotocki.VFE.Tribals</li>
+		<li>OskarPotocki.VFE.Medieval2</li>
+		<li>vanillaexpanded.gravship</li>
+		<li>ferny.progressionattire</li>
+		<li>ferny.progressioncore</li>
+		<li>ferny.progressionstorage</li>
+		<li>ferny.progressionproduction</li>
+		<li>ferny.ProgressionGravship</li>
+	</loadAfter>		
+</ModMetaData>

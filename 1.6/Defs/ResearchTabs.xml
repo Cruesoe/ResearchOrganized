@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+
+	<ResearchTabDef>
+		<defName>TabAnimal</defName>
+			<label>Primitive</label>
+	</ResearchTabDef>
+
+	<ResearchTabDef>
+		<defName>TabNeolithic</defName>
+			<label>Neolithic</label>
+	</ResearchTabDef>
+	
+	<ResearchTabDef>
+		<defName>TabMedieval</defName>
+			<label>Medieval</label>
+	</ResearchTabDef>
+
+	<ResearchTabDef>
+		<defName>TabIndustrial</defName>
+			<label>Industrial</label>
+	</ResearchTabDef>
+  
+	<ResearchTabDef>
+		<defName>TabHighIndustrial</defName>
+			<label>high industrial</label>
+	</ResearchTabDef>
+  
+	<ResearchTabDef>
+		<defName>TabLateIndustrial</defName>
+			<label>late industrial</label>
+	</ResearchTabDef>
+
+	<ResearchTabDef>
+		<defName>TabSpacer</defName>
+			<label>Spacer</label>
+	</ResearchTabDef>
+
+	<ResearchTabDef>
+		<defName>TabUltra</defName>
+			<label>Ultra</label>
+	</ResearchTabDef>
+
+	<ResearchTabDef>
+		<defName>TabArchotech</defName>
+			<label>Archotech</label>
+	</ResearchTabDef>
+
+	<ResearchTabDef>
+		<defName>TabMisc</defName>
+			<label>Miscellaneous</label>
+	</ResearchTabDef>
+
+</Defs>
