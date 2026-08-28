@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Patch>
+
+  <Operation Class="PatchOperationAdd">
+    <xpath>Defs/ThingDef[defName="Schematic"]/comps/li[@Class="CompProperties_Book"]/doers/li[@Class="BookOutcomeProperties_GainResearch"]/tabs</xpath>
+    <value>
+      <TabNeolithic />
+      <TabMedieval />
+      <TabIndustrial />
+      <TabSpacer />
+      <TabUltra />
+      <TabArchotech />
+    </value>
+  </Operation>
+
+</Patch>
