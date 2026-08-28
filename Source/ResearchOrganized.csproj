@@ -57,7 +57,13 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Class1.cs" />
+    <Compile Include="Layout\LayoutGraph.cs" />
+    <Compile Include="Layout\CycleBreaker.cs" />
+    <Compile Include="Layout\Layering.cs" />
+    <Compile Include="Layout\LayeredGraph.cs" />
+    <Compile Include="Layout\Ordering.cs" />
+    <Compile Include="Layout\CoordinateAssigner.cs" />
+    <Compile Include="Layout\SugiyamaLayout.cs" />
     <Compile Include="ResearchOrganizedMain.cs" />
     <Compile Include="ResearchOrganizedMod.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

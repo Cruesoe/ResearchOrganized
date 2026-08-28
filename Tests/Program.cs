@@ -1,0 +1,298 @@
+using System;
+using System.Collections.Generic;
+using ResearchOrganized.Layout;
+
+namespace ResearchOrganized.Tests
+{
+    /// <summary>
+    /// Assertions over the layout core. No test framework on purpose: a plain console exe
+    /// needs no package restore, so this runs anywhere the mod itself builds.
+    /// Exit code 0 means everything passed.
+    /// </summary>
+    internal static class Program
+    {
+        private static int failures;
+        private static int checks;
+
+        private static int Main()
+        {
+            Run("empty graph is handled", EmptyGraph);
+            Run("chain lands in consecutive columns", ChainLayering);
+            Run("every child is right of its parents", ChildAlwaysRightOfParent);
+            Run("column width cap is respected", ColumnWidthCap);
+            Run("cycles are broken and reported", CyclesAreBroken);
+            Run("a planar graph ends with zero crossings", PlanarGraphHasNoCrossings);
+            Run("crossings are reduced on a tangled graph", CrossingsAreReduced);
+            Run("nodes in a column keep minimum separation", MinimumSeparation);
+            Run("layout is deterministic", Deterministic);
+            Run("disconnected components all get placed", DisconnectedComponents);
+            Run("scale benchmark", ScaleBenchmark);
+
+            Console.WriteLine();
+            Console.WriteLine(failures == 0
+                ? string.Format("PASS - {0} checks across 11 tests", checks)
+                : string.Format("FAIL - {0} failed check(s) of {1}", failures, checks));
+            return failures == 0 ? 0 : 1;
+        }
+
+        // ---- tests ----------------------------------------------------------------
+
+        private static void EmptyGraph()
+        {
+            var result = SugiyamaLayout.Compute(new LayoutGraph(0), new LayoutOptions());
+            IsTrue(result.X.Length == 0, "no coordinates produced");
+        }
+
+        private static void ChainLayering()
+        {
+            var graph = new LayoutGraph(3);
+            graph.AddEdge(0, 1);
+            graph.AddEdge(1, 2);
+
+            var result = SugiyamaLayout.Compute(graph, new LayoutOptions());
+            AreEqual(0, result.Layer[0], "first node column");
+            AreEqual(1, result.Layer[1], "second node column");
+            AreEqual(2, result.Layer[2], "third node column");
+            IsTrue(result.X[0] < result.X[1] && result.X[1] < result.X[2], "x increases along the chain");
+        }
+
+        private static void ChildAlwaysRightOfParent()
+        {
+            var graph = RandomDag(60, 120, seed: 12345);
+            var result = SugiyamaLayout.Compute(graph, new LayoutOptions());
+
+            foreach (var edge in graph.AllEdges())
+            {
+                if (result.Layer[edge.Child] <= result.Layer[edge.Parent])
+                {
+                    IsTrue(false, "edge " + edge + " does not advance a column");
+                    return;
+                }
+            }
+            IsTrue(true, "all 120 edges advance at least one column");
+        }
+
+        private static void ColumnWidthCap()
+        {
+            // One root with 20 independent children; cap of 4 must split them across columns.
+            var graph = new LayoutGraph(21);
+            for (int i = 1; i <= 20; i++) graph.AddEdge(0, i);
+
+            var options = new LayoutOptions { maxNodesPerColumn = 4 };
+            var result = SugiyamaLayout.Compute(graph, options);
+
+            var counts = new Dictionary<int, int>();
+            for (int node = 0; node < graph.NodeCount; node++)
+            {
+                int layer = result.Layer[node];
+                counts[layer] = counts.ContainsKey(layer) ? counts[layer] + 1 : 1;
+            }
+
+            foreach (var pair in counts)
+            {
+                if (pair.Value > 4)
+                {
+                    IsTrue(false, string.Format("column {0} holds {1} nodes, cap was 4", pair.Key, pair.Value));
+                    return;
+                }
+            }
+            IsTrue(true, "no column exceeded the cap");
+        }
+
+        private static void CyclesAreBroken()
+        {
+            var graph = new LayoutGraph(3);
+            graph.AddEdge(0, 1);
+            graph.AddEdge(1, 2);
+            graph.AddEdge(2, 0);
+
+            var result = SugiyamaLayout.Compute(graph, new LayoutOptions());
+            IsTrue(result.ReversedEdges.Count >= 1, "at least one edge was reversed");
+            IsTrue(result.NodesInCycles.Count >= 2, "nodes on the cycle were reported");
+
+            // After breaking, the retained edges must still form a left-to-right order.
+            int advancing = 0;
+            foreach (var edge in graph.AllEdges())
+            {
+                if (result.Layer[edge.Child] > result.Layer[edge.Parent]) advancing++;
+            }
+            AreEqual(2, advancing, "two of the three cycle edges still advance");
+        }
+
+        private static void PlanarGraphHasNoCrossings()
+        {
+            // Three parents wired to three children in reverse order. Crossings only
+            // vanish if the ordering stage flips one of the layers.
+            var graph = new LayoutGraph(6);
+            graph.AddEdge(0, 5);
+            graph.AddEdge(1, 4);
+            graph.AddEdge(2, 3);
+
+            var result = SugiyamaLayout.Compute(graph, new LayoutOptions());
+            AreEqual(0, result.Crossings, "crossings eliminated");
+        }
+
+        private static void CrossingsAreReduced()
+        {
+            var graph = RandomDag(40, 90, seed: 999);
+            var options = new LayoutOptions();
+
+            int optimized = SugiyamaLayout.Compute(graph, options).Crossings;
+            int unoptimized = CrossingsWithoutOrdering(graph, options);
+
+            IsTrue(optimized <= unoptimized,
+                string.Format("ordering did not make things worse ({0} vs {1} unoptimised)", optimized, unoptimized));
+            IsTrue(optimized < unoptimized,
+                string.Format("ordering reduced crossings: {0} -> {1}", unoptimized, optimized));
+
+            Console.WriteLine(string.Format("         40 nodes / 90 edges: {0} -> {1} crossings ({2:0.#}% fewer)",
+                unoptimized, optimized, 100.0 * (unoptimized - optimized) / unoptimized));
+        }
+
+        /// <summary>
+        /// Not an assertion so much as a guard rail: this runs during game startup, so if a
+        /// tree the size of a heavy modlist ever takes seconds rather than milliseconds we
+        /// want to see it here rather than in a load-time freeze.
+        /// </summary>
+        private static void ScaleBenchmark()
+        {
+            var graph = RandomDag(400, 900, seed: 20260828);
+            var options = new LayoutOptions();
+
+            int before = CrossingsWithoutOrdering(graph, options);
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var result = SugiyamaLayout.Compute(graph, options);
+            watch.Stop();
+
+            Console.WriteLine(string.Format("         400 nodes / 900 edges: {0} -> {1} crossings in {2} ms",
+                before, result.Crossings, watch.ElapsedMilliseconds));
+
+            IsTrue(result.Crossings <= before, "large graph did not regress");
+            IsTrue(watch.ElapsedMilliseconds < 10000, "large graph laid out in under 10 seconds");
+        }
+
+        private static void MinimumSeparation()
+        {
+            var graph = RandomDag(50, 100, seed: 4242);
+            var options = new LayoutOptions();
+            var result = SugiyamaLayout.Compute(graph, options);
+
+            var byLayer = new Dictionary<int, List<float>>();
+            for (int node = 0; node < graph.NodeCount; node++)
+            {
+                int layer = result.Layer[node];
+                if (!byLayer.ContainsKey(layer)) byLayer[layer] = new List<float>();
+                byLayer[layer].Add(result.Y[node]);
+            }
+
+            foreach (var pair in byLayer)
+            {
+                var values = pair.Value;
+                values.Sort();
+                for (int i = 1; i < values.Count; i++)
+                {
+                    float gap = values[i] - values[i - 1];
+                    if (gap < options.yStep - 0.001f)
+                    {
+                        IsTrue(false, string.Format("column {0} has a {1:0.###} gap, expected >= {2}", pair.Key, gap, options.yStep));
+                        return;
+                    }
+                }
+            }
+            IsTrue(true, "all columns kept their minimum spacing");
+        }
+
+        private static void Deterministic()
+        {
+            var graph = RandomDag(45, 95, seed: 777);
+            var first = SugiyamaLayout.Compute(graph, new LayoutOptions());
+            var second = SugiyamaLayout.Compute(graph, new LayoutOptions());
+
+            for (int node = 0; node < graph.NodeCount; node++)
+            {
+                if (first.X[node] != second.X[node] || first.Y[node] != second.Y[node])
+                {
+                    IsTrue(false, "node " + node + " moved between identical runs");
+                    return;
+                }
+            }
+            IsTrue(true, "two runs produced identical coordinates");
+        }
+
+        private static void DisconnectedComponents()
+        {
+            var graph = new LayoutGraph(6);
+            graph.AddEdge(0, 1);
+            graph.AddEdge(2, 3);
+            // 4 and 5 are isolated.
+
+            var result = SugiyamaLayout.Compute(graph, new LayoutOptions());
+            AreEqual(0, result.Layer[4], "isolated node sits in the first column");
+            AreEqual(0, result.Layer[5], "second isolated node too");
+            IsTrue(result.Layer[1] == 1 && result.Layer[3] == 1, "both components advance normally");
+        }
+
+        // ---- helpers --------------------------------------------------------------
+
+        /// <summary>Layout with the ordering stage skipped, for a fair before/after crossing count.</summary>
+        private static int CrossingsWithoutOrdering(LayoutGraph graph, LayoutOptions options)
+        {
+            var broken = CycleBreaker.Break(graph);
+            int[] layerOf = Layering.Assign(broken.Acyclic, options.maxNodesPerColumn);
+            var layered = LayeredGraph.Build(broken.Acyclic, layerOf);
+            return layered.CountCrossings();
+        }
+
+        /// <summary>Random DAG: edges only ever run from a lower to a higher index, so it cannot cycle.</summary>
+        private static LayoutGraph RandomDag(int nodes, int edges, int seed)
+        {
+            var random = new Random(seed);
+            var graph = new LayoutGraph(nodes);
+
+            int attempts = 0;
+            while (graph.EdgeCount < edges && attempts++ < edges * 40)
+            {
+                int a = random.Next(nodes);
+                int b = random.Next(nodes);
+                if (a == b) continue;
+                graph.AddEdge(Math.Min(a, b), Math.Max(a, b));
+            }
+            return graph;
+        }
+
+        private static void Run(string name, Action test)
+        {
+            try
+            {
+                int before = failures;
+                test();
+                Console.WriteLine((failures == before ? "  ok   " : "  FAIL ") + name);
+            }
+            catch (Exception ex)
+            {
+                failures++;
+                Console.WriteLine("  FAIL " + name + " - threw " + ex.GetType().Name + ": " + ex.Message);
+            }
+        }
+
+        private static void IsTrue(bool condition, string message)
+        {
+            checks++;
+            if (!condition)
+            {
+                failures++;
+                Console.WriteLine("         assertion failed: " + message);
+            }
+        }
+
+        private static void AreEqual(int expected, int actual, string message)
+        {
+            checks++;
+            if (expected != actual)
+            {
+                failures++;
+                Console.WriteLine(string.Format("         {0}: expected {1}, got {2}", message, expected, actual));
+            }
+        }
+    }
+}

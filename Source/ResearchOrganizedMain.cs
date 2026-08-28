@@ -28,7 +28,8 @@ namespace ResearchOrganized
         public static List<string> GlobalTabOrder = new List<string>();
         public static Dictionary<ResearchProjectDef, List<ResearchProjectDef>> VirtualPrereqsCache = new Dictionary<ResearchProjectDef, List<ResearchProjectDef>>();
         public static Dictionary<string, LayoutConfig> TabLayouts = new Dictionary<string, LayoutConfig>();
-        public static Dictionary<ResearchProjectDef, ResearchProjectDef> DominantParentCache = new Dictionary<ResearchProjectDef, ResearchProjectDef>();
+
+        private static readonly List<ResearchTabDef> hiddenTabs = new List<ResearchTabDef>();
 
         private static readonly Dictionary<ResearchProjectDef, bool> reqMultiCache = new Dictionary<ResearchProjectDef, bool>();
         private static readonly Dictionary<ResearchProjectDef, bool> reqHiTechCache = new Dictionary<ResearchProjectDef, bool>();
@@ -58,31 +59,12 @@ namespace ResearchOrganized
                 harmony.Patch(listProjectsMethod, transpiler: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(ColorTranspiler)));
             }
 
-            // Patch DrawConnections safely using DeclaredMethod to access private/protected methods
-            var drawConnectionsMethod = AccessTools.DeclaredMethod(typeof(MainTabWindow_Research), "DrawConnections");
-            if (drawConnectionsMethod != null)
-            {
-                harmony.Patch(drawConnectionsMethod, transpiler: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(LineSuppressionTranspiler)));
-            }
-            else
-            {
-                Log.Warning("[Research: Organized] Could not find MainTabWindow_Research.DrawConnections. Line suppression disabled.");
-                MethodDiscoveryDiagnostic.DumpResearchWindowMethods();
-            }
+            // A DrawConnections patch used to be registered here to suppress connection lines
+            // running between tabs, but its transpiler returned the instruction stream
+            // untouched, so it only ever added overhead. Cross-tab line suppression is still
+            // unimplemented; see the README.
 
             OrganizeTabsAndLayout();
-        }
-
-        public static ResearchProjectDef GetDominantParent(ResearchProjectDef node)
-        {
-            if (DominantParentCache.TryGetValue(node, out var cached)) return cached;
-            var parents = ResearchOrganizedLayout.GetDirectPrereqs(node);
-            if (parents.NullOrEmpty()) return null;
-            ResearchProjectDef dominant = parents
-                .OrderByDescending(p => ResearchOrganizedLayout.GetAllAncestors(p).Count)
-                .ThenByDescending(p => p.baseCost)
-                .FirstOrDefault();
-            return DominantParentCache[node] = dominant;
         }
 
         public static void RefreshColors()
@@ -126,49 +108,19 @@ namespace ResearchOrganized
             try
             {
                 ResetCaches();
+                RestoreHiddenTabs();
                 LoadConfigs();
                 MapProjectsToTabs();
                 var activeTabs = new HashSet<ResearchTabDef>(DefDatabase<ResearchProjectDef>.AllDefs.Select(p => p.tab).Where(t => t != null));
                 HideEmptyTabs(activeTabs);
                 SortAndIndexTabs();
 
-                var allProjects = DefDatabase<ResearchProjectDef>.AllDefsListForReading;
-                var childrenMap = new Dictionary<ResearchProjectDef, List<ResearchProjectDef>>();
-                foreach (var proj in allProjects)
-                {
-                    var dominant = GetDominantParent(proj);
-                    if (dominant != null && proj.tab != null && proj.tab == dominant.tab)
-                    {
-                        if (!childrenMap.ContainsKey(dominant)) childrenMap[dominant] = new List<ResearchProjectDef>();
-                        childrenMap[dominant].Add(proj);
-                    }
-                }
-
-                var ancestorCounts = allProjects.ToDictionary(p => p, p => ResearchOrganizedLayout.GetAllAncestors(p).Count);
-                var bottomUpProjects = allProjects.OrderByDescending(p => ancestorCounts[p]).ToList();
-                var minorAnchorsList = new List<ResearchProjectDef>();
-                var majorAnchorsList = new List<ResearchProjectDef>();
-
-                foreach (var proj in bottomUpProjects)
-                {
-                    if (childrenMap.TryGetValue(proj, out var children))
-                    {
-                        int nonAnchorChildrenCount = children.Count(c => !majorAnchorsList.Contains(c) && !minorAnchorsList.Contains(c));
-                        if (nonAnchorChildrenCount >= ResearchOrganizedMod.settings.majorAnchorChildThreshold) majorAnchorsList.Add(proj);
-                        else if (nonAnchorChildrenCount >= ResearchOrganizedMod.settings.minorAnchorChildThreshold) minorAnchorsList.Add(proj);
-                    }
-                }
-
-                List<string> minorAnchors = minorAnchorsList.OrderBy(p => ancestorCounts[p]).Select(p => p.defName).ToList();
-                List<string> majorAnchors = majorAnchorsList.OrderBy(p => ancestorCounts[p]).Select(p => p.defName).ToList();
-
                 foreach (var tab in activeTabs)
                 {
                     if (IgnoredTabs.Contains(tab.defName)) continue;
                     var projects = DefDatabase<ResearchProjectDef>.AllDefs.Where(p => p.tab == tab).ToList();
-                    if (projects.Count > 0) ResearchOrganizedLayout.ApplyTopologicalEpochLayout(projects, tab.defName, minorAnchors, majorAnchors);
+                    if (projects.Count > 0) ResearchOrganizedLayout.ApplyLayout(projects, tab.defName);
                 }
-                ResearchProjectDef.GenerateNonOverlappingCoordinates();
             }
             catch (Exception ex) { Log.Error($"[Research: Organized] Master Organizer Error: {ex}"); }
         }
@@ -181,7 +133,6 @@ namespace ResearchOrganized
             reqMultiCache.Clear();
             reqHiTechCache.Clear();
             VirtualPrereqsCache.Clear();
-            DominantParentCache.Clear();
             ResearchOrganizedLayout.ClearCaches();
         }
 
@@ -288,9 +239,47 @@ namespace ResearchOrganized
                 var defsList = (List<ResearchTabDef>)defsListField.GetValue(null);
                 var defsByName = (Dictionary<string, ResearchTabDef>)defsByNameField.GetValue(null);
                 var toRemove = defsList.Where(t => !activeTabs.Contains(t) && !IgnoredTabs.Contains(t.defName)).ToList();
-                foreach (var tab in toRemove) { defsList.Remove(tab); defsByName.Remove(tab.defName); }
+                foreach (var tab in toRemove)
+                {
+                    defsList.Remove(tab);
+                    defsByName.Remove(tab.defName);
+                    hiddenTabs.Add(tab);
+                }
             }
             catch (Exception ex) { Log.Error($"[Research: Organized] Hide Tabs Error: {ex.Message}"); }
+        }
+
+        /// <summary>
+        /// Puts back every tab a previous pass removed.
+        ///
+        /// Hiding a tab deletes it from the def database, which used to be a one-way trip:
+        /// re-running the organiser could never bring a tab back, so changing a setting that
+        /// refills a tab left it permanently invisible. Keeping the removed defs lets the
+        /// organiser be run more than once in a session.
+        /// </summary>
+        private static void RestoreHiddenTabs()
+        {
+            if (hiddenTabs.Count == 0) return;
+
+            try
+            {
+                var defsListField = AccessTools.Field(typeof(DefDatabase<ResearchTabDef>), "defsList");
+                var defsByNameField = AccessTools.Field(typeof(DefDatabase<ResearchTabDef>), "defsByName");
+                if (defsListField == null || defsByNameField == null) return;
+                var defsList = (List<ResearchTabDef>)defsListField.GetValue(null);
+                var defsByName = (Dictionary<string, ResearchTabDef>)defsByNameField.GetValue(null);
+
+                foreach (var tab in hiddenTabs)
+                {
+                    if (!defsByName.ContainsKey(tab.defName))
+                    {
+                        defsList.Add(tab);
+                        defsByName[tab.defName] = tab;
+                    }
+                }
+            }
+            catch (Exception ex) { Log.Error($"[Research: Organized] Restore Tabs Error: {ex.Message}"); }
+            finally { hiddenTabs.Clear(); }
         }
 
         private static void SortAndIndexTabs()
@@ -323,10 +312,6 @@ namespace ResearchOrganized
             return list;
         }
 
-        public static IEnumerable<CodeInstruction> LineSuppressionTranspiler(IEnumerable<CodeInstruction> instructions)
-        {
-            return instructions; // Transpiler placeholder: logic now handled via UI wrapper hooks
-        }
 
         public static bool DrawCustomButtonText(ref Rect rect, string label, Color bgColor, Color textColor, Color borderColor, Color unfilledBgColor, bool cacheHeight, float borderSize, bool doMouseOverSound, bool active, ResearchProjectDef project)
         {
