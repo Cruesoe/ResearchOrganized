@@ -126,7 +126,7 @@ namespace ResearchOrganized.Layout
             Ordering.Optimize(layered, options.orderingSweeps);
 
             float[] y;
-            CoordinateAssigner.Assign(layered, options.yStep, options.coordinateSweeps, out y);
+            CoordinateAssigner.Assign(layered, options.yStep, options.maxNodesPerColumn, options.coordinateSweeps, out y);
 
             aggregate.Crossings += layered.CountCrossings();
 
