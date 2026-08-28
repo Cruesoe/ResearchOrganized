@@ -27,6 +27,8 @@ Incompatible with other research-tab organisers (Tech Tree, TTPF, Research Tab C
 3. **Crossing reduction** — dummy nodes split long edges so every edge spans one column, then alternating median sweeps with a transpose pass cut the number of crossings. The best ordering seen is kept, so the result can never be worse than the starting point.
 4. **Coordinates** — the priority method nudges each node toward its neighbours' average position without reordering anything, so long dependency chains come out straight. Dummy nodes get top priority.
 
+Each tab is laid out on its own, and within a tab each **connected component** is laid out separately and then shelf-packed left-aligned against the origin. This matters because a tab holds one tech level while prerequisites cross tech levels, so a tab is mostly loose projects plus a few short chains. Sharing one column budget across unrelated fragments pushes a project many columns away from its own parent and leaves the tab sprawling.
+
 Nothing in `Source/Layout/` references RimWorld or Unity. That is what makes it testable.
 
 ## Tests

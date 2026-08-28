@@ -57,6 +57,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Layout\Components.cs" />
     <Compile Include="Layout\LayoutGraph.cs" />
     <Compile Include="Layout\CycleBreaker.cs" />
     <Compile Include="Layout\Layering.cs" />

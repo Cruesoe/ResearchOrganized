@@ -26,11 +26,13 @@ namespace ResearchOrganized.Tests
             Run("nodes in a column keep minimum separation", MinimumSeparation);
             Run("layout is deterministic", Deterministic);
             Run("disconnected components all get placed", DisconnectedComponents);
+            Run("dependents stay near their parents", DependentsStayNearParents);
+            Run("loose nodes pack tightly", LooseNodesPackTightly);
             Run("scale benchmark", ScaleBenchmark);
 
             Console.WriteLine();
             Console.WriteLine(failures == 0
-                ? string.Format("PASS - {0} checks across 11 tests", checks)
+                ? string.Format("PASS - {0} checks across 13 tests", checks)
                 : string.Format("FAIL - {0} failed check(s) of {1}", failures, checks));
             return failures == 0 ? 0 : 1;
         }
@@ -230,6 +232,52 @@ namespace ResearchOrganized.Tests
             AreEqual(0, result.Layer[4], "isolated node sits in the first column");
             AreEqual(0, result.Layer[5], "second isolated node too");
             IsTrue(result.Layer[1] == 1 && result.Layer[3] == 1, "both components advance normally");
+        }
+
+        /// <summary>
+        /// Models a real tab. Because tabs are split by tech level and prerequisites almost
+        /// always cross tech levels, most nodes on a tab have no in-tab parent at all - a tab
+        /// is mostly loose nodes plus a few short chains. A dependent node must still land
+        /// beside its parent, not be flung to the far right because the cap filled the
+        /// columns in between.
+        /// </summary>
+        private static void DependentsStayNearParents()
+        {
+            // 80 loose nodes, plus one 4-long chain hanging off node 0.
+            var graph = new LayoutGraph(84);
+            graph.AddEdge(0, 80);
+            graph.AddEdge(80, 81);
+            graph.AddEdge(81, 82);
+            graph.AddEdge(82, 83);
+
+            var options = new LayoutOptions { maxNodesPerColumn = 10 };
+            var result = SugiyamaLayout.Compute(graph, options);
+
+            int worst = 0;
+            foreach (var edge in graph.AllEdges())
+            {
+                int span = result.Layer[edge.Child] - result.Layer[edge.Parent];
+                if (span > worst) worst = span;
+            }
+
+            Console.WriteLine(string.Format("         worst parent->child column span: {0}", worst));
+            IsTrue(worst <= 2, string.Format("a child sits {0} columns from its parent", worst));
+        }
+
+        /// <summary>
+        /// A tab of entirely unconnected projects should pack into a tight block, not sprawl.
+        /// </summary>
+        private static void LooseNodesPackTightly()
+        {
+            var graph = new LayoutGraph(80);
+            var options = new LayoutOptions { maxNodesPerColumn = 10 };
+            var result = SugiyamaLayout.Compute(graph, options);
+
+            int columns = 0;
+            for (int i = 0; i < 80; i++) if (result.Layer[i] + 1 > columns) columns = result.Layer[i] + 1;
+
+            Console.WriteLine(string.Format("         80 loose nodes packed into {0} columns (ideal 8)", columns));
+            IsTrue(columns <= 8, string.Format("used {0} columns for 80 nodes at 10 per column", columns));
         }
 
         // ---- helpers --------------------------------------------------------------
