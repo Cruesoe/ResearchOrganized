@@ -52,19 +52,28 @@ namespace ResearchOrganized.Layout
                 return a.CompareTo(b);
             });
 
+            // A node with children cannot be pinned: it would land to the right of its own
+            // followers, and an edge that runs backwards has no valid routing through the
+            // columns. Enforced here rather than trusting the caller, because the failure
+            // mode is an exception deep in the crossing counter.
+            var effectivePin = new bool[count];
+            if (pinLast != null)
+            {
+                for (int i = 0; i < count; i++) effectivePin[i] = pinLast[i] && graph.ChildrenOf(i).Count == 0;
+            }
+
             var occupancy = new Dictionary<int, int>();
             var placed = new bool[count];
 
             for (int i = 0; i < order.Count; i++)
             {
                 int node = order[i];
-                if (pinLast != null && pinLast[node]) continue;
+                if (effectivePin[node]) continue;
 
                 column[node] = PlaceNode(graph, node, depth[node], maxDepth, maxWidth, column, occupancy);
                 placed[node] = true;
             }
 
-            if (pinLast != null)
             {
                 int finalColumn = maxDepth;
                 foreach (var pair in occupancy) if (pair.Key > finalColumn) finalColumn = pair.Key;
@@ -73,7 +82,7 @@ namespace ResearchOrganized.Layout
                 for (int i = 0; i < order.Count; i++)
                 {
                     int node = order[i];
-                    if (!pinLast[node] || placed[node]) continue;
+                    if (!effectivePin[node] || placed[node]) continue;
 
                     column[node] = PlaceNode(graph, node, finalColumn, int.MaxValue, maxWidth, column, occupancy);
                     placed[node] = true;

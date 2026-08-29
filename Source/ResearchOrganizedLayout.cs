@@ -55,7 +55,7 @@ namespace ResearchOrganized
 
             var options = BuildOptions(tabName);
             options.rank = BuildRank(tabNodes, graph);
-            options.pinLast = BuildGatewayFlags(tabNodes, tabName);
+            options.pinLast = BuildGatewayFlags(tabNodes, tabName, graph);
 
             var result = SugiyamaLayout.Compute(graph, options);
 
@@ -124,7 +124,7 @@ namespace ResearchOrganized
         /// than any hardcoded project name, so a mod that adds its own gateway tech gets the
         /// same treatment for free.
         /// </summary>
-        private static bool[] BuildGatewayFlags(List<ResearchProjectDef> tabNodes, string tabName)
+        private static bool[] BuildGatewayFlags(List<ResearchProjectDef> tabNodes, string tabName, LayoutGraph graph)
         {
             var flags = new bool[tabNodes.Count];
 
@@ -135,6 +135,11 @@ namespace ResearchOrganized
 
             for (int i = 0; i < tabNodes.Count; i++)
             {
+                // Only a project that nothing on this tab depends on can be moved to the end.
+                // Anything with followers here is not really the conclusion of the tab, and
+                // pushing it right would place it after its own followers.
+                if (graph.ChildrenOf(i).Count > 0) continue;
+
                 List<ResearchProjectDef> dependents;
                 if (!children.TryGetValue(tabNodes[i], out dependents)) continue;
 

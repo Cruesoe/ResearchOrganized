@@ -119,7 +119,19 @@ namespace ResearchOrganized
                 {
                     if (IgnoredTabs.Contains(tab.defName)) continue;
                     var projects = DefDatabase<ResearchProjectDef>.AllDefs.Where(p => p.tab == tab).ToList();
-                    if (projects.Count > 0) ResearchOrganizedLayout.ApplyLayout(projects, tab.defName);
+                    if (projects.Count == 0) continue;
+
+                    // Contain failures to the tab that caused them. One bad tab used to
+                    // abort this loop, leaving every remaining tab at its authored layout.
+                    try
+                    {
+                        ResearchOrganizedLayout.ApplyLayout(projects, tab.defName);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"[Research: Organized] Layout failed for tab '{tab.defName}', " +
+                                  $"leaving it at its original coordinates. Other tabs are unaffected. {ex}");
+                    }
                 }
 
                 // REQUIRED, and not for the reason its name suggests. The research window

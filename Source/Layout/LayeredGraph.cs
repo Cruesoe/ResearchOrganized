@@ -58,6 +58,13 @@ namespace ResearchOrganized.Layout
                 int to = edge.Child;
                 int span = layerOf[to] - layerOf[from];
 
+                // An edge that does not run left to right cannot be routed through columns,
+                // and threading one in anyway corrupts the structure: the crossing counter
+                // indexes the next layer by position and walks off the end of its array,
+                // which aborts the layout for every tab. Drop it instead - the caller is
+                // responsible for producing a sane column assignment.
+                if (span <= 0) continue;
+
                 if (span == 1)
                 {
                     down[from].Add(to);
