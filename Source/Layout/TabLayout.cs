@@ -86,8 +86,13 @@ namespace ResearchOrganized.Layout
                 else trees.Add(LayoutTree(acyclic, members, column, row, cap, options.rank));
             }
 
-            PackTrees(trees, column, row, cap);
-            PlaceLoose(loose, column, row, trees, cap);
+            // Standalone projects go first, on the left. They need nothing and lead nowhere,
+            // so they are what a reader skims past on the way to the trees - and putting
+            // them here is what leaves the trees starting further right, each with its own
+            // clean columns, instead of a hub sitting in column 0 with its followers
+            // threaded through everything else.
+            int firstTreeColumn = PlaceLoose(loose, column, row, cap);
+            PackTrees(trees, column, row, cap, firstTreeColumn);
             CompactRows(column, row);
 
             for (int node = 0; node < graph.NodeCount; node++)
@@ -170,32 +175,96 @@ namespace ResearchOrganized.Layout
             int localColumn = 0;
             int tallest = 0;
 
-            for (int g = 0; g <= deepest; g++)
+            // First generation: whatever this tree starts from, stacked at the top.
+            var first = byGeneration[0];
+            first.Sort(delegate (int a, int b) { return RankOf(rank, a).CompareTo(RankOf(rank, b)); });
+            for (int i = 0; i < first.Count; i++)
+            {
+                column[first[i]] = 0;
+                row[first[i]] = i % cap;
+                if (i / cap > 0) column[first[i]] = i / cap;
+                if (row[first[i]] + 1 > tallest) tallest = row[first[i]] + 1;
+            }
+            localColumn = (first.Count - 1) / cap + 1;
+
+            for (int g = 1; g <= deepest; g++)
             {
                 var here = byGeneration[g];
                 if (here.Count == 0) continue;
 
-                // Hubs last, so the next generation begins beside the card it follows from.
-                here.Sort(delegate (int a, int b)
+                // Each card follows from the placed prerequisite furthest right - that is the
+                // one it reads as coming after - and sits level with it. Filling every column
+                // from the top instead is what left a card several rows above the thing it
+                // follows, with the connector cutting diagonally back across the column.
+                var anchorOf = new Dictionary<int, int>(here.Count);
+                foreach (int node in here)
                 {
-                    bool hubA = graph.ChildrenOf(a).Count > 0;
-                    bool hubB = graph.ChildrenOf(b).Count > 0;
-                    if (hubA != hubB) return hubA ? 1 : -1;
-                    int byRank = RankOf(rank, a).CompareTo(RankOf(rank, b));
-                    if (byRank != 0) return byRank;
+                    var parents = graph.ParentsOf(node);
+                    int anchor = -1;
+                    for (int i = 0; i < parents.Count; i++)
+                    {
+                        if (generation[parents[i]] >= g) continue;
+                        if (anchor < 0 || column[parents[i]] > column[anchor]
+                            || (column[parents[i]] == column[anchor] && row[parents[i]] < row[anchor]))
+                        {
+                            anchor = parents[i];
+                        }
+                    }
+                    anchorOf[node] = anchor;
+                }
+
+                var byAnchor = new Dictionary<int, List<int>>();
+                var anchorOrder = new List<int>();
+                foreach (int node in here)
+                {
+                    int anchor = anchorOf[node];
+                    List<int> kids;
+                    if (!byAnchor.TryGetValue(anchor, out kids))
+                    {
+                        kids = new List<int>();
+                        byAnchor[anchor] = kids;
+                        anchorOrder.Add(anchor);
+                    }
+                    kids.Add(node);
+                }
+
+                // Following the anchors down the column keeps the connectors parallel
+                // instead of crossing over one another.
+                anchorOrder.Sort(delegate (int a, int b)
+                {
+                    if (a < 0 || b < 0) return a.CompareTo(b);
+                    if (row[a] != row[b]) return row[a].CompareTo(row[b]);
                     return a.CompareTo(b);
                 });
 
-                int r = 0;
-                foreach (int node in here)
+                int c = localColumn;
+                int cursor = 0;
+
+                foreach (int anchor in anchorOrder)
                 {
-                    column[node] = localColumn;
-                    row[node] = r;
-                    r++;
-                    if (r > tallest) tallest = r;
-                    if (r >= cap) { localColumn++; r = 0; }
+                    var kids = byAnchor[anchor];
+                    kids.Sort(delegate (int a, int b)
+                    {
+                        bool hubA = graph.ChildrenOf(a).Count > 0;
+                        bool hubB = graph.ChildrenOf(b).Count > 0;
+                        if (hubA != hubB) return hubA ? 1 : -1;
+                        return RankOf(rank, a).CompareTo(RankOf(rank, b));
+                    });
+
+                    int start = anchor >= 0 && row[anchor] > cursor ? row[anchor] : cursor;
+
+                    foreach (int kid in kids)
+                    {
+                        if (start >= cap) { c++; start = 0; }
+                        column[kid] = c;
+                        row[kid] = start;
+                        start++;
+                        cursor = start;
+                        if (start > tallest) tallest = start;
+                    }
                 }
-                if (r > 0) localColumn++;
+
+                localColumn = c + 1;
             }
 
             return new Tree { Members = members, Width = Math.Max(1, localColumn), Height = Math.Max(1, tallest) };
@@ -239,7 +308,7 @@ namespace ResearchOrganized.Layout
         /// shelf to the right. Smallest first, so a tree of five is not made to wait behind a
         /// tree of thirty - which is what put one tree's followers in the middle of another's.
         /// </summary>
-        private static void PackTrees(List<Tree> trees, int[] column, int[] row, int cap)
+        private static void PackTrees(List<Tree> trees, int[] column, int[] row, int cap, int firstColumn)
         {
             trees.Sort(delegate (Tree a, Tree b)
             {
@@ -248,7 +317,7 @@ namespace ResearchOrganized.Layout
                 return a.Members[0].CompareTo(b.Members[0]);
             });
 
-            int shelfColumn = 0;
+            int shelfColumn = firstColumn;
             int shelfRow = 0;
             int shelfWidth = 0;
 
@@ -277,38 +346,21 @@ namespace ResearchOrganized.Layout
         /// can never take a column a tree needed, and they keep the tab from being padded out
         /// with blank space.
         /// </summary>
-        private static void PlaceLoose(List<int> loose, int[] column, int[] row, List<Tree> trees, int cap)
+        private static int PlaceLoose(List<int> loose, int[] column, int[] row, int cap)
         {
-            if (loose.Count == 0) return;
+            if (loose.Count == 0) return 0;
 
-            var nextFree = new Dictionary<int, int>();
-            foreach (var tree in trees)
-            {
-                foreach (int node in tree.Members)
-                {
-                    int after = row[node] + 1;
-                    int held;
-                    if (!nextFree.TryGetValue(column[node], out held) || after > held) nextFree[column[node]] = after;
-                }
-            }
-
-            int target = 0;
+            int c = 0;
+            int r = 0;
             foreach (int node in loose)
             {
-                while (true)
-                {
-                    int used;
-                    if (!nextFree.TryGetValue(target, out used)) used = 0;
-                    if (used < cap)
-                    {
-                        column[node] = target;
-                        row[node] = used;
-                        nextFree[target] = used + 1;
-                        break;
-                    }
-                    target++;
-                }
+                column[node] = c;
+                row[node] = r;
+                r++;
+                if (r >= cap) { c++; r = 0; }
             }
+
+            return r > 0 ? c + 1 : c;
         }
 
         /// <summary>Removes rows that ended up with nothing in them anywhere on the tab.</summary>
