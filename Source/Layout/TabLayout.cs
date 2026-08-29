@@ -88,7 +88,15 @@ namespace ResearchOrganized.Layout
             var row = new int[graph.NodeCount];
             Project(groups, column, row);
 
-            PullParentsBesideFollowers(acyclic, depth, column, row, options);
+            // Pulling a card next to its followers leaves a hole where it used to be, and
+            // drops it into whatever row was free - which splits the block it landed in.
+            // Repacking closes both, and moving cards changes what "beside" means, so the
+            // two alternate until they settle.
+            for (int pass = 0; pass < 3; pass++)
+            {
+                PullParentsBesideFollowers(acyclic, depth, column, row, options);
+                RepackColumns(column, row, primaryParent, options);
+            }
             CompactRows(column, row);
 
             for (int node = 0; node < graph.NodeCount; node++)
@@ -375,6 +383,97 @@ namespace ResearchOrganized.Layout
                 if (above >= 0 && !taken.Contains(CellKey(column, above))) return above;
             }
             return -1;
+        }
+
+        /// <summary>
+        /// Rebuilds each column so it reads cleanly: no holes, and every card that follows
+        /// the same parent sitting together.
+        ///
+        /// Both are damage from the pull. A card that moves out to join its own followers
+        /// leaves a hole behind it, and lands in whichever row happened to be free, which
+        /// drops it into the middle of someone else's block. Sibling runs are restored in
+        /// place - a group keeps roughly the height it already had, so nothing jumps across
+        /// the tab - and a blank row goes between runs when the column has room for it.
+        /// </summary>
+        private static void RepackColumns(int[] column, int[] row, int[] primaryParent, LayoutOptions options)
+        {
+            int maxRows = options.maxNodesPerColumn > 0 ? options.maxNodesPerColumn : int.MaxValue;
+
+            var byColumn = new Dictionary<int, List<int>>();
+            for (int node = 0; node < column.Length; node++)
+            {
+                List<int> members;
+                if (!byColumn.TryGetValue(column[node], out members))
+                {
+                    members = new List<int>();
+                    byColumn[column[node]] = members;
+                }
+                members.Add(node);
+            }
+
+            foreach (var pair in byColumn)
+            {
+                var members = pair.Value;
+
+                var runs = new Dictionary<int, List<int>>();
+                var runOrder = new List<int>();
+                foreach (int node in members)
+                {
+                    int key = primaryParent[node];
+                    List<int> run;
+                    if (!runs.TryGetValue(key, out run))
+                    {
+                        run = new List<int>();
+                        runs[key] = run;
+                        runOrder.Add(key);
+                    }
+                    run.Add(node);
+                }
+
+                foreach (int key in runOrder)
+                {
+                    runs[key].Sort(delegate (int a, int b)
+                    {
+                        if (row[a] != row[b]) return row[a].CompareTo(row[b]);
+                        return a.CompareTo(b);
+                    });
+                }
+
+                // Runs keep their existing vertical order, so repacking tidies a column
+                // rather than rearranging it.
+                runOrder.Sort(delegate (int a, int b)
+                {
+                    double meanA = MeanRow(runs[a], row);
+                    double meanB = MeanRow(runs[b], row);
+                    int byMean = meanA.CompareTo(meanB);
+                    if (byMean != 0) return byMean;
+                    return a.CompareTo(b);
+                });
+
+                bool roomForGaps = options.separateGroups
+                                && members.Count + runOrder.Count - 1 <= maxRows;
+
+                int next = 0;
+                bool first = true;
+                foreach (int key in runOrder)
+                {
+                    if (!first && roomForGaps) next++;
+                    first = false;
+
+                    foreach (int node in runs[key])
+                    {
+                        row[node] = next;
+                        next++;
+                    }
+                }
+            }
+        }
+
+        private static double MeanRow(List<int> nodes, int[] row)
+        {
+            double total = 0;
+            for (int i = 0; i < nodes.Count; i++) total += row[nodes[i]];
+            return total / nodes.Count;
         }
 
         /// <summary>Removes rows that ended up with nothing in them anywhere on the tab.</summary>
