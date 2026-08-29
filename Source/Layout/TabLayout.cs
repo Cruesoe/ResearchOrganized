@@ -86,14 +86,10 @@ namespace ResearchOrganized.Layout
 
             var column = new int[graph.NodeCount];
             var row = new int[graph.NodeCount];
-            foreach (var group in groups)
-            {
-                for (int i = 0; i < group.Members.Count; i++)
-                {
-                    column[group.Members[i]] = group.Cells[i].Column;
-                    row[group.Members[i]] = group.Cells[i].Row;
-                }
-            }
+            Project(groups, column, row);
+
+            PullParentsBesideFollowers(acyclic, depth, column, row, options);
+            CompactRows(column, row);
 
             for (int node = 0; node < graph.NodeCount; node++)
             {
@@ -239,6 +235,15 @@ namespace ResearchOrganized.Layout
                         row++;
                         if (row >= maxRows) { column++; row = 0; }
                     }
+
+                    // A big group begins a fresh column rather than starting halfway down
+                    // one another group already filled. Otherwise its parent has no single
+                    // place to sit beside it, and the connectors leave at every angle.
+                    if (!firstGroup && row > 0 && group.Members.Count * 2 > maxRows)
+                    {
+                        column++;
+                        row = 0;
+                    }
                     firstGroup = false;
 
                     foreach (int unused in group.Members)
@@ -292,6 +297,103 @@ namespace ResearchOrganized.Layout
 
                 Project(groups, column, row);
             }
+        }
+
+        /// <summary>
+        /// Slides each project rightwards until it sits directly beside its own followers,
+        /// level with the middle of them.
+        ///
+        /// Depth alone puts a project as far left as its prerequisites allow, which is the
+        /// wrong answer to look at: electricity has nothing before it, so depth pins it to
+        /// column 0 while its two dozen followers begin a column or more away, and the
+        /// connectors sweep across everything in between. Nothing is gained by that
+        /// leftmost position - what a reader wants is the parent next to its block.
+        ///
+        /// Deepest first, so by the time a project is considered its own followers have
+        /// already settled. A project never moves left, and never past its own
+        /// prerequisites, so the reading order still holds.
+        /// </summary>
+        private static void PullParentsBesideFollowers(LayoutGraph graph, int[] depth, int[] column, int[] row, LayoutOptions options)
+        {
+            int maxRows = options.maxNodesPerColumn > 0 ? options.maxNodesPerColumn : int.MaxValue;
+
+            var taken = new HashSet<long>();
+            for (int node = 0; node < graph.NodeCount; node++) taken.Add(CellKey(column[node], row[node]));
+
+            var order = new List<int>();
+            for (int node = 0; node < graph.NodeCount; node++) order.Add(node);
+            order.Sort(delegate (int a, int b)
+            {
+                if (depth[a] != depth[b]) return depth[b].CompareTo(depth[a]);
+                return a.CompareTo(b);
+            });
+
+            foreach (int node in order)
+            {
+                var children = graph.ChildrenOf(node);
+                if (children.Count == 0) continue;
+
+                int earliestChild = int.MaxValue;
+                for (int i = 0; i < children.Count; i++)
+                {
+                    if (column[children[i]] < earliestChild) earliestChild = column[children[i]];
+                }
+
+                int target = earliestChild - 1;
+                if (target <= column[node]) continue;
+
+                var parents = graph.ParentsOf(node);
+                for (int i = 0; i < parents.Count; i++)
+                {
+                    if (column[parents[i]] + 1 > target) target = column[parents[i]] + 1;
+                }
+                if (target >= earliestChild || target <= column[node]) continue;
+
+                var childRows = new List<int>(children.Count);
+                for (int i = 0; i < children.Count; i++) childRows.Add(row[children[i]]);
+                childRows.Sort();
+                int desired = childRows[childRows.Count / 2];
+
+                int chosen = NearestFreeRow(taken, target, desired, maxRows);
+                if (chosen < 0) continue;
+
+                taken.Remove(CellKey(column[node], row[node]));
+                column[node] = target;
+                row[node] = chosen;
+                taken.Add(CellKey(target, chosen));
+            }
+        }
+
+        private static int NearestFreeRow(HashSet<long> taken, int column, int desired, int maxRows)
+        {
+            for (int offset = 0; offset < maxRows; offset++)
+            {
+                int below = desired + offset;
+                if (below < maxRows && !taken.Contains(CellKey(column, below))) return below;
+
+                int above = desired - offset;
+                if (above >= 0 && !taken.Contains(CellKey(column, above))) return above;
+            }
+            return -1;
+        }
+
+        /// <summary>Removes rows that ended up with nothing in them anywhere on the tab.</summary>
+        private static void CompactRows(int[] column, int[] row)
+        {
+            var used = new List<int>();
+            var seen = new HashSet<int>();
+            for (int node = 0; node < row.Length; node++) if (seen.Add(row[node])) used.Add(row[node]);
+            used.Sort();
+
+            var moved = new Dictionary<int, int>();
+            for (int i = 0; i < used.Count; i++) moved[used[i]] = i;
+
+            for (int node = 0; node < row.Length; node++) row[node] = moved[row[node]];
+        }
+
+        private static long CellKey(int column, int row)
+        {
+            return ((long)column << 32) ^ (uint)row;
         }
 
         private static void Project(List<Group> groups, int[] column, int[] row)

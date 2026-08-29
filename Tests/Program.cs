@@ -24,6 +24,7 @@ namespace ResearchOrganized.Tests
             Run("cycles are broken and reported", CyclesAreBroken);
             Run("layout is deterministic", Deterministic);
             Run("roots share the first column", RootsShareTheFirstColumn);
+            Run("parent sits beside its followers", ParentSitsBesideItsFollowers);
             Run("loose projects pack tightly", LooseNodesPackTightly);
             Run("a wide fan lands in one contiguous block", WideFanFormsOneBlock);
             Run("groups never interleave", GroupsDoNotInterleave);
@@ -135,8 +136,12 @@ namespace ResearchOrganized.Tests
         // ---- the grouping model ---------------------------------------------------
 
         /// <summary>
-        /// A project with no prerequisites is available immediately, so it belongs in
-        /// column zero whichever part of the tab it belongs to.
+        /// A project with no prerequisites and no followers has nothing pulling it anywhere,
+        /// so it stays in column zero where "available now" is read.
+        ///
+        /// A project with followers is deliberately allowed to move right to sit beside
+        /// them - see <see cref="ParentSitsBesideItsFollowers"/>. Being leftmost buys a
+        /// reader nothing when it costs a fan of connectors crossing the whole tab.
         /// </summary>
         private static void RootsShareTheFirstColumn()
         {
@@ -147,16 +152,51 @@ namespace ResearchOrganized.Tests
 
             var result = TabLayout.Compute(graph, new LayoutOptions { maxNodesPerColumn = 10 });
 
-            int[] roots = { 0, 13, 15, 16, 17, 18, 19 };
-            foreach (int root in roots)
+            int[] standalone = { 15, 16, 17, 18, 19 };
+            foreach (int root in standalone)
             {
                 if (result.Layer[root] != 0)
                 {
-                    IsTrue(false, string.Format("root {0} landed in column {1}, not 0", root, result.Layer[root]));
+                    IsTrue(false, string.Format("standalone project {0} landed in column {1}, not 0", root, result.Layer[root]));
                     return;
                 }
             }
-            IsTrue(true, "all 7 prerequisite-free projects share column 0");
+            IsTrue(true, "every project with nothing attached sits in column 0");
+        }
+
+        /// <summary>
+        /// The readability rule that matters most: whatever a project leads to should start
+        /// in the very next column, with the project level with the middle of it. A hub sat
+        /// in column 0 while its two dozen followers began further right, and the connectors
+        /// swept diagonally across every unrelated card in between.
+        /// </summary>
+        private static void ParentSitsBesideItsFollowers()
+        {
+            // A small group occupying the early column, plus a hub whose 24 followers
+            // therefore cannot start where its parent sits.
+            var graph = new LayoutGraph(32);
+            for (int i = 2; i <= 5; i++) graph.AddEdge(0, i);     // small group
+            for (int i = 6; i <= 29; i++) graph.AddEdge(1, i);    // the 24-wide hub
+
+            var options = new LayoutOptions { maxNodesPerColumn = 10 };
+            var result = TabLayout.Compute(graph, options);
+
+            int earliestFollower = int.MaxValue;
+            for (int i = 6; i <= 29; i++) if (result.Layer[i] < earliestFollower) earliestFollower = result.Layer[i];
+
+            int gap = earliestFollower - result.Layer[1];
+
+            var rows = new List<int>();
+            for (int i = 6; i <= 29; i++) if (result.Layer[i] == earliestFollower) rows.Add(RowOf(result, i, options));
+            rows.Sort();
+            int middle = rows[rows.Count / 2];
+            int offset = Math.Abs(RowOf(result, 1, options) - middle);
+
+            Console.WriteLine(string.Format("         hub in column {0}, followers start in {1}, {2} row(s) off centre",
+                result.Layer[1], earliestFollower, offset));
+
+            AreEqual(1, gap, "followers start in the very next column");
+            IsTrue(offset <= 2, string.Format("hub is {0} rows off the middle of its block", offset));
         }
 
         private static void LooseNodesPackTightly()
@@ -217,9 +257,14 @@ namespace ResearchOrganized.Tests
             var options = new LayoutOptions { maxNodesPerColumn = 8 };
             var result = TabLayout.Compute(graph, options);
 
+            // Only the plain followers are considered. A follower that is itself a hub gets
+            // pulled out of this run to sit beside its own block, which is intended - it is
+            // the whole point of the beside-your-followers rule - so it would otherwise look
+            // like a group had been split.
             var owners = new Dictionary<int, int>();   // cell -> owning parent
             foreach (var edge in graph.AllEdges())
             {
+                if (graph.ChildrenOf(edge.Child).Count > 0) continue;
                 int cell = result.Layer[edge.Child] * 1000 + RowOf(result, edge.Child, options);
                 owners[cell] = edge.Parent;
             }
