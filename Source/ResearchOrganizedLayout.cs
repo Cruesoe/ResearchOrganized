@@ -20,7 +20,6 @@ namespace ResearchOrganized
         private static readonly Dictionary<ResearchProjectDef, List<ResearchProjectDef>> cachedPrereqs =
             new Dictionary<ResearchProjectDef, List<ResearchProjectDef>>();
 
-        private static Dictionary<ResearchProjectDef, List<ResearchProjectDef>> childrenByProject;
 
         /// <summary>Projects sitting on a dependency cycle. Drawn with a red border.</summary>
         public static HashSet<ResearchProjectDef> cyclicNodes = new HashSet<ResearchProjectDef>();
@@ -29,7 +28,6 @@ namespace ResearchOrganized
         {
             cachedPrereqs.Clear();
             cyclicNodes.Clear();
-            childrenByProject = null;
         }
 
         /// <summary>
@@ -55,7 +53,12 @@ namespace ResearchOrganized
 
             var options = BuildOptions(tabName);
             options.rank = BuildRank(tabNodes, graph);
-            options.pinLast = BuildGatewayFlags(tabNodes, tabName, graph);
+            // No gateway pinning. The rule that "something on a later tab depends on this"
+            // matches almost every project that leads into the next era - recurve bow, for
+            // one, which then sat isolated in a far column of the neolithic tab. Worse, it
+            // could not match microelectronics, the case it was written for, because that has
+            // followers on its own tab. Marking a tab's concluding project needs a rule based
+            // on what it unlocks, not on who depends on it.
 
             var result = SugiyamaLayout.Compute(graph, options);
 
@@ -113,69 +116,6 @@ namespace ResearchOrganized
             if (majorThreshold > 0 && directChildren >= majorThreshold) return 0;
             if (minorThreshold > 0 && directChildren >= minorThreshold) return 1;
             return 2;
-        }
-
-        /// <summary>
-        /// Projects that conclude this tab: something on a later tab depends on them. In
-        /// vanilla that is microelectronics, which unlocks the bench high industrial needs -
-        /// it reads wrongly when buried mid-tab, because finishing it is what moves you on.
-        ///
-        /// Derived from the actual prerequisite graph and the configured tab order rather
-        /// than any hardcoded project name, so a mod that adds its own gateway tech gets the
-        /// same treatment for free.
-        /// </summary>
-        private static bool[] BuildGatewayFlags(List<ResearchProjectDef> tabNodes, string tabName, LayoutGraph graph)
-        {
-            var flags = new bool[tabNodes.Count];
-
-            int thisTabOrder = ResearchOrganizedMain.GlobalTabOrder.IndexOf(tabName);
-            if (thisTabOrder < 0) return flags;
-
-            var children = ChildrenByProject();
-
-            for (int i = 0; i < tabNodes.Count; i++)
-            {
-                // Only a project that nothing on this tab depends on can be moved to the end.
-                // Anything with followers here is not really the conclusion of the tab, and
-                // pushing it right would place it after its own followers.
-                if (graph.ChildrenOf(i).Count > 0) continue;
-
-                List<ResearchProjectDef> dependents;
-                if (!children.TryGetValue(tabNodes[i], out dependents)) continue;
-
-                foreach (var dependent in dependents)
-                {
-                    string otherTab = dependent.tab != null ? dependent.tab.defName : null;
-                    if (otherTab == null || otherTab == tabName) continue;
-
-                    int otherOrder = ResearchOrganizedMain.GlobalTabOrder.IndexOf(otherTab);
-                    if (otherOrder > thisTabOrder) { flags[i] = true; break; }
-                }
-            }
-
-            return flags;
-        }
-
-        /// <summary>Reverse of the prerequisite graph, across every tab. Built once per pass.</summary>
-        private static Dictionary<ResearchProjectDef, List<ResearchProjectDef>> ChildrenByProject()
-        {
-            if (childrenByProject != null) return childrenByProject;
-
-            childrenByProject = new Dictionary<ResearchProjectDef, List<ResearchProjectDef>>();
-            foreach (var project in DefDatabase<ResearchProjectDef>.AllDefsListForReading)
-            {
-                foreach (var prereq in GetDirectPrereqs(project))
-                {
-                    List<ResearchProjectDef> list;
-                    if (!childrenByProject.TryGetValue(prereq, out list))
-                    {
-                        list = new List<ResearchProjectDef>();
-                        childrenByProject[prereq] = list;
-                    }
-                    list.Add(project);
-                }
-            }
-            return childrenByProject;
         }
 
         private static LayoutOptions BuildOptions(string tabName)

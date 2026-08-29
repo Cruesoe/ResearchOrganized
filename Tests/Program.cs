@@ -34,12 +34,14 @@ namespace ResearchOrganized.Tests
             Run("gateway projects go last", GatewayProjectsGoLast);
             Run("pinned project with followers does not corrupt layers", PinnedProjectWithFollowersDoesNotCorruptLayers);
             Run("backward edges do not throw", BackwardEdgesDoNotThrow);
+            Run("overflow stays near its parent", OverflowStaysNearItsParent);
+            Run("no empty rows across the tab", NoEmptyRowsAcrossTheTab);
             Run("height never exceeds the column cap", HeightNeverExceedsColumnCap);
             Run("scale benchmark", ScaleBenchmark);
 
             Console.WriteLine();
             Console.WriteLine(failures == 0
-                ? string.Format("PASS - {0} checks across 20 tests", checks)
+                ? string.Format("PASS - {0} checks across 22 tests", checks)
                 : string.Format("FAIL - {0} failed check(s) of {1}", failures, checks));
             return failures == 0 ? 0 : 1;
         }
@@ -517,6 +519,67 @@ namespace ResearchOrganized.Tests
             int crossings = layered.CountCrossings();
 
             IsTrue(crossings >= 0, "counted crossings without throwing");
+        }
+
+        /// <summary>
+        /// A hub with more followers than a column holds must not fling the surplus to the
+        /// far side of the tab. Doing so drew edges stretching the full width of the window.
+        /// The overflow belongs in the next column along.
+        /// </summary>
+        private static void OverflowStaysNearItsParent()
+        {
+            // One hub with 16 followers against a cap of 10, plus unrelated loose projects
+            // competing for the same early columns.
+            var graph = new LayoutGraph(30);
+            for (int i = 1; i <= 16; i++) graph.AddEdge(0, i);
+            // 17..29 stand alone.
+
+            var options = new LayoutOptions { maxNodesPerColumn = 10 };
+            var result = SugiyamaLayout.Compute(graph, options);
+
+            int worst = 0;
+            foreach (var edge in graph.AllEdges())
+            {
+                int span = result.Layer[edge.Child] - result.Layer[edge.Parent];
+                if (span > worst) worst = span;
+            }
+
+            Console.WriteLine(string.Format("         hub of 16 at cap 10: widest edge spans {0} columns", worst));
+            IsTrue(worst <= 2, string.Format("a follower sits {0} columns from its hub", worst));
+        }
+
+        /// <summary>
+        /// Straightening pulls projects down to meet their followers and nothing pulls them
+        /// back, which left whole empty rows across a tab - a card at the top, then several
+        /// blank rows, then the rest.
+        /// </summary>
+        private static void NoEmptyRowsAcrossTheTab()
+        {
+            var graph = new LayoutGraph(12);
+            // A lone project with no followers, plus a chain that gets pulled downward.
+            graph.AddEdge(1, 2);
+            graph.AddEdge(2, 3);
+            graph.AddEdge(3, 4);
+            graph.AddEdge(5, 6);
+            graph.AddEdge(6, 7);
+            for (int i = 8; i < 12; i++) graph.AddEdge(5, i);
+
+            var options = new LayoutOptions { maxNodesPerColumn = 10 };
+            var result = SugiyamaLayout.Compute(graph, options);
+
+            var rows = new List<float>(result.Y);
+            rows.Sort();
+
+            float biggest = 0f;
+            for (int i = 1; i < rows.Count; i++)
+            {
+                float gap = rows[i] - rows[i - 1];
+                if (gap > biggest) biggest = gap;
+            }
+
+            Console.WriteLine(string.Format("         widest empty band: {0:0.##} rows", biggest / options.yStep));
+            IsTrue(biggest <= options.yStep + 0.001f,
+                string.Format("left a {0:0.##} row gap with nothing in it", biggest / options.yStep));
         }
 
         // ---- helpers --------------------------------------------------------------

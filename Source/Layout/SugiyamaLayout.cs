@@ -112,7 +112,48 @@ namespace ResearchOrganized.Layout
                 result.Y[node] = y[node];
             }
 
+            CloseVerticalGaps(result.Y, options.yStep);
             return result;
+        }
+
+        /// <summary>
+        /// Squeezes out empty horizontal bands.
+        ///
+        /// Straightening pulls projects down to line up with their followers, and nothing
+        /// pulls them back, so a tab could open with one card at the top and the next four
+        /// rows further down completely empty. This walks the distinct row positions and
+        /// caps any gap between two of them at a single row.
+        ///
+        /// The remap is monotonic, so anything that was aligned stays aligned and nothing
+        /// changes order; and because a gap is only ever reduced to yStep, never below,
+        /// cards in the same column keep their spacing.
+        /// </summary>
+        private static void CloseVerticalGaps(float[] y, float yStep)
+        {
+            if (y.Length < 2 || yStep <= 0f) return;
+
+            var distinct = new List<float>(y);
+            distinct.Sort();
+
+            var moved = new Dictionary<float, float>();
+            float previous = distinct[0];
+            float target = distinct[0];
+            moved[previous] = target;
+
+            for (int i = 1; i < distinct.Count; i++)
+            {
+                float current = distinct[i];
+                if (current == previous) continue;
+
+                float gap = current - previous;
+                if (gap > yStep) gap = yStep;
+
+                target += gap;
+                moved[current] = target;
+                previous = current;
+            }
+
+            for (int i = 0; i < y.Length; i++) y[i] = moved[y[i]];
         }
     }
 }

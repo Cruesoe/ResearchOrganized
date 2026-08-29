@@ -62,65 +62,123 @@ namespace ResearchOrganized.Layout
                 for (int i = 0; i < count; i++) effectivePin[i] = pinLast[i] && graph.ChildrenOf(i).Count == 0;
             }
 
-            var occupancy = new Dictionary<int, int>();
-            var placed = new bool[count];
+            var members = new Dictionary<int, List<int>>();
 
             for (int i = 0; i < order.Count; i++)
             {
                 int node = order[i];
                 if (effectivePin[node]) continue;
-
-                column[node] = PlaceNode(graph, node, depth[node], maxDepth, maxWidth, column, occupancy);
-                placed[node] = true;
+                Place(graph, node, depth, rank, maxWidth, column, members, 0);
             }
 
             {
                 int finalColumn = maxDepth;
-                foreach (var pair in occupancy) if (pair.Key > finalColumn) finalColumn = pair.Key;
+                foreach (var pair in members) if (pair.Key > finalColumn) finalColumn = pair.Key;
                 finalColumn++;
 
                 for (int i = 0; i < order.Count; i++)
                 {
                     int node = order[i];
-                    if (!effectivePin[node] || placed[node]) continue;
-
-                    column[node] = PlaceNode(graph, node, finalColumn, int.MaxValue, maxWidth, column, occupancy);
-                    placed[node] = true;
+                    if (!effectivePin[node]) continue;
+                    Place(graph, node, depth, rank, maxWidth, column, members, finalColumn);
                 }
             }
 
             return column;
         }
 
-        private static int PlaceNode(LayoutGraph graph, int node, int idealColumn, int reservedThrough,
-                                     int maxWidth, int[] column, Dictionary<int, int> occupancy)
+        /// <summary>
+        /// Places one node in the leftmost column at or after its depth that will take it.
+        ///
+        /// When the wanted column is full, the node does NOT get flung to the far right -
+        /// that produced edges stretching the width of the tab. It takes the place of the
+        /// least important node already sitting there, if it outranks one, and that node
+        /// moves along to the next column instead. Only a node at the same depth can be
+        /// displaced, so a parent is never pushed past a child that has already been placed.
+        /// </summary>
+        private static void Place(LayoutGraph graph, int node, int[] depth, int[] rank, int maxWidth,
+                                  int[] column, Dictionary<int, List<int>> members, int minColumn)
         {
-            int earliest = idealColumn;
+            int chosen = depth[node];
+            if (minColumn > chosen) chosen = minColumn;
+
             var parents = graph.ParentsOf(node);
             for (int p = 0; p < parents.Count; p++)
             {
                 int after = column[parents[p]] + 1;
-                if (after > earliest) earliest = after;
+                if (after > chosen) chosen = after;
             }
 
-            int chosen = earliest;
-            if (maxWidth > 0)
+            while (true)
             {
-                int held;
-                if (chosen <= reservedThrough && occupancy.TryGetValue(chosen, out held) && held >= maxWidth)
+                List<int> holding;
+                if (!members.TryGetValue(chosen, out holding))
                 {
-                    // This depth's column is full. Spill sideways instead of stealing the
-                    // next depth's column, which would drag this node away from its parent
-                    // and push a whole subtree along with it.
-                    chosen = reservedThrough + 1;
-                    if (chosen < earliest) chosen = earliest;
+                    holding = new List<int>();
+                    members[chosen] = holding;
                 }
-                while (occupancy.TryGetValue(chosen, out held) && held >= maxWidth) chosen++;
-            }
 
-            int existing;
-            occupancy[chosen] = occupancy.TryGetValue(chosen, out existing) ? existing + 1 : 1;
-            return chosen;
+                if (maxWidth <= 0 || holding.Count < maxWidth)
+                {
+                    holding.Add(node);
+                    column[node] = chosen;
+                    return;
+                }
+
+                int displaced = PickDisplaced(graph, holding, node, depth, rank);
+                if (displaced >= 0)
+                {
+                    holding.Remove(displaced);
+                    holding.Add(node);
+                    column[node] = chosen;
+
+                    // The displaced node must land further right, never back here.
+                    Place(graph, displaced, depth, rank, maxWidth, column, members, chosen + 1);
+                    return;
+                }
+
+                chosen++;
+            }
+        }
+
+        /// <summary>
+        /// Chooses which node in a full column should move along, or -1 to leave them all.
+        ///
+        /// First preference is a node that does not belong in this column at all: one that
+        /// overflowed here from a shallower depth. A column should go to the nodes whose
+        /// depth it represents, and yielding it costs the overflowed node nothing it had a
+        /// claim to. Only childless ones though - shifting a node that already has followers
+        /// placed could push it past them.
+        ///
+        /// Otherwise a peer at the same depth that ranks below the newcomer. Peers are safe
+        /// to move regardless, since anything depending on them is deeper and not yet placed.
+        /// </summary>
+        private static int PickDisplaced(LayoutGraph graph, List<int> holding, int node, int[] depth, int[] rank)
+        {
+            int overflowed = -1;
+            for (int i = 0; i < holding.Count; i++)
+            {
+                int other = holding[i];
+                if (depth[other] >= depth[node]) continue;
+                if (graph.ChildrenOf(other).Count > 0) continue;
+                if (overflowed < 0 || RankOf(rank, other) > RankOf(rank, overflowed)) overflowed = other;
+            }
+            if (overflowed >= 0) return overflowed;
+
+            int peer = -1;
+            for (int i = 0; i < holding.Count; i++)
+            {
+                int other = holding[i];
+                if (depth[other] != depth[node]) continue;
+                if (RankOf(rank, other) <= RankOf(rank, node)) continue;
+                if (peer < 0 || RankOf(rank, other) > RankOf(rank, peer)) peer = other;
+            }
+            return peer;
+        }
+
+        private static int RankOf(int[] rank, int node)
+        {
+            return rank != null ? rank[node] : node;
         }
 
         /// <summary>Longest path from any root, which is the depth a reader perceives.</summary>
