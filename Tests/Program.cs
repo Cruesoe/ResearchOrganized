@@ -29,12 +29,15 @@ namespace ResearchOrganized.Tests
             Run("dependents stay near their parents", DependentsStayNearParents);
             Run("loose nodes pack tightly", LooseNodesPackTightly);
             Run("routed edges do not inflate columns", RoutedEdgesDoNotInflateColumns);
+            Run("roots share the first column", RootsShareTheFirstColumn);
+            Run("anchors hold their column when it overflows", AnchorsHoldTheirColumnWhenItOverflows);
+            Run("gateway projects go last", GatewayProjectsGoLast);
             Run("height never exceeds the column cap", HeightNeverExceedsColumnCap);
             Run("scale benchmark", ScaleBenchmark);
 
             Console.WriteLine();
             Console.WriteLine(failures == 0
-                ? string.Format("PASS - {0} checks across 15 tests", checks)
+                ? string.Format("PASS - {0} checks across 18 tests", checks)
                 : string.Format("FAIL - {0} failed check(s) of {1}", failures, checks));
             return failures == 0 ? 0 : 1;
         }
@@ -376,13 +379,94 @@ namespace ResearchOrganized.Tests
             return graph;
         }
 
+        /// <summary>
+        /// A project with no prerequisites is available immediately, so it belongs in column
+        /// zero no matter which part of the tab it belongs to. Previously independent
+        /// fragments were packed to the right of the biggest one, which read as "you need
+        /// electricity first" for projects that need nothing at all.
+        /// </summary>
+        private static void RootsShareTheFirstColumn()
+        {
+            // A big hub with a dozen followers, plus three unrelated standalone projects.
+            var graph = new LayoutGraph(20);
+            for (int i = 1; i <= 12; i++) graph.AddEdge(0, i);
+            graph.AddEdge(13, 14);
+            // 15, 16, 17, 18, 19 stand alone.
+
+            var options = new LayoutOptions { maxNodesPerColumn = 10 };
+            var result = SugiyamaLayout.Compute(graph, options);
+
+            int[] roots = { 0, 13, 15, 16, 17, 18, 19 };
+            foreach (int root in roots)
+            {
+                if (result.Layer[root] != 0)
+                {
+                    IsTrue(false, string.Format("root {0} landed in column {1}, not 0", root, result.Layer[root]));
+                    return;
+                }
+            }
+            IsTrue(true, "all 7 prerequisite-free projects share column 0");
+        }
+
+        /// <summary>
+        /// When a column overflows, the hubs keep their place and the leaves move aside.
+        /// Losing this is what buried a key project like machining among its siblings.
+        /// </summary>
+        private static void AnchorsHoldTheirColumnWhenItOverflows()
+        {
+            // 14 children of a root, one of which (node 1) is itself a hub with 5 followers.
+            var graph = new LayoutGraph(20);
+            for (int i = 1; i <= 14; i++) graph.AddEdge(0, i);
+            for (int i = 15; i <= 19; i++) graph.AddEdge(1, i);
+
+            // Rank the hub first, the way the adapter ranks anchors ahead of leaves.
+            var rank = new int[20];
+            for (int i = 0; i < 20; i++) rank[i] = i == 1 ? 0 : i + 1;
+
+            var options = new LayoutOptions { maxNodesPerColumn = 10, rank = rank };
+            var result = SugiyamaLayout.Compute(graph, options);
+
+            Console.WriteLine(string.Format("         anchor in column {0}, its followers in column {1}",
+                result.Layer[1], result.Layer[15]));
+
+            AreEqual(1, result.Layer[1], "anchor stays at its true depth");
+            IsTrue(result.Layer[15] == result.Layer[1] + 1, "the anchor's followers sit directly beside it");
+        }
+
+        /// <summary>
+        /// A project that another tab depends on concludes this one, so it belongs at the
+        /// right-hand end rather than in the middle of a column of siblings.
+        /// </summary>
+        private static void GatewayProjectsGoLast()
+        {
+            var graph = new LayoutGraph(12);
+            for (int i = 1; i <= 8; i++) graph.AddEdge(0, i);
+            graph.AddEdge(8, 9);
+            graph.AddEdge(9, 10);
+
+            // Node 3 is the gateway: shallow, but it is what unlocks the next tab.
+            var pinLast = new bool[12];
+            pinLast[3] = true;
+
+            var options = new LayoutOptions { maxNodesPerColumn = 10, pinLast = pinLast };
+            var result = SugiyamaLayout.Compute(graph, options);
+
+            int deepest = 0;
+            for (int i = 0; i < 12; i++) if (i != 3 && result.Layer[i] > deepest) deepest = result.Layer[i];
+
+            Console.WriteLine(string.Format("         gateway in column {0}, everything else ends at {1}",
+                result.Layer[3], deepest));
+
+            IsTrue(result.Layer[3] > deepest, "the gateway sits past every other project");
+        }
+
         // ---- helpers --------------------------------------------------------------
 
         /// <summary>Layout with the ordering stage skipped, for a fair before/after crossing count.</summary>
         private static int CrossingsWithoutOrdering(LayoutGraph graph, LayoutOptions options)
         {
             var broken = CycleBreaker.Break(graph);
-            int[] layerOf = Layering.Assign(broken.Acyclic, options.maxNodesPerColumn);
+            int[] layerOf = Layering.Assign(broken.Acyclic, options.maxNodesPerColumn, options.rank, options.pinLast);
             var layered = LayeredGraph.Build(broken.Acyclic, layerOf);
             return layered.CountCrossings();
         }

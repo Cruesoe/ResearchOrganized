@@ -7,6 +7,8 @@ namespace ResearchOrganized
     public class ResearchOrganizedSettings : ModSettings
     {
         public bool combineIndustrial = false;
+        public int minorAnchorChildThreshold = 3;
+        public int majorAnchorChildThreshold = 7;
         public bool disableCustomColors = false;
 
         public Color colorUndefined = new Color(0.60f, 0.60f, 0.60f);
@@ -23,6 +25,8 @@ namespace ResearchOrganized
         {
             base.ExposeData();
             Scribe_Values.Look(ref combineIndustrial, "combineIndustrial", false);
+            Scribe_Values.Look(ref minorAnchorChildThreshold, "minorAnchorChildThreshold", 3);
+            Scribe_Values.Look(ref majorAnchorChildThreshold, "majorAnchorChildThreshold", 7);
             Scribe_Values.Look(ref disableCustomColors, "disableCustomColors", false);
             Scribe_Values.Look(ref colorUndefined, "colorUndefined", new Color(0.60f, 0.60f, 0.60f));
             Scribe_Values.Look(ref colorAnimal, "colorAnimal", new Color(0.45f, 0.33f, 0.24f));
@@ -38,6 +42,8 @@ namespace ResearchOrganized
         public void CopyFrom(ResearchOrganizedSettings defaults)
         {
             combineIndustrial = defaults.combineIndustrial;
+            minorAnchorChildThreshold = defaults.minorAnchorChildThreshold;
+            majorAnchorChildThreshold = defaults.majorAnchorChildThreshold;
             disableCustomColors = defaults.disableCustomColors;
             colorUndefined = defaults.colorUndefined;
             colorAnimal = defaults.colorAnimal;
@@ -64,13 +70,22 @@ namespace ResearchOrganized
             new Color(0.30f, 0.00f, 0.30f), new Color(0.60f, 0.30f, 0.60f), new Color(0.30f, 0.30f, 0.30f), new Color(0.60f, 0.60f, 0.60f)
         };
 
-        /// <summary>Last value the layout was actually built with, so we know when to redo it.</summary>
+        /// <summary>Values the layout was actually built with, so we know when to redo it.</summary>
         private bool appliedCombineIndustrial;
+        private int appliedMinorAnchorThreshold;
+        private int appliedMajorAnchorThreshold;
+
+        private string minorThresholdBuffer;
+        private string majorThresholdBuffer;
 
         public ResearchOrganizedMod(ModContentPack content) : base(content)
         {
             settings = GetSettings<ResearchOrganizedSettings>();
             appliedCombineIndustrial = settings.combineIndustrial;
+            appliedMinorAnchorThreshold = settings.minorAnchorChildThreshold;
+            appliedMajorAnchorThreshold = settings.majorAnchorChildThreshold;
+            minorThresholdBuffer = settings.minorAnchorChildThreshold.ToString();
+            majorThresholdBuffer = settings.majorAnchorChildThreshold.ToString();
         }
 
         public override string SettingsCategory() => "Research: Organized";
@@ -84,7 +99,9 @@ namespace ResearchOrganized
         /// </summary>
         public override void WriteSettings()
         {
-            bool structureChanged = settings.combineIndustrial != appliedCombineIndustrial;
+            bool structureChanged = settings.combineIndustrial != appliedCombineIndustrial
+                                 || settings.minorAnchorChildThreshold != appliedMinorAnchorThreshold
+                                 || settings.majorAnchorChildThreshold != appliedMajorAnchorThreshold;
 
             base.WriteSettings();
             ResearchOrganizedMain.RefreshColors();
@@ -92,6 +109,8 @@ namespace ResearchOrganized
             if (structureChanged)
             {
                 appliedCombineIndustrial = settings.combineIndustrial;
+                appliedMinorAnchorThreshold = settings.minorAnchorChildThreshold;
+                appliedMajorAnchorThreshold = settings.majorAnchorChildThreshold;
                 ResearchOrganizedMain.OrganizeTabsAndLayout();
             }
         }
@@ -103,6 +122,24 @@ namespace ResearchOrganized
 
             listing.CheckboxLabeled("Combine Industrial", ref settings.combineIndustrial,
                 "Merges High and Late Industrial technologies back into the main Industrial tab.");
+
+            listing.Gap();
+
+            Text.Font = GameFont.Medium;
+            listing.Label("Anchor Projects");
+            Text.Font = GameFont.Small;
+            listing.Label("A project with this many direct follow-ups on its own tab is treated as a hub: it keeps its "
+                        + "place in the tree when a column is full, and the lesser projects move aside instead.");
+
+            Rect minorRect = listing.GetRect(24f);
+            Widgets.Label(new Rect(minorRect.x, minorRect.y, minorRect.width - 60f, minorRect.height), "Follow-ups for a minor anchor:");
+            Widgets.TextFieldNumeric(new Rect(minorRect.xMax - 50f, minorRect.y, 50f, minorRect.height),
+                ref settings.minorAnchorChildThreshold, ref minorThresholdBuffer, 1f, 99f);
+
+            Rect majorRect = listing.GetRect(24f);
+            Widgets.Label(new Rect(majorRect.x, majorRect.y, majorRect.width - 60f, majorRect.height), "Follow-ups for a major anchor:");
+            Widgets.TextFieldNumeric(new Rect(majorRect.xMax - 50f, majorRect.y, 50f, majorRect.height),
+                ref settings.majorAnchorChildThreshold, ref majorThresholdBuffer, 2f, 99f);
 
             listing.Gap();
 
@@ -136,6 +173,8 @@ namespace ResearchOrganized
             if (listing.ButtonText("Reset to Defaults"))
             {
                 settings.CopyFrom(new ResearchOrganizedSettings());
+                minorThresholdBuffer = settings.minorAnchorChildThreshold.ToString();
+                majorThresholdBuffer = settings.majorAnchorChildThreshold.ToString();
             }
 
             listing.End();

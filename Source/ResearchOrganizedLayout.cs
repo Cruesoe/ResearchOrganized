@@ -10,15 +10,17 @@ namespace ResearchOrganized
     /// Adapter between RimWorld's research defs and the pure layout core in
     /// <see cref="ResearchOrganized.Layout"/>.
     ///
-    /// Everything game-specific lives here: reading prerequisites, deciding which edges are
-    /// in scope for a tab, and writing coordinates back onto the defs. The actual layout
-    /// decisions are made by <see cref="SugiyamaLayout"/>, which knows nothing about RimWorld
-    /// and is covered by the test project.
+    /// Everything game-specific lives here: reading prerequisites, deciding which projects
+    /// matter most on a tab, and writing coordinates back onto the defs. The layout
+    /// decisions are made by <see cref="SugiyamaLayout"/>, which knows nothing about
+    /// RimWorld and is covered by the test project.
     /// </summary>
     public static class ResearchOrganizedLayout
     {
         private static readonly Dictionary<ResearchProjectDef, List<ResearchProjectDef>> cachedPrereqs =
             new Dictionary<ResearchProjectDef, List<ResearchProjectDef>>();
+
+        private static Dictionary<ResearchProjectDef, List<ResearchProjectDef>> childrenByProject;
 
         /// <summary>Projects sitting on a dependency cycle. Drawn with a red border.</summary>
         public static HashSet<ResearchProjectDef> cyclicNodes = new HashSet<ResearchProjectDef>();
@@ -27,6 +29,7 @@ namespace ResearchOrganized
         {
             cachedPrereqs.Clear();
             cyclicNodes.Clear();
+            childrenByProject = null;
         }
 
         /// <summary>
@@ -51,6 +54,9 @@ namespace ResearchOrganized
             }
 
             var options = BuildOptions(tabName);
+            options.rank = BuildRank(tabNodes, graph);
+            options.pinLast = BuildGatewayFlags(tabNodes, tabName);
+
             var result = SugiyamaLayout.Compute(graph, options);
 
             for (int i = 0; i < tabNodes.Count; i++)
@@ -60,6 +66,111 @@ namespace ResearchOrganized
             }
 
             ReportCycles(tabNodes, tabName, result);
+        }
+
+        /// <summary>
+        /// Placement priority within a column, lowest first. Two ideas, in order:
+        ///
+        /// 1. Anchors - projects with many direct children on this tab - come first. They
+        ///    are the hubs the rest of the tab hangs off, so they must hold their own depth
+        ///    column and never be the ones pushed aside when a column fills up.
+        /// 2. Then cheapest first, because that is roughly the order a colony researches in,
+        ///    and it keeps the early projects to the left where the eye starts.
+        ///
+        /// Counting only direct in-tab children, as the original did, is what makes this
+        /// work for modded trees too: it needs no list of known project names.
+        /// </summary>
+        private static int[] BuildRank(List<ResearchProjectDef> tabNodes, LayoutGraph graph)
+        {
+            int minorThreshold = ResearchOrganizedMod.settings.minorAnchorChildThreshold;
+            int majorThreshold = ResearchOrganizedMod.settings.majorAnchorChildThreshold;
+
+            var order = new List<int>(tabNodes.Count);
+            for (int i = 0; i < tabNodes.Count; i++) order.Add(i);
+
+            order.Sort(delegate (int a, int b)
+            {
+                int tierA = AnchorTier(graph.ChildrenOf(a).Count, minorThreshold, majorThreshold);
+                int tierB = AnchorTier(graph.ChildrenOf(b).Count, minorThreshold, majorThreshold);
+                if (tierA != tierB) return tierA.CompareTo(tierB);
+
+                int childCompare = graph.ChildrenOf(b).Count.CompareTo(graph.ChildrenOf(a).Count);
+                if (childCompare != 0) return childCompare;
+
+                int costCompare = tabNodes[a].baseCost.CompareTo(tabNodes[b].baseCost);
+                if (costCompare != 0) return costCompare;
+
+                return string.Compare(tabNodes[a].defName, tabNodes[b].defName, System.StringComparison.Ordinal);
+            });
+
+            var rank = new int[tabNodes.Count];
+            for (int position = 0; position < order.Count; position++) rank[order[position]] = position;
+            return rank;
+        }
+
+        private static int AnchorTier(int directChildren, int minorThreshold, int majorThreshold)
+        {
+            if (majorThreshold > 0 && directChildren >= majorThreshold) return 0;
+            if (minorThreshold > 0 && directChildren >= minorThreshold) return 1;
+            return 2;
+        }
+
+        /// <summary>
+        /// Projects that conclude this tab: something on a later tab depends on them. In
+        /// vanilla that is microelectronics, which unlocks the bench high industrial needs -
+        /// it reads wrongly when buried mid-tab, because finishing it is what moves you on.
+        ///
+        /// Derived from the actual prerequisite graph and the configured tab order rather
+        /// than any hardcoded project name, so a mod that adds its own gateway tech gets the
+        /// same treatment for free.
+        /// </summary>
+        private static bool[] BuildGatewayFlags(List<ResearchProjectDef> tabNodes, string tabName)
+        {
+            var flags = new bool[tabNodes.Count];
+
+            int thisTabOrder = ResearchOrganizedMain.GlobalTabOrder.IndexOf(tabName);
+            if (thisTabOrder < 0) return flags;
+
+            var children = ChildrenByProject();
+
+            for (int i = 0; i < tabNodes.Count; i++)
+            {
+                List<ResearchProjectDef> dependents;
+                if (!children.TryGetValue(tabNodes[i], out dependents)) continue;
+
+                foreach (var dependent in dependents)
+                {
+                    string otherTab = dependent.tab != null ? dependent.tab.defName : null;
+                    if (otherTab == null || otherTab == tabName) continue;
+
+                    int otherOrder = ResearchOrganizedMain.GlobalTabOrder.IndexOf(otherTab);
+                    if (otherOrder > thisTabOrder) { flags[i] = true; break; }
+                }
+            }
+
+            return flags;
+        }
+
+        /// <summary>Reverse of the prerequisite graph, across every tab. Built once per pass.</summary>
+        private static Dictionary<ResearchProjectDef, List<ResearchProjectDef>> ChildrenByProject()
+        {
+            if (childrenByProject != null) return childrenByProject;
+
+            childrenByProject = new Dictionary<ResearchProjectDef, List<ResearchProjectDef>>();
+            foreach (var project in DefDatabase<ResearchProjectDef>.AllDefsListForReading)
+            {
+                foreach (var prereq in GetDirectPrereqs(project))
+                {
+                    List<ResearchProjectDef> list;
+                    if (!childrenByProject.TryGetValue(prereq, out list))
+                    {
+                        list = new List<ResearchProjectDef>();
+                        childrenByProject[prereq] = list;
+                    }
+                    list.Add(project);
+                }
+            }
+            return childrenByProject;
         }
 
         private static LayoutOptions BuildOptions(string tabName)
