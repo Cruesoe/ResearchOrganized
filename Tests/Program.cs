@@ -31,6 +31,8 @@ namespace ResearchOrganized.Tests
             Run("a small group stays beside its parent", SmallGroupStaysNearParent);
             Run("hubs sit beside their own followers", HubsSitAtGroupEnd);
             Run("groups are visually separated", GroupsAreSeparated);
+            Run("columns have no holes", ColumnsHaveNoHoles);
+            Run("siblings stay together in a column", SiblingsStayTogetherInAColumn);
             Run("no empty rows across the tab", NoEmptyRowsAcrossTheTab);
             Run("refinement reduces crossings", RefinementReducesCrossings);
             Run("height never exceeds the cap", HeightNeverExceedsColumnCap);
@@ -458,6 +460,94 @@ namespace ResearchOrganized.Tests
                 result.Crossings, watch.ElapsedMilliseconds));
 
             IsTrue(watch.ElapsedMilliseconds < 10000, "large tab laid out in under 10 seconds");
+        }
+
+        /// <summary>
+        /// A column must not be full of holes. Cards that move out to sit beside their own
+        /// followers used to leave their old slot empty, so a block would read as a scatter
+        /// of cards with blanks punched through it.
+        ///
+        /// A single blank row is allowed: that is the deliberate divider between two runs.
+        /// </summary>
+        private static void ColumnsHaveNoHoles()
+        {
+            // Several hubs at mixed depths, so plenty of cards get pulled out of blocks.
+            var graph = new LayoutGraph(45);
+            for (int i = 1; i <= 14; i++) graph.AddEdge(0, i);
+            for (int i = 15; i <= 24; i++) graph.AddEdge(3, i);
+            for (int i = 25; i <= 32; i++) graph.AddEdge(5, i);
+            for (int i = 33; i <= 38; i++) graph.AddEdge(15, i);
+            // 39..44 stand alone.
+
+            var options = new LayoutOptions { maxNodesPerColumn = 10 };
+            var result = TabLayout.Compute(graph, options);
+
+            var byColumn = new Dictionary<int, List<int>>();
+            for (int node = 0; node < graph.NodeCount; node++)
+            {
+                int col = result.Layer[node];
+                if (!byColumn.ContainsKey(col)) byColumn[col] = new List<int>();
+                byColumn[col].Add(RowOf(result, node, options));
+            }
+
+            int worst = 0;
+            int worstColumn = -1;
+            foreach (var pair in byColumn)
+            {
+                var rows = pair.Value;
+                rows.Sort();
+                for (int i = 1; i < rows.Count; i++)
+                {
+                    int gap = rows[i] - rows[i - 1] - 1;
+                    if (gap > worst) { worst = gap; worstColumn = pair.Key; }
+                }
+            }
+
+            Console.WriteLine(string.Format("         widest hole inside a column: {0} row(s)", worst));
+            IsTrue(worst <= 1, string.Format("column {0} has a {1}-row hole in it", worstColumn, worst));
+        }
+
+        /// <summary>
+        /// Everything following the same parent must sit together in a column. A card that
+        /// was dropped into whichever row happened to be free split the block it landed in -
+        /// which is how starflight basics ended up with two followers stranded well below
+        /// the rest of its block.
+        /// </summary>
+        private static void SiblingsStayTogetherInAColumn()
+        {
+            var graph = new LayoutGraph(30);
+            for (int i = 1; i <= 8; i++) graph.AddEdge(0, i);     // the block we care about
+            for (int i = 9; i <= 16; i++) graph.AddEdge(1, i);    // a hub inside it
+            for (int i = 17; i <= 22; i++) graph.AddEdge(2, i);   // another
+            // 23..29 stand alone.
+
+            var options = new LayoutOptions { maxNodesPerColumn = 10 };
+            var result = TabLayout.Compute(graph, options);
+
+            // Within each column, the followers of node 0 must occupy consecutive rows.
+            var byColumn = new Dictionary<int, List<int>>();
+            for (int i = 1; i <= 8; i++)
+            {
+                int col = result.Layer[i];
+                if (!byColumn.ContainsKey(col)) byColumn[col] = new List<int>();
+                byColumn[col].Add(RowOf(result, i, options));
+            }
+
+            foreach (var pair in byColumn)
+            {
+                var rows = pair.Value;
+                rows.Sort();
+                for (int i = 1; i < rows.Count; i++)
+                {
+                    if (rows[i] - rows[i - 1] > 1)
+                    {
+                        IsTrue(false, string.Format("siblings split in column {0}: rows {1} and {2}",
+                            pair.Key, rows[i - 1], rows[i]));
+                        return;
+                    }
+                }
+            }
+            IsTrue(true, "siblings sharing a column sit in consecutive rows");
         }
 
         // ---- helpers --------------------------------------------------------------
