@@ -15,7 +15,13 @@ namespace ResearchOrganized.Tests
         private static int checks;
         private static int tests;
 
-        private static int Main()
+        private static int Main(string[] args)
+        {
+            if (args.Length > 0 && args[0] == "dump") return Dump.Run(args);
+            return RunTests();
+        }
+
+        private static int RunTests()
         {
             Run("empty graph is handled", EmptyGraph);
             Run("chain lands in consecutive columns", ChainLayering);
