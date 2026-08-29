@@ -11,15 +11,13 @@ namespace ResearchOrganized.Layout
         /// <summary>Hard cap on cards per column. 0 or less means unbounded.</summary>
         public int maxNodesPerColumn = 12;
 
-        /// <summary>Leave a blank row between sibling groups when the column has room.</summary>
+        /// <summary>Unused by this layout; kept so callers do not need changing.</summary>
         public bool separateGroups = true;
-
-        /// <summary>Passes of reordering within groups to reduce crossing lines.</summary>
         public int refineSweeps = 4;
 
         /// <summary>
-        /// Optional placement priority, lower first. Used to order members inside a group -
-        /// the caller puts cheap projects first - and to break ties between groups.
+        /// Optional placement priority, lower first. Orders cards within a generation - the
+        /// caller puts cheap projects first.
         /// </summary>
         public int[] rank;
     }
@@ -35,28 +33,26 @@ namespace ResearchOrganized.Layout
         public HashSet<int> NodesInCycles = new HashSet<int>();
         public List<LayoutGraph.Edge> ReversedEdges = new List<LayoutGraph.Edge>();
 
-        /// <summary>Edge crossings in the final arrangement. Lower is better.</summary>
         public int Crossings;
     }
 
     /// <summary>
-    /// Lays out one research tab.
+    /// Lays out one research tab as a set of trees, one per group of connected projects.
     ///
-    /// The organising idea is that a reader follows GROUPS, not individual cards. A parent's
-    /// followers are allocated one contiguous run of cells - filling a column top to bottom
-    /// and wrapping into the next - and no other group is placed inside that run. So a
-    /// project with two dozen followers shows a fan landing in one solid block, instead of
-    /// two dozen lines diffusing across a uniform grid of unrelated cards.
+    /// A tree is drawn the way anybody draws a tree: the thing at the top of it sits in one
+    /// column, everything that follows from it sits in the next column along, everything
+    /// following those in the column after that. A project with two dozen followers gets a
+    /// column to itself and the followers fill the columns to its right - so the fan reads
+    /// as a fan, and nothing unrelated is threaded through it.
     ///
-    /// Everything else follows from that:
+    /// Trees are then packed onto the tab: stacked down a shelf while they fit the height,
+    /// then a new shelf to the right. Smallest first, so a tree of five does not have to
+    /// wait behind a tree of thirty. Projects with nothing attached fill whatever is left.
     ///
-    ///   - Each depth occupies a contiguous band of columns. A depth wider than one column
-    ///     simply spans several, which is unavoidable once a hub has more followers than a
-    ///     column can hold, and honest about what is being shown.
-    ///   - Small groups are allocated first, so a parent with three followers keeps them
-    ///     beside it rather than being pushed past a neighbour's twenty.
-    ///   - Hubs sit at the end of their own group, next to where their followers begin.
-    ///   - Column 0 is every project with no prerequisites on this tab: available now.
+    /// The previous layout arranged the whole tab by prerequisite depth instead, which put
+    /// every root in column 0 regardless of what followed it. That is why electricity sat in
+    /// the first column with its followers scattered through three more, cutting across
+    /// another tree on the way.
     /// </summary>
     public static class TabLayout
     {
@@ -77,39 +73,21 @@ namespace ResearchOrganized.Layout
             result.NodesInCycles = broken.NodesInCycles;
 
             var acyclic = broken.Acyclic;
-            int[] depth = ComputeDepth(acyclic);
-            int[] primaryParent = ChoosePrimaryParents(acyclic, depth, options.rank);
-
-            // Projects with nothing attached are set aside first. On a real tab they are
-            // most of the cards - Spacer has 96 projects and only 56 links - and if they
-            // compete for columns with the tree they fill the very slots a parent needs to
-            // sit beside its followers, which is what stranded starflight basics four
-            // columns from its own drive.
-            var connected = new List<int>();
-            var loose = new List<int>();
-            for (int node = 0; node < acyclic.NodeCount; node++)
-            {
-                if (acyclic.ChildrenOf(node).Count > 0 || acyclic.ParentsOf(node).Count > 0) connected.Add(node);
-                else loose.Add(node);
-            }
-
-            var groups = BuildGroups(acyclic, depth, primaryParent, options.rank, connected);
+            int cap = options.maxNodesPerColumn > 0 ? options.maxNodesPerColumn : int.MaxValue;
 
             var column = new int[graph.NodeCount];
             var row = new int[graph.NodeCount];
-            Allocate(acyclic, groups, depth, column, row, options);
 
-            // Pulling a card next to its followers leaves a hole where it used to be, and
-            // drops it into whatever row was free - which splits the block it landed in.
-            // Repacking closes both, and moving cards changes what "beside" means, so the
-            // two alternate until they settle.
-            for (int pass = 0; pass < 3; pass++)
+            var trees = new List<Tree>();
+            var loose = new List<int>();
+            foreach (var members in FindConnectedGroups(acyclic))
             {
-                PullParentsBesideFollowers(acyclic, depth, column, row, connected, options);
-                RepackColumns(column, row, primaryParent, connected, options);
+                if (members.Count == 1) loose.Add(members[0]);
+                else trees.Add(LayoutTree(acyclic, members, column, row, cap, options.rank));
             }
 
-            PlaceLoose(loose, column, row, connected, options);
+            PackTrees(trees, column, row, cap);
+            PlaceLoose(loose, column, row, trees, cap);
             CompactRows(column, row);
 
             for (int node = 0; node < graph.NodeCount; node++)
@@ -123,77 +101,82 @@ namespace ResearchOrganized.Layout
             return result;
         }
 
-        private struct Cell
+        private sealed class Tree
         {
-            public int Column;
-            public int Row;
-
-            public Cell(int column, int row)
-            {
-                Column = column;
-                Row = row;
-            }
+            public List<int> Members;
+            public int Width;
+            public int Height;
         }
 
-        private sealed class Group
+        /// <summary>Groups of projects joined by prerequisites, ignoring direction.</summary>
+        private static List<List<int>> FindConnectedGroups(LayoutGraph graph)
         {
-            public int Depth;
-            public int Parent;               // -1 for the roots
-            public List<int> Members = new List<int>();
-            public List<Cell> Cells = new List<Cell>();
+            var seen = new bool[graph.NodeCount];
+            var groups = new List<List<int>>();
+            var stack = new List<int>();
+
+            for (int start = 0; start < graph.NodeCount; start++)
+            {
+                if (seen[start]) continue;
+
+                var members = new List<int>();
+                seen[start] = true;
+                stack.Add(start);
+
+                while (stack.Count > 0)
+                {
+                    int node = stack[stack.Count - 1];
+                    stack.RemoveAt(stack.Count - 1);
+                    members.Add(node);
+
+                    var children = graph.ChildrenOf(node);
+                    for (int i = 0; i < children.Count; i++)
+                    {
+                        if (!seen[children[i]]) { seen[children[i]] = true; stack.Add(children[i]); }
+                    }
+                    var parents = graph.ParentsOf(node);
+                    for (int i = 0; i < parents.Count; i++)
+                    {
+                        if (!seen[parents[i]]) { seen[parents[i]] = true; stack.Add(parents[i]); }
+                    }
+                }
+
+                members.Sort();
+                groups.Add(members);
+            }
+            return groups;
         }
 
         /// <summary>
-        /// Every node hangs off exactly one parent for grouping purposes: the deepest one,
-        /// so the group sits as far right as the prerequisites actually require. Remaining
-        /// prerequisites still draw their lines, they just do not decide the grouping.
+        /// Places one tree in its own coordinate space, starting at column 0.
+        ///
+        /// Generation by generation: everything with nothing before it in this tree goes in
+        /// the first column, everything following those in the next, and so on. A generation
+        /// too tall for one column wraps into the next, and the following generation always
+        /// starts a fresh column - so a follower is never left of the thing it follows, and a
+        /// parent standing alone in its generation gets a column to itself.
         /// </summary>
-        private static int[] ChoosePrimaryParents(LayoutGraph graph, int[] depth, int[] rank)
+        private static Tree LayoutTree(LayoutGraph graph, List<int> members, int[] column, int[] row, int cap, int[] rank)
         {
-            var primary = new int[graph.NodeCount];
-            for (int node = 0; node < graph.NodeCount; node++)
+            var generation = Generations(graph, members);
+
+            int deepest = 0;
+            foreach (int node in members) if (generation[node] > deepest) deepest = generation[node];
+
+            var byGeneration = new List<int>[deepest + 1];
+            for (int g = 0; g <= deepest; g++) byGeneration[g] = new List<int>();
+            foreach (int node in members) byGeneration[generation[node]].Add(node);
+
+            int localColumn = 0;
+            int tallest = 0;
+
+            for (int g = 0; g <= deepest; g++)
             {
-                var parents = graph.ParentsOf(node);
-                int best = -1;
-                for (int i = 0; i < parents.Count; i++)
-                {
-                    int candidate = parents[i];
-                    if (best < 0
-                        || depth[candidate] > depth[best]
-                        || (depth[candidate] == depth[best] && RankOf(rank, candidate) < RankOf(rank, best)))
-                    {
-                        best = candidate;
-                    }
-                }
-                primary[node] = best;
-            }
-            return primary;
-        }
+                var here = byGeneration[g];
+                if (here.Count == 0) continue;
 
-        private static List<Group> BuildGroups(LayoutGraph graph, int[] depth, int[] primaryParent, int[] rank, List<int> members)
-        {
-            var byKey = new Dictionary<long, Group>();
-            var ordered = new List<Group>();
-
-            foreach (int node in members)
-            {
-                long key = ((long)depth[node] << 32) ^ (uint)(primaryParent[node] + 1);
-
-                Group group;
-                if (!byKey.TryGetValue(key, out group))
-                {
-                    group = new Group { Depth = depth[node], Parent = primaryParent[node] };
-                    byKey[key] = group;
-                    ordered.Add(group);
-                }
-                group.Members.Add(node);
-            }
-
-            foreach (var group in ordered)
-            {
-                // Hubs last, so a hub sits beside where its own followers start. Otherwise
-                // by rank, which the caller orders cheapest first.
-                group.Members.Sort(delegate (int a, int b)
+                // Hubs last, so the next generation begins beside the card it follows from.
+                here.Sort(delegate (int a, int b)
                 {
                     bool hubA = graph.ChildrenOf(a).Count > 0;
                     bool hubB = graph.ChildrenOf(b).Count > 0;
@@ -202,256 +185,111 @@ namespace ResearchOrganized.Layout
                     if (byRank != 0) return byRank;
                     return a.CompareTo(b);
                 });
-            }
 
-            return ordered;
-        }
-
-        /// <summary>
-        /// Hands every group a contiguous run of cells. Depths are laid out in order and each
-        /// occupies its own band of columns, so a follower is always right of its parent.
-        /// </summary>
-
-        /// <summary>
-        /// Hands every group a contiguous run of cells beginning in the column immediately
-        /// after its parent.
-        ///
-        /// Anchoring on the parent rather than on a shared band per depth is what keeps a
-        /// follower beside the thing it follows. Bands looked tidier in the abstract, but a
-        /// depth with many projects spans several columns, and a parent sitting at the start
-        /// of one band ended up two or three columns from followers that named it as their
-        /// only prerequisite.
-        ///
-        /// Groups are taken shallowest first so a parent always has its column before its
-        /// followers need it, and smallest first within a depth so a parent with a handful
-        /// of followers keeps them close instead of being pushed past a neighbour's two dozen.
-        /// </summary>
-        private static void Allocate(LayoutGraph graph, List<Group> groups, int[] depth, int[] column, int[] row, LayoutOptions options)
-        {
-            int maxRows = options.maxNodesPerColumn > 0 ? options.maxNodesPerColumn : int.MaxValue;
-
-            var ordered = new List<Group>(groups);
-            ordered.Sort(delegate (Group a, Group b)
-            {
-                if (a.Depth != b.Depth) return a.Depth.CompareTo(b.Depth);
-                int bySize = a.Members.Count.CompareTo(b.Members.Count);
-                if (bySize != 0) return bySize;
-                return a.Parent.CompareTo(b.Parent);
-            });
-
-            var used = new Dictionary<int, int>();
-
-            foreach (var group in ordered)
-            {
-                int c = group.Parent < 0 ? 0 : column[group.Parent] + 1;
-                int held;
-                while (used.TryGetValue(c, out held) && held >= maxRows) c++;
-
-                // The block has landed further right than the parent - because the columns
-                // between were already full - so bring the parent along to meet it. Waiting
-                // for a later pass to do this fails exactly when it matters: on a full tab
-                // there is no free slot left to move into.
-                if (group.Parent >= 0 && column[group.Parent] != c - 1)
+                int r = 0;
+                foreach (int node in here)
                 {
-                    int wanted = c - 1;
-                    int earliest = 0;
-                    var above = graph.ParentsOf(group.Parent);
-                    for (int i = 0; i < above.Count; i++)
-                    {
-                        if (column[above[i]] + 1 > earliest) earliest = column[above[i]] + 1;
-                    }
-
-                    used.TryGetValue(wanted, out int occupancy);
-                    if (wanted >= earliest && occupancy < maxRows)
-                    {
-                        column[group.Parent] = wanted;
-                        row[group.Parent] = occupancy;
-                        used[wanted] = occupancy + 1;
-                    }
-                }
-
-                used.TryGetValue(c, out int r);
-
-                // A blank row divides this run from whatever shares the column, when there
-                // is room to spare one.
-                if (options.separateGroups && r > 0 && r + group.Members.Count < maxRows) r++;
-
-                foreach (int member in group.Members)
-                {
-                    // Grouping follows one parent, but a project can name several. It must
-                    // still come after all of them, or its connector would run backwards.
-                    int required = c;
-                    var parents = graph.ParentsOf(member);
-                    for (int i = 0; i < parents.Count; i++)
-                    {
-                        if (column[parents[i]] + 1 > required) required = column[parents[i]] + 1;
-                    }
-
-                    while (required > c || (used.TryGetValue(c, out held) && held >= maxRows && r >= maxRows))
-                    {
-                        if (required > c) { c = required; used.TryGetValue(c, out r); }
-                        else break;
-                    }
-
-                    column[member] = c;
-                    row[member] = r;
-                    used[c] = r + 1;
-
+                    column[node] = localColumn;
+                    row[node] = r;
                     r++;
-                    if (r >= maxRows)
-                    {
-                        c++;
-                        used.TryGetValue(c, out r);
-                    }
+                    if (r > tallest) tallest = r;
+                    if (r >= cap) { localColumn++; r = 0; }
                 }
+                if (r > 0) localColumn++;
             }
+
+            return new Tree { Members = members, Width = Math.Max(1, localColumn), Height = Math.Max(1, tallest) };
         }
 
-        /// <summary>
-        /// Shuffles members within their own group - never across groups, so the blocks stay
-        /// intact - to pull each card near the average position of what it connects to.
-        /// </summary>
-        private static void Refine(LayoutGraph graph, List<Group> groups, int sweeps)
+        /// <summary>Longest path from the tree's own starting projects.</summary>
+        private static int[] Generations(LayoutGraph graph, List<int> members)
         {
-            if (sweeps < 1) return;
+            var generation = new int[graph.NodeCount];
+            var remaining = new Dictionary<int, int>(members.Count);
+            var ready = new List<int>();
 
-            var row = new int[graph.NodeCount];
-            var column = new int[graph.NodeCount];
-            Project(groups, column, row);
-
-            for (int sweep = 0; sweep < sweeps; sweep++)
+            foreach (int node in members)
             {
-                bool downward = (sweep % 2) == 0;
-
-                foreach (var group in groups)
-                {
-                    if (group.Members.Count < 2) continue;
-
-                    var keys = new Dictionary<int, double>();
-                    for (int i = 0; i < group.Members.Count; i++)
-                    {
-                        int node = group.Members[i];
-                        var neighbours = downward ? graph.ParentsOf(node) : graph.ChildrenOf(node);
-                        keys[node] = neighbours.Count == 0 ? row[node] : Average(neighbours, row);
-                    }
-
-                    group.Members.Sort(delegate (int a, int b)
-                    {
-                        int byKey = keys[a].CompareTo(keys[b]);
-                        if (byKey != 0) return byKey;
-                        return a.CompareTo(b);
-                    });
-                }
-
-                Project(groups, column, row);
+                int count = graph.ParentsOf(node).Count;
+                remaining[node] = count;
+                if (count == 0) ready.Add(node);
             }
-        }
 
-        /// <summary>
-        /// Slides each project rightwards until it sits directly beside its own followers,
-        /// level with the middle of them.
-        ///
-        /// Depth alone puts a project as far left as its prerequisites allow, which is the
-        /// wrong answer to look at: electricity has nothing before it, so depth pins it to
-        /// column 0 while its two dozen followers begin a column or more away, and the
-        /// connectors sweep across everything in between. Nothing is gained by that
-        /// leftmost position - what a reader wants is the parent next to its block.
-        ///
-        /// Deepest first, so by the time a project is considered its own followers have
-        /// already settled. A project never moves left, and never past its own
-        /// prerequisites, so the reading order still holds.
-        /// </summary>
-        private static void PullParentsBesideFollowers(LayoutGraph graph, int[] depth, int[] column, int[] row, List<int> connected, LayoutOptions options)
-        {
-            int maxRows = options.maxNodesPerColumn > 0 ? options.maxNodesPerColumn : int.MaxValue;
-
-            var taken = new HashSet<long>();
-            foreach (int node in connected) taken.Add(CellKey(column[node], row[node]));
-
-            var order = new List<int>();
-            order.AddRange(connected);
-            order.Sort(delegate (int a, int b)
+            while (ready.Count > 0)
             {
-                if (depth[a] != depth[b]) return depth[b].CompareTo(depth[a]);
-                return a.CompareTo(b);
-            });
+                int pick = 0;
+                for (int i = 1; i < ready.Count; i++) if (ready[i] < ready[pick]) pick = i;
 
-            foreach (int node in order)
-            {
+                int node = ready[pick];
+                ready.RemoveAt(pick);
+
                 var children = graph.ChildrenOf(node);
-                if (children.Count == 0) continue;
-
-                int earliestChild = int.MaxValue;
                 for (int i = 0; i < children.Count; i++)
                 {
-                    if (column[children[i]] < earliestChild) earliestChild = column[children[i]];
+                    int child = children[i];
+                    if (generation[node] + 1 > generation[child]) generation[child] = generation[node] + 1;
+                    if (--remaining[child] == 0) ready.Add(child);
                 }
-
-                int target = earliestChild - 1;
-                if (target <= column[node]) continue;
-
-                var parents = graph.ParentsOf(node);
-                for (int i = 0; i < parents.Count; i++)
-                {
-                    if (column[parents[i]] + 1 > target) target = column[parents[i]] + 1;
-                }
-                if (target >= earliestChild || target <= column[node]) continue;
-
-                var childRows = new List<int>(children.Count);
-                for (int i = 0; i < children.Count; i++) childRows.Add(row[children[i]]);
-                childRows.Sort();
-                int desired = childRows[childRows.Count / 2];
-
-                int chosen = NearestFreeRow(taken, target, desired, maxRows);
-                if (chosen < 0) continue;
-
-                taken.Remove(CellKey(column[node], row[node]));
-                column[node] = target;
-                row[node] = chosen;
-                taken.Add(CellKey(target, chosen));
             }
+            return generation;
         }
 
-        private static int NearestFreeRow(HashSet<long> taken, int column, int desired, int maxRows)
+        /// <summary>
+        /// Drops the trees onto the tab: down a shelf while they fit the height, then a new
+        /// shelf to the right. Smallest first, so a tree of five is not made to wait behind a
+        /// tree of thirty - which is what put one tree's followers in the middle of another's.
+        /// </summary>
+        private static void PackTrees(List<Tree> trees, int[] column, int[] row, int cap)
         {
-            for (int offset = 0; offset < maxRows; offset++)
+            trees.Sort(delegate (Tree a, Tree b)
             {
-                int below = desired + offset;
-                if (below < maxRows && !taken.Contains(CellKey(column, below))) return below;
+                int bySize = a.Members.Count.CompareTo(b.Members.Count);
+                if (bySize != 0) return bySize;
+                return a.Members[0].CompareTo(b.Members[0]);
+            });
 
-                int above = desired - offset;
-                if (above >= 0 && !taken.Contains(CellKey(column, above))) return above;
+            int shelfColumn = 0;
+            int shelfRow = 0;
+            int shelfWidth = 0;
+
+            foreach (var tree in trees)
+            {
+                if (shelfRow > 0 && shelfRow + tree.Height > cap)
+                {
+                    shelfColumn += shelfWidth;
+                    shelfRow = 0;
+                    shelfWidth = 0;
+                }
+
+                foreach (int node in tree.Members)
+                {
+                    column[node] += shelfColumn;
+                    row[node] += shelfRow;
+                }
+
+                shelfRow += tree.Height;
+                if (tree.Width > shelfWidth) shelfWidth = tree.Width;
             }
-            return -1;
         }
 
         /// <summary>
-        /// Rebuilds each column so it reads cleanly: no holes, and every card that follows
-        /// the same parent sitting together.
-        ///
-        /// Both are damage from the pull. A card that moves out to join its own followers
-        /// leaves a hole behind it, and lands in whichever row happened to be free, which
-        /// drops it into the middle of someone else's block. Sibling runs are restored in
-        /// place - a group keeps roughly the height it already had, so nothing jumps across
-        /// the tab - and a blank row goes between runs when the column has room for it.
+        /// Projects with nothing attached go in last, filling whatever the trees left. They
+        /// can never take a column a tree needed, and they keep the tab from being padded out
+        /// with blank space.
         /// </summary>
-        /// <summary>
-        /// Drops the projects that have nothing attached into whatever room is left, working
-        /// down each column from the bottom of what the tree already put there. They fill
-        /// the tab out rather than padding it with blanks, and because they go in last they
-        /// can never take a slot a parent needed to sit beside its followers.
-        /// </summary>
-        private static void PlaceLoose(List<int> loose, int[] column, int[] row, List<int> connected, LayoutOptions options)
+        private static void PlaceLoose(List<int> loose, int[] column, int[] row, List<Tree> trees, int cap)
         {
             if (loose.Count == 0) return;
-            int maxRows = options.maxNodesPerColumn > 0 ? options.maxNodesPerColumn : int.MaxValue;
 
             var nextFree = new Dictionary<int, int>();
-            foreach (int node in connected)
+            foreach (var tree in trees)
             {
-                int after = row[node] + 1;
-                int held;
-                if (!nextFree.TryGetValue(column[node], out held) || after > held) nextFree[column[node]] = after;
+                foreach (int node in tree.Members)
+                {
+                    int after = row[node] + 1;
+                    int held;
+                    if (!nextFree.TryGetValue(column[node], out held) || after > held) nextFree[column[node]] = after;
+                }
             }
 
             int target = 0;
@@ -461,7 +299,7 @@ namespace ResearchOrganized.Layout
                 {
                     int used;
                     if (!nextFree.TryGetValue(target, out used)) used = 0;
-                    if (used < maxRows)
+                    if (used < cap)
                     {
                         column[node] = target;
                         row[node] = used;
@@ -471,87 +309,6 @@ namespace ResearchOrganized.Layout
                     target++;
                 }
             }
-        }
-
-        private static void RepackColumns(int[] column, int[] row, int[] primaryParent, List<int> connected, LayoutOptions options)
-        {
-            int maxRows = options.maxNodesPerColumn > 0 ? options.maxNodesPerColumn : int.MaxValue;
-
-            var byColumn = new Dictionary<int, List<int>>();
-            foreach (int node in connected)
-            {
-                List<int> members;
-                if (!byColumn.TryGetValue(column[node], out members))
-                {
-                    members = new List<int>();
-                    byColumn[column[node]] = members;
-                }
-                members.Add(node);
-            }
-
-            foreach (var pair in byColumn)
-            {
-                var members = pair.Value;
-
-                var runs = new Dictionary<int, List<int>>();
-                var runOrder = new List<int>();
-                foreach (int node in members)
-                {
-                    int key = primaryParent[node];
-                    List<int> run;
-                    if (!runs.TryGetValue(key, out run))
-                    {
-                        run = new List<int>();
-                        runs[key] = run;
-                        runOrder.Add(key);
-                    }
-                    run.Add(node);
-                }
-
-                foreach (int key in runOrder)
-                {
-                    runs[key].Sort(delegate (int a, int b)
-                    {
-                        if (row[a] != row[b]) return row[a].CompareTo(row[b]);
-                        return a.CompareTo(b);
-                    });
-                }
-
-                // Runs keep their existing vertical order, so repacking tidies a column
-                // rather than rearranging it.
-                runOrder.Sort(delegate (int a, int b)
-                {
-                    double meanA = MeanRow(runs[a], row);
-                    double meanB = MeanRow(runs[b], row);
-                    int byMean = meanA.CompareTo(meanB);
-                    if (byMean != 0) return byMean;
-                    return a.CompareTo(b);
-                });
-
-                bool roomForGaps = options.separateGroups
-                                && members.Count + runOrder.Count - 1 <= maxRows;
-
-                int next = 0;
-                bool first = true;
-                foreach (int key in runOrder)
-                {
-                    if (!first && roomForGaps) next++;
-                    first = false;
-
-                    foreach (int node in runs[key])
-                    {
-                        row[node] = next;
-                        next++;
-                    }
-                }
-            }
-        }
-
-        private static double MeanRow(List<int> nodes, int[] row)
-        {
-            double total = 0;
-            for (int i = 0; i < nodes.Count; i++) total += row[nodes[i]];
-            return total / nodes.Count;
         }
 
         /// <summary>Removes rows that ended up with nothing in them anywhere on the tab.</summary>
@@ -566,64 +323,6 @@ namespace ResearchOrganized.Layout
             for (int i = 0; i < used.Count; i++) moved[used[i]] = i;
 
             for (int node = 0; node < row.Length; node++) row[node] = moved[row[node]];
-        }
-
-        private static long CellKey(int column, int row)
-        {
-            return ((long)column << 32) ^ (uint)row;
-        }
-
-        private static void Project(List<Group> groups, int[] column, int[] row)
-        {
-            foreach (var group in groups)
-            {
-                for (int i = 0; i < group.Members.Count && i < group.Cells.Count; i++)
-                {
-                    column[group.Members[i]] = group.Cells[i].Column;
-                    row[group.Members[i]] = group.Cells[i].Row;
-                }
-            }
-        }
-
-        private static double Average(IReadOnlyList<int> nodes, int[] row)
-        {
-            double total = 0;
-            for (int i = 0; i < nodes.Count; i++) total += row[nodes[i]];
-            return total / nodes.Count;
-        }
-
-        /// <summary>Longest path from any root, which is the depth a reader perceives.</summary>
-        private static int[] ComputeDepth(LayoutGraph graph)
-        {
-            int count = graph.NodeCount;
-            var depth = new int[count];
-            var remaining = new int[count];
-
-            var ready = new List<int>();
-            for (int i = 0; i < count; i++)
-            {
-                remaining[i] = graph.ParentsOf(i).Count;
-                if (remaining[i] == 0) ready.Add(i);
-            }
-
-            while (ready.Count > 0)
-            {
-                int pick = 0;
-                for (int i = 1; i < ready.Count; i++) if (ready[i] < ready[pick]) pick = i;
-
-                int node = ready[pick];
-                ready.RemoveAt(pick);
-
-                var children = graph.ChildrenOf(node);
-                for (int c = 0; c < children.Count; c++)
-                {
-                    int child = children[c];
-                    if (depth[node] + 1 > depth[child]) depth[child] = depth[node] + 1;
-                    if (--remaining[child] == 0) ready.Add(child);
-                }
-            }
-
-            return depth;
         }
 
         private static int RankOf(int[] rank, int node)
