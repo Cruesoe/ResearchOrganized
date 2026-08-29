@@ -32,12 +32,14 @@ namespace ResearchOrganized.Tests
             Run("roots share the first column", RootsShareTheFirstColumn);
             Run("anchors hold their column when it overflows", AnchorsHoldTheirColumnWhenItOverflows);
             Run("gateway projects go last", GatewayProjectsGoLast);
+            Run("pinned project with followers does not corrupt layers", PinnedProjectWithFollowersDoesNotCorruptLayers);
+            Run("backward edges do not throw", BackwardEdgesDoNotThrow);
             Run("height never exceeds the column cap", HeightNeverExceedsColumnCap);
             Run("scale benchmark", ScaleBenchmark);
 
             Console.WriteLine();
             Console.WriteLine(failures == 0
-                ? string.Format("PASS - {0} checks across 18 tests", checks)
+                ? string.Format("PASS - {0} checks across 20 tests", checks)
                 : string.Format("FAIL - {0} failed check(s) of {1}", failures, checks));
             return failures == 0 ? 0 : 1;
         }
@@ -458,6 +460,63 @@ namespace ResearchOrganized.Tests
                 result.Layer[3], deepest));
 
             IsTrue(result.Layer[3] > deepest, "the gateway sits past every other project");
+        }
+
+        /// <summary>
+        /// Pinning a project that other projects on the same tab depend on would push it to
+        /// the right of its own followers, producing an edge that runs backwards. That
+        /// corrupted the layer structure and threw out of the crossing counter, which took
+        /// down the layout for every tab at once.
+        /// </summary>
+        private static void PinnedProjectWithFollowersDoesNotCorruptLayers()
+        {
+            var graph = new LayoutGraph(8);
+            graph.AddEdge(0, 1);
+            graph.AddEdge(1, 2);   // node 1 is pinned yet node 2 depends on it
+            graph.AddEdge(2, 3);
+            for (int i = 4; i < 8; i++) graph.AddEdge(0, i);
+
+            var pinLast = new bool[8];
+            pinLast[1] = true;
+
+            var options = new LayoutOptions { maxNodesPerColumn = 4, pinLast = pinLast };
+            var result = SugiyamaLayout.Compute(graph, options);
+
+            foreach (var edge in graph.AllEdges())
+            {
+                if (result.Layer[edge.Child] <= result.Layer[edge.Parent])
+                {
+                    IsTrue(false, string.Format("edge {0} runs backwards: columns {1} -> {2}",
+                        edge, result.Layer[edge.Parent], result.Layer[edge.Child]));
+                    return;
+                }
+            }
+            IsTrue(true, "every edge still advances a column");
+        }
+
+        /// <summary>
+        /// Even if something upstream hands the layered graph an edge that cannot run left
+        /// to right, it must degrade rather than throw - this runs at game startup, and one
+        /// exception aborts the layout for every tab.
+        /// </summary>
+        private static void BackwardEdgesDoNotThrow()
+        {
+            var graph = new LayoutGraph(6);
+            graph.AddEdge(0, 1);
+            graph.AddEdge(1, 2);
+            for (int i = 3; i < 6; i++) graph.AddEdge(0, i);
+
+            // Force a layering that puts a child left of its parent.
+            var broken = CycleBreaker.Break(graph);
+            var layerOf = new int[6];
+            layerOf[0] = 0; layerOf[1] = 5; layerOf[2] = 2;
+            layerOf[3] = 1; layerOf[4] = 1; layerOf[5] = 1;
+
+            var layered = LayeredGraph.Build(broken.Acyclic, layerOf);
+            Ordering.Optimize(layered, 4);
+            int crossings = layered.CountCrossings();
+
+            IsTrue(crossings >= 0, "counted crossings without throwing");
         }
 
         // ---- helpers --------------------------------------------------------------
