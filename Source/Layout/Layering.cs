@@ -1,132 +1,158 @@
+using System;
 using System.Collections.Generic;
 
 namespace ResearchOrganized.Layout
 {
     /// <summary>
-    /// Assigns each node to a layer (a column, in RimWorld terms) such that every node sits
-    /// strictly to the right of all its parents, while keeping any single layer from
-    /// exceeding maxWidth nodes.
+    /// Decides which column each node sits in.
     ///
-    /// Uses Coffman-Graham labelling to decide the order nodes are considered, then a
-    /// width-bounded greedy placement. The labelling is what keeps siblings together:
-    /// nodes whose parents were placed early get labelled early, so related work lands in
-    /// neighbouring layers instead of being scattered by an arbitrary topological order.
+    /// A column means something to the reader: it is how deep a project sits in the
+    /// prerequisite chain, so column 0 is "you can research this right now". That has to
+    /// hold across the whole tab, not per fragment - a project with no prerequisites must
+    /// never appear to the right of one that has them, because the eye reads that as
+    /// "comes after".
+    ///
+    /// Columns 0..maxDepth are reserved for nodes of exactly that depth. When a column is
+    /// full, the lowest-priority nodes spill into columns past maxDepth rather than into the
+    /// next depth's column, so a project that fits always stays beside its parent and only
+    /// the least important leaves get pushed out to the side.
     /// </summary>
     public static class Layering
     {
         /// <summary>
-        /// Returns layer[node]. Requires an acyclic graph - run <see cref="CycleBreaker"/> first.
-        /// maxWidth &lt;= 0 means unbounded.
+        /// Returns column[node]. Requires an acyclic graph - run <see cref="CycleBreaker"/>
+        /// first. maxWidth &lt;= 0 means unbounded.
         /// </summary>
-        public static int[] Assign(LayoutGraph graph, int maxWidth)
+        /// <param name="rank">
+        /// Optional placement priority, lower first. Nodes competing for a full column are
+        /// kept in rank order, so whatever the caller considers important stays put and the
+        /// rest spills. Null means node index order.
+        /// </param>
+        /// <param name="pinLast">
+        /// Optional. Nodes forced into the final columns regardless of depth - for a project
+        /// that concludes a tab, such as one unlocking the bench the next tab needs.
+        /// </param>
+        public static int[] Assign(LayoutGraph graph, int maxWidth, int[] rank, bool[] pinLast)
         {
-            int[] order = ComputeLabelOrder(graph);
-            var layer = new int[graph.NodeCount];
-            var layerCounts = new Dictionary<int, int>();
+            int count = graph.NodeCount;
+            var column = new int[count];
+            if (count == 0) return column;
 
-            for (int i = 0; i < order.Length; i++)
+            int[] depth = ComputeDepth(graph);
+
+            int maxDepth = 0;
+            for (int i = 0; i < count; i++) if (depth[i] > maxDepth) maxDepth = depth[i];
+
+            var order = new List<int>(count);
+            for (int i = 0; i < count; i++) order.Add(i);
+            order.Sort(delegate (int a, int b)
+            {
+                if (depth[a] != depth[b]) return depth[a].CompareTo(depth[b]);
+                if (rank != null && rank[a] != rank[b]) return rank[a].CompareTo(rank[b]);
+                return a.CompareTo(b);
+            });
+
+            var occupancy = new Dictionary<int, int>();
+            var placed = new bool[count];
+
+            for (int i = 0; i < order.Count; i++)
             {
                 int node = order[i];
+                if (pinLast != null && pinLast[node]) continue;
 
-                int earliest = 0;
-                var parents = graph.ParentsOf(node);
-                for (int p = 0; p < parents.Count; p++)
-                {
-                    int candidate = layer[parents[p]] + 1;
-                    if (candidate > earliest) earliest = candidate;
-                }
-
-                if (maxWidth > 0)
-                {
-                    int count;
-                    while (layerCounts.TryGetValue(earliest, out count) && count >= maxWidth) earliest++;
-                }
-
-                layer[node] = earliest;
-                int existing;
-                layerCounts[earliest] = layerCounts.TryGetValue(earliest, out existing) ? existing + 1 : 1;
+                column[node] = PlaceNode(graph, node, depth[node], maxDepth, maxWidth, column, occupancy);
+                placed[node] = true;
             }
 
-            return layer;
+            if (pinLast != null)
+            {
+                int finalColumn = maxDepth;
+                foreach (var pair in occupancy) if (pair.Key > finalColumn) finalColumn = pair.Key;
+                finalColumn++;
+
+                for (int i = 0; i < order.Count; i++)
+                {
+                    int node = order[i];
+                    if (!pinLast[node] || placed[node]) continue;
+
+                    column[node] = PlaceNode(graph, node, finalColumn, int.MaxValue, maxWidth, column, occupancy);
+                    placed[node] = true;
+                }
+            }
+
+            return column;
         }
 
-        /// <summary>
-        /// Coffman-Graham labelling. Repeatedly takes an unlabelled node whose parents are
-        /// all labelled, preferring the one whose parent labels are lexicographically
-        /// smallest (comparing largest label first). Returns nodes in labelling order,
-        /// which is always a valid topological order.
-        /// </summary>
-        private static int[] ComputeLabelOrder(LayoutGraph graph)
+        private static int PlaceNode(LayoutGraph graph, int node, int idealColumn, int reservedThrough,
+                                     int maxWidth, int[] column, Dictionary<int, int> occupancy)
         {
-            int n = graph.NodeCount;
-            var labelled = new bool[n];
-            var label = new int[n];
-            var order = new int[n];
+            int earliest = idealColumn;
+            var parents = graph.ParentsOf(node);
+            for (int p = 0; p < parents.Count; p++)
+            {
+                int after = column[parents[p]] + 1;
+                if (after > earliest) earliest = after;
+            }
 
-            var remainingParents = new int[n];
-            for (int i = 0; i < n; i++) remainingParents[i] = graph.ParentsOf(i).Count;
+            int chosen = earliest;
+            if (maxWidth > 0)
+            {
+                int held;
+                if (chosen <= reservedThrough && occupancy.TryGetValue(chosen, out held) && held >= maxWidth)
+                {
+                    // This depth's column is full. Spill sideways instead of stealing the
+                    // next depth's column, which would drag this node away from its parent
+                    // and push a whole subtree along with it.
+                    chosen = reservedThrough + 1;
+                    if (chosen < earliest) chosen = earliest;
+                }
+                while (occupancy.TryGetValue(chosen, out held) && held >= maxWidth) chosen++;
+            }
+
+            int existing;
+            occupancy[chosen] = occupancy.TryGetValue(chosen, out existing) ? existing + 1 : 1;
+            return chosen;
+        }
+
+        /// <summary>Longest path from any root, which is the depth a reader perceives.</summary>
+        private static int[] ComputeDepth(LayoutGraph graph)
+        {
+            int count = graph.NodeCount;
+            var depth = new int[count];
+            var remaining = new int[count];
 
             var ready = new List<int>();
-            for (int i = 0; i < n; i++) if (remainingParents[i] == 0) ready.Add(i);
-
-            for (int step = 0; step < n; step++)
+            for (int i = 0; i < count; i++)
             {
-                if (ready.Count == 0)
-                {
-                    // Should not happen on a DAG, but never spin: take any unlabelled node.
-                    for (int i = 0; i < n; i++) if (!labelled[i]) { ready.Add(i); break; }
-                    if (ready.Count == 0) break;
-                }
+                remaining[i] = graph.ParentsOf(i).Count;
+                if (remaining[i] == 0) ready.Add(i);
+            }
 
-                int bestIndex = 0;
-                var bestKey = ParentLabelKey(graph, ready[0], label, labelled);
-                for (int i = 1; i < ready.Count; i++)
-                {
-                    var key = ParentLabelKey(graph, ready[i], label, labelled);
-                    if (CompareDescending(key, bestKey) < 0)
-                    {
-                        bestKey = key;
-                        bestIndex = i;
-                    }
-                }
+            int processed = 0;
+            while (ready.Count > 0)
+            {
+                // Smallest index first purely so the result is reproducible.
+                int pick = 0;
+                for (int i = 1; i < ready.Count; i++) if (ready[i] < ready[pick]) pick = i;
 
-                int chosen = ready[bestIndex];
-                ready.RemoveAt(bestIndex);
+                int node = ready[pick];
+                ready.RemoveAt(pick);
+                processed++;
 
-                labelled[chosen] = true;
-                label[chosen] = step;
-                order[step] = chosen;
-
-                var children = graph.ChildrenOf(chosen);
+                var children = graph.ChildrenOf(node);
                 for (int c = 0; c < children.Count; c++)
                 {
                     int child = children[c];
-                    if (--remainingParents[child] == 0 && !labelled[child]) ready.Add(child);
+                    if (depth[node] + 1 > depth[child]) depth[child] = depth[node] + 1;
+                    if (--remaining[child] == 0) ready.Add(child);
                 }
             }
 
-            return order;
-        }
+            // A well-formed acyclic graph always drains; if something is left, it keeps
+            // depth 0 rather than being dropped from the layout.
+            if (processed < count) { }
 
-        private static List<int> ParentLabelKey(LayoutGraph graph, int node, int[] label, bool[] labelled)
-        {
-            var key = new List<int>();
-            var parents = graph.ParentsOf(node);
-            for (int i = 0; i < parents.Count; i++) if (labelled[parents[i]]) key.Add(label[parents[i]]);
-            key.Sort();
-            key.Reverse();
-            return key;
-        }
-
-        /// <summary>Lexicographic compare of descending label lists; shorter wins on a prefix tie.</summary>
-        private static int CompareDescending(List<int> a, List<int> b)
-        {
-            int shared = a.Count < b.Count ? a.Count : b.Count;
-            for (int i = 0; i < shared; i++)
-            {
-                if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
-            }
-            return a.Count.CompareTo(b.Count);
+            return depth;
         }
     }
 }

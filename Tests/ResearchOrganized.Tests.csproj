@@ -40,9 +40,6 @@
       references RimWorld and Unity and could not load in a plain console host. Everything
       under Source\Layout is deliberately free of those dependencies so it can be tested here.
     -->
-    <Compile Include="..\Source\Layout\Components.cs">
-      <Link>Layout\Components.cs</Link>
-    </Compile>
     <Compile Include="..\Source\Layout\LayoutGraph.cs">
       <Link>Layout\LayoutGraph.cs</Link>
     </Compile>
