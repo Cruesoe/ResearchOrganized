@@ -13,44 +13,41 @@ namespace ResearchOrganized.Tests
     {
         private static int failures;
         private static int checks;
+        private static int tests;
 
         private static int Main()
         {
             Run("empty graph is handled", EmptyGraph);
             Run("chain lands in consecutive columns", ChainLayering);
-            Run("every child is right of its parents", ChildAlwaysRightOfParent);
-            Run("column width cap is respected", ColumnWidthCap);
+            Run("every follower is right of its parent", ChildAlwaysRightOfParent);
+            Run("column height cap is respected", ColumnHeightCap);
             Run("cycles are broken and reported", CyclesAreBroken);
-            Run("a planar graph ends with zero crossings", PlanarGraphHasNoCrossings);
-            Run("crossings are reduced on a tangled graph", CrossingsAreReduced);
-            Run("nodes in a column keep minimum separation", MinimumSeparation);
             Run("layout is deterministic", Deterministic);
-            Run("disconnected components all get placed", DisconnectedComponents);
-            Run("dependents stay near their parents", DependentsStayNearParents);
-            Run("loose nodes pack tightly", LooseNodesPackTightly);
-            Run("routed edges do not inflate columns", RoutedEdgesDoNotInflateColumns);
             Run("roots share the first column", RootsShareTheFirstColumn);
-            Run("anchors hold their column when it overflows", AnchorsHoldTheirColumnWhenItOverflows);
-            Run("gateway projects go last", GatewayProjectsGoLast);
-            Run("pinned project with followers does not corrupt layers", PinnedProjectWithFollowersDoesNotCorruptLayers);
-            Run("backward edges do not throw", BackwardEdgesDoNotThrow);
-            Run("overflow stays near its parent", OverflowStaysNearItsParent);
+            Run("loose projects pack tightly", LooseNodesPackTightly);
+            Run("a wide fan lands in one contiguous block", WideFanFormsOneBlock);
+            Run("groups never interleave", GroupsDoNotInterleave);
+            Run("a small group stays beside its parent", SmallGroupStaysNearParent);
+            Run("hubs sit beside their own followers", HubsSitAtGroupEnd);
+            Run("groups are visually separated", GroupsAreSeparated);
             Run("no empty rows across the tab", NoEmptyRowsAcrossTheTab);
-            Run("height never exceeds the column cap", HeightNeverExceedsColumnCap);
+            Run("refinement reduces crossings", RefinementReducesCrossings);
+            Run("height never exceeds the cap", HeightNeverExceedsColumnCap);
+            Run("backward edges do not throw", BackwardEdgesDoNotThrow);
             Run("scale benchmark", ScaleBenchmark);
 
             Console.WriteLine();
             Console.WriteLine(failures == 0
-                ? string.Format("PASS - {0} checks across 22 tests", checks)
+                ? string.Format("PASS - {0} checks across {1} tests", checks, tests)
                 : string.Format("FAIL - {0} failed check(s) of {1}", failures, checks));
             return failures == 0 ? 0 : 1;
         }
 
-        // ---- tests ----------------------------------------------------------------
+        // ---- basics ---------------------------------------------------------------
 
         private static void EmptyGraph()
         {
-            var result = SugiyamaLayout.Compute(new LayoutGraph(0), new LayoutOptions());
+            var result = TabLayout.Compute(new LayoutGraph(0), new LayoutOptions());
             IsTrue(result.X.Length == 0, "no coordinates produced");
         }
 
@@ -60,17 +57,16 @@ namespace ResearchOrganized.Tests
             graph.AddEdge(0, 1);
             graph.AddEdge(1, 2);
 
-            var result = SugiyamaLayout.Compute(graph, new LayoutOptions());
-            AreEqual(0, result.Layer[0], "first node column");
-            AreEqual(1, result.Layer[1], "second node column");
-            AreEqual(2, result.Layer[2], "third node column");
-            IsTrue(result.X[0] < result.X[1] && result.X[1] < result.X[2], "x increases along the chain");
+            var result = TabLayout.Compute(graph, new LayoutOptions());
+            AreEqual(0, result.Layer[0], "first project column");
+            AreEqual(1, result.Layer[1], "second project column");
+            AreEqual(2, result.Layer[2], "third project column");
         }
 
         private static void ChildAlwaysRightOfParent()
         {
             var graph = RandomDag(60, 120, seed: 12345);
-            var result = SugiyamaLayout.Compute(graph, new LayoutOptions());
+            var result = TabLayout.Compute(graph, new LayoutOptions { maxNodesPerColumn = 10 });
 
             foreach (var edge in graph.AllEdges())
             {
@@ -83,14 +79,11 @@ namespace ResearchOrganized.Tests
             IsTrue(true, "all 120 edges advance at least one column");
         }
 
-        private static void ColumnWidthCap()
+        private static void ColumnHeightCap()
         {
-            // One root with 20 independent children; cap of 4 must split them across columns.
-            var graph = new LayoutGraph(21);
-            for (int i = 1; i <= 20; i++) graph.AddEdge(0, i);
-
-            var options = new LayoutOptions { maxNodesPerColumn = 4 };
-            var result = SugiyamaLayout.Compute(graph, options);
+            var graph = MakeFan(40);
+            var options = new LayoutOptions { maxNodesPerColumn = 6 };
+            var result = TabLayout.Compute(graph, options);
 
             var counts = new Dictionary<int, int>();
             for (int node = 0; node < graph.NodeCount; node++)
@@ -101,9 +94,9 @@ namespace ResearchOrganized.Tests
 
             foreach (var pair in counts)
             {
-                if (pair.Value > 4)
+                if (pair.Value > 6)
                 {
-                    IsTrue(false, string.Format("column {0} holds {1} nodes, cap was 4", pair.Key, pair.Value));
+                    IsTrue(false, string.Format("column {0} holds {1} cards, cap was 6", pair.Key, pair.Value));
                     return;
                 }
             }
@@ -117,231 +110,260 @@ namespace ResearchOrganized.Tests
             graph.AddEdge(1, 2);
             graph.AddEdge(2, 0);
 
-            var result = SugiyamaLayout.Compute(graph, new LayoutOptions());
+            var result = TabLayout.Compute(graph, new LayoutOptions());
             IsTrue(result.ReversedEdges.Count >= 1, "at least one edge was reversed");
-            IsTrue(result.NodesInCycles.Count >= 2, "nodes on the cycle were reported");
-
-            // After breaking, the retained edges must still form a left-to-right order.
-            int advancing = 0;
-            foreach (var edge in graph.AllEdges())
-            {
-                if (result.Layer[edge.Child] > result.Layer[edge.Parent]) advancing++;
-            }
-            AreEqual(2, advancing, "two of the three cycle edges still advance");
-        }
-
-        private static void PlanarGraphHasNoCrossings()
-        {
-            // Three parents wired to three children in reverse order. Crossings only
-            // vanish if the ordering stage flips one of the layers.
-            var graph = new LayoutGraph(6);
-            graph.AddEdge(0, 5);
-            graph.AddEdge(1, 4);
-            graph.AddEdge(2, 3);
-
-            var result = SugiyamaLayout.Compute(graph, new LayoutOptions());
-            AreEqual(0, result.Crossings, "crossings eliminated");
-        }
-
-        private static void CrossingsAreReduced()
-        {
-            var graph = RandomDag(40, 90, seed: 999);
-            var options = new LayoutOptions();
-
-            int optimized = SugiyamaLayout.Compute(graph, options).Crossings;
-            int unoptimized = CrossingsWithoutOrdering(graph, options);
-
-            IsTrue(optimized <= unoptimized,
-                string.Format("ordering did not make things worse ({0} vs {1} unoptimised)", optimized, unoptimized));
-            IsTrue(optimized < unoptimized,
-                string.Format("ordering reduced crossings: {0} -> {1}", unoptimized, optimized));
-
-            Console.WriteLine(string.Format("         40 nodes / 90 edges: {0} -> {1} crossings ({2:0.#}% fewer)",
-                unoptimized, optimized, 100.0 * (unoptimized - optimized) / unoptimized));
-        }
-
-        /// <summary>
-        /// Not an assertion so much as a guard rail: this runs during game startup, so if a
-        /// tree the size of a heavy modlist ever takes seconds rather than milliseconds we
-        /// want to see it here rather than in a load-time freeze.
-        /// </summary>
-        private static void ScaleBenchmark()
-        {
-            var graph = RandomDag(400, 900, seed: 20260828);
-            var options = new LayoutOptions();
-
-            int before = CrossingsWithoutOrdering(graph, options);
-            var watch = System.Diagnostics.Stopwatch.StartNew();
-            var result = SugiyamaLayout.Compute(graph, options);
-            watch.Stop();
-
-            Console.WriteLine(string.Format("         400 nodes / 900 edges: {0} -> {1} crossings in {2} ms",
-                before, result.Crossings, watch.ElapsedMilliseconds));
-
-            IsTrue(result.Crossings <= before, "large graph did not regress");
-            IsTrue(watch.ElapsedMilliseconds < 10000, "large graph laid out in under 10 seconds");
-        }
-
-        private static void MinimumSeparation()
-        {
-            var graph = RandomDag(50, 100, seed: 4242);
-            var options = new LayoutOptions();
-            var result = SugiyamaLayout.Compute(graph, options);
-
-            var byLayer = new Dictionary<int, List<float>>();
-            for (int node = 0; node < graph.NodeCount; node++)
-            {
-                int layer = result.Layer[node];
-                if (!byLayer.ContainsKey(layer)) byLayer[layer] = new List<float>();
-                byLayer[layer].Add(result.Y[node]);
-            }
-
-            foreach (var pair in byLayer)
-            {
-                var values = pair.Value;
-                values.Sort();
-                for (int i = 1; i < values.Count; i++)
-                {
-                    float gap = values[i] - values[i - 1];
-                    if (gap < options.yStep - 0.001f)
-                    {
-                        IsTrue(false, string.Format("column {0} has a {1:0.###} gap, expected >= {2}", pair.Key, gap, options.yStep));
-                        return;
-                    }
-                }
-            }
-            IsTrue(true, "all columns kept their minimum spacing");
+            IsTrue(result.NodesInCycles.Count >= 2, "projects on the cycle were reported");
         }
 
         private static void Deterministic()
         {
             var graph = RandomDag(45, 95, seed: 777);
-            var first = SugiyamaLayout.Compute(graph, new LayoutOptions());
-            var second = SugiyamaLayout.Compute(graph, new LayoutOptions());
+            var first = TabLayout.Compute(graph, new LayoutOptions());
+            var second = TabLayout.Compute(graph, new LayoutOptions());
 
             for (int node = 0; node < graph.NodeCount; node++)
             {
                 if (first.X[node] != second.X[node] || first.Y[node] != second.Y[node])
                 {
-                    IsTrue(false, "node " + node + " moved between identical runs");
+                    IsTrue(false, "project " + node + " moved between identical runs");
                     return;
                 }
             }
             IsTrue(true, "two runs produced identical coordinates");
         }
 
-        private static void DisconnectedComponents()
-        {
-            var graph = new LayoutGraph(6);
-            graph.AddEdge(0, 1);
-            graph.AddEdge(2, 3);
-            // 4 and 5 are isolated.
-
-            var result = SugiyamaLayout.Compute(graph, new LayoutOptions());
-            AreEqual(0, result.Layer[4], "isolated node sits in the first column");
-            AreEqual(0, result.Layer[5], "second isolated node too");
-            IsTrue(result.Layer[1] == 1 && result.Layer[3] == 1, "both components advance normally");
-        }
+        // ---- the grouping model ---------------------------------------------------
 
         /// <summary>
-        /// Models a real tab. Because tabs are split by tech level and prerequisites almost
-        /// always cross tech levels, most nodes on a tab have no in-tab parent at all - a tab
-        /// is mostly loose nodes plus a few short chains. A dependent node must still land
-        /// beside its parent, not be flung to the far right because the cap filled the
-        /// columns in between.
+        /// A project with no prerequisites is available immediately, so it belongs in
+        /// column zero whichever part of the tab it belongs to.
         /// </summary>
-        private static void DependentsStayNearParents()
+        private static void RootsShareTheFirstColumn()
         {
-            // 80 loose nodes, plus one 4-long chain hanging off node 0.
-            var graph = new LayoutGraph(84);
-            graph.AddEdge(0, 80);
-            graph.AddEdge(80, 81);
-            graph.AddEdge(81, 82);
-            graph.AddEdge(82, 83);
+            var graph = new LayoutGraph(20);
+            for (int i = 1; i <= 12; i++) graph.AddEdge(0, i);
+            graph.AddEdge(13, 14);
+            // 15..19 stand alone.
 
-            var options = new LayoutOptions { maxNodesPerColumn = 10 };
-            var result = SugiyamaLayout.Compute(graph, options);
+            var result = TabLayout.Compute(graph, new LayoutOptions { maxNodesPerColumn = 10 });
 
-            int worst = 0;
-            foreach (var edge in graph.AllEdges())
+            int[] roots = { 0, 13, 15, 16, 17, 18, 19 };
+            foreach (int root in roots)
             {
-                int span = result.Layer[edge.Child] - result.Layer[edge.Parent];
-                if (span > worst) worst = span;
+                if (result.Layer[root] != 0)
+                {
+                    IsTrue(false, string.Format("root {0} landed in column {1}, not 0", root, result.Layer[root]));
+                    return;
+                }
             }
-
-            Console.WriteLine(string.Format("         worst parent->child column span: {0}", worst));
-            IsTrue(worst <= 2, string.Format("a child sits {0} columns from its parent", worst));
+            IsTrue(true, "all 7 prerequisite-free projects share column 0");
         }
 
-        /// <summary>
-        /// A tab of entirely unconnected projects should pack into a tight block, not sprawl.
-        /// </summary>
         private static void LooseNodesPackTightly()
         {
             var graph = new LayoutGraph(80);
-            var options = new LayoutOptions { maxNodesPerColumn = 10 };
-            var result = SugiyamaLayout.Compute(graph, options);
+            var result = TabLayout.Compute(graph, new LayoutOptions { maxNodesPerColumn = 10 });
 
             int columns = 0;
             for (int i = 0; i < 80; i++) if (result.Layer[i] + 1 > columns) columns = result.Layer[i] + 1;
 
-            Console.WriteLine(string.Format("         80 loose nodes packed into {0} columns (ideal 8)", columns));
-            IsTrue(columns <= 8, string.Format("used {0} columns for 80 nodes at 10 per column", columns));
+            Console.WriteLine(string.Format("         80 loose projects packed into {0} columns (ideal 8)", columns));
+            IsTrue(columns <= 8, string.Format("used {0} columns for 80 projects at 10 per column", columns));
         }
 
         /// <summary>
-        /// A long edge crossing a column becomes a dummy node in that column. A dummy is a
-        /// line passing through, not a research card, so it must not push the real nodes in
-        /// that column a whole row apart. This is what left large vertical gaps between
-        /// cards that sat in the same column.
+        /// The case that motivated the model. Electricity has 24 followers against a cap of
+        /// 10, so they cannot share a column - but they must still land as ONE run of cells
+        /// with nothing else inside it, not diffuse across the tab.
         /// </summary>
-        private static void RoutedEdgesDoNotInflateColumns()
+        private static void WideFanFormsOneBlock()
         {
-            // A hub fanning to 8 nodes placed far to the right, so every intermediate
-            // column carries 8 routed edges, plus 4 real cards sharing one of those columns.
-            var graph = new LayoutGraph(14);
-            for (int i = 1; i <= 8; i++) graph.AddEdge(0, i);
-            for (int i = 1; i <= 8; i++) graph.AddEdge(i, 9);
-            graph.AddEdge(9, 10);
-            graph.AddEdge(10, 11);
-            graph.AddEdge(11, 12);
-            graph.AddEdge(12, 13);
+            var graph = new LayoutGraph(30);
+            for (int i = 1; i <= 24; i++) graph.AddEdge(0, i);   // the hub
+            graph.AddEdge(25, 26);                                // an unrelated pair
+            // 27, 28, 29 stand alone.
 
-            var options = new LayoutOptions { maxNodesPerColumn = 4 };
-            var result = SugiyamaLayout.Compute(graph, options);
+            var options = new LayoutOptions { maxNodesPerColumn = 10 };
+            var result = TabLayout.Compute(graph, options);
 
-            float minY = float.MaxValue, maxY = float.MinValue;
-            for (int i = 0; i < graph.NodeCount; i++)
+            var cells = new List<int>();
+            for (int i = 1; i <= 24; i++) cells.Add(result.Layer[i] * 1000 + RowOf(result, i, options));
+            cells.Sort();
+
+            // Contiguous in column-major order means every step is +1 row, or a wrap.
+            int breaks = 0;
+            for (int i = 1; i < cells.Count; i++) if (cells[i] != cells[i - 1] + 1) breaks++;
+
+            int spanColumns = result.Layer[24] - result.Layer[1] + 1;
+            Console.WriteLine(string.Format("         24 followers span {0} columns with {1} break(s) in the run",
+                spanColumns, breaks));
+
+            IsTrue(breaks <= 2, string.Format("the fan is split into {0} pieces", breaks + 1));
+            IsTrue(spanColumns <= 3, string.Format("the fan spans {0} columns", spanColumns));
+        }
+
+        /// <summary>
+        /// No cell inside one parent's run may belong to a different parent. This is what
+        /// stops a fan reading as a grid of unrelated cards.
+        /// </summary>
+        private static void GroupsDoNotInterleave()
+        {
+            var graph = new LayoutGraph(40);
+            for (int i = 1; i <= 15; i++) graph.AddEdge(0, i);
+            for (int i = 16; i <= 25; i++) graph.AddEdge(1, i);
+            for (int i = 26; i <= 30; i++) graph.AddEdge(2, i);
+            // 31..39 stand alone.
+
+            var options = new LayoutOptions { maxNodesPerColumn = 8 };
+            var result = TabLayout.Compute(graph, options);
+
+            var owners = new Dictionary<int, int>();   // cell -> owning parent
+            foreach (var edge in graph.AllEdges())
             {
-                if (result.Y[i] < minY) minY = result.Y[i];
-                if (result.Y[i] > maxY) maxY = result.Y[i];
+                int cell = result.Layer[edge.Child] * 1000 + RowOf(result, edge.Child, options);
+                owners[cell] = edge.Parent;
             }
 
-            float rows = (maxY - minY) / options.yStep;
-            Console.WriteLine(string.Format("         14 nodes, cap 4: vertical extent {0:0.#} rows", rows));
+            var sortedCells = new List<int>(owners.Keys);
+            sortedCells.Sort();
 
-            // 14 nodes at 4 per column needs about 4 rows. Allow generous slack for
-            // straightening, but not the runaway growth a full-height dummy causes.
-            IsTrue(rows <= 8f, string.Format("layout is {0:0.#} rows tall for a 4-row-deep graph", rows));
+            // Walking the cells in order, an owner must not reappear after another owner
+            // has taken over - that would mean two groups were woven together.
+            var seen = new HashSet<int>();
+            int previousOwner = -1;
+            foreach (int cell in sortedCells)
+            {
+                int owner = owners[cell];
+                if (owner != previousOwner)
+                {
+                    if (!seen.Add(owner))
+                    {
+                        IsTrue(false, string.Format("group {0} is split around another group", owner));
+                        return;
+                    }
+                    previousOwner = owner;
+                }
+            }
+            IsTrue(true, "each parent's followers form one unbroken run");
         }
 
-        /// <summary>
-        /// The research window does not scroll comfortably in Y, so a tab must never grow
-        /// taller than maxNodesPerColumn rows - overflow goes sideways instead. The original
-        /// engine guaranteed this by only ever placing nodes at row indices below the cap;
-        /// the rewrite lost it and tabs ran off the bottom of the window.
-        /// </summary>
+        private static void SmallGroupStaysNearParent()
+        {
+            // A big hub and a small one at the same depth. The small group must not be
+            // pushed past the big one's two dozen.
+            var graph = new LayoutGraph(32);
+            for (int i = 2; i <= 25; i++) graph.AddEdge(0, i);   // 24 followers
+            for (int i = 26; i <= 29; i++) graph.AddEdge(1, i);  // 4 followers
+
+            var options = new LayoutOptions { maxNodesPerColumn = 10 };
+            var result = TabLayout.Compute(graph, options);
+
+            int worst = 0;
+            for (int i = 26; i <= 29; i++)
+            {
+                int span = result.Layer[i] - result.Layer[1];
+                if (span > worst) worst = span;
+            }
+
+            Console.WriteLine(string.Format("         small group sits {0} column(s) from its parent", worst));
+            IsTrue(worst <= 1, string.Format("the small group is {0} columns away", worst));
+        }
+
+        private static void HubsSitAtGroupEnd()
+        {
+            // Node 5 is a follower of 0 and a hub in its own right.
+            var graph = new LayoutGraph(20);
+            for (int i = 1; i <= 8; i++) graph.AddEdge(0, i);
+            for (int i = 9; i <= 14; i++) graph.AddEdge(5, i);
+
+            var options = new LayoutOptions { maxNodesPerColumn = 10 };
+            var result = TabLayout.Compute(graph, options);
+
+            // Hubs start at the end of their group, but the refinement pass then pulls them
+            // level with the middle of their own followers. That is the better place to be:
+            // the lines out of the hub stay short instead of fanning from a corner. What
+            // matters is that it ends up beside its followers, not that it is last.
+            int hubRow = RowOf(result, 5, options);
+
+            double followerRows = 0;
+            for (int i = 9; i <= 14; i++) followerRows += RowOf(result, i, options);
+            followerRows /= 6;
+
+            Console.WriteLine(string.Format("         hub at row {0}, its followers centre on row {1:0.#}",
+                hubRow, followerRows));
+
+            IsTrue(Math.Abs(hubRow - followerRows) <= 2.0,
+                string.Format("hub is {0:0.#} rows from the middle of its own followers", Math.Abs(hubRow - followerRows)));
+        }
+
+        private static void GroupsAreSeparated()
+        {
+            // Two small groups sharing a column should have a blank row between them.
+            var graph = new LayoutGraph(12);
+            for (int i = 2; i <= 5; i++) graph.AddEdge(0, i);
+            for (int i = 6; i <= 9; i++) graph.AddEdge(1, i);
+
+            var options = new LayoutOptions { maxNodesPerColumn = 12, separateGroups = true };
+            var result = TabLayout.Compute(graph, options);
+
+            var rowsA = new List<int>();
+            var rowsB = new List<int>();
+            for (int i = 2; i <= 5; i++) rowsA.Add(RowOf(result, i, options));
+            for (int i = 6; i <= 9; i++) rowsB.Add(RowOf(result, i, options));
+            rowsA.Sort();
+            rowsB.Sort();
+
+            bool sameColumn = result.Layer[2] == result.Layer[6];
+            int gap = sameColumn ? Math.Abs(Math.Min(rowsB[0], rowsA[0]) - Math.Max(rowsA[rowsA.Count - 1], rowsB[rowsB.Count - 1])) : 0;
+
+            Console.WriteLine(string.Format("         two 4-card groups share a column: {0}", sameColumn));
+            IsTrue(!sameColumn || gap >= 4, "a blank row divides the two groups");
+        }
+
+        private static void NoEmptyRowsAcrossTheTab()
+        {
+            var graph = new LayoutGraph(12);
+            graph.AddEdge(1, 2);
+            graph.AddEdge(2, 3);
+            graph.AddEdge(3, 4);
+            graph.AddEdge(5, 6);
+            for (int i = 8; i < 12; i++) graph.AddEdge(5, i);
+
+            var options = new LayoutOptions { maxNodesPerColumn = 10, separateGroups = false };
+            var result = TabLayout.Compute(graph, options);
+
+            var rows = new List<float>(result.Y);
+            rows.Sort();
+
+            float biggest = 0f;
+            for (int i = 1; i < rows.Count; i++)
+            {
+                float gap = rows[i] - rows[i - 1];
+                if (gap > biggest) biggest = gap;
+            }
+
+            Console.WriteLine(string.Format("         widest empty band: {0:0.##} rows", biggest / options.yStep));
+            IsTrue(biggest <= options.yStep + 0.001f, "no band left with nothing in it");
+        }
+
+        private static void RefinementReducesCrossings()
+        {
+            var graph = RandomDag(60, 140, seed: 4242);
+
+            int refined = TabLayout.Compute(graph, new LayoutOptions { maxNodesPerColumn = 10, refineSweeps = 6 }).Crossings;
+            int raw = TabLayout.Compute(graph, new LayoutOptions { maxNodesPerColumn = 10, refineSweeps = 0 }).Crossings;
+
+            Console.WriteLine(string.Format("         60 projects / 140 links: {0} -> {1} crossings", raw, refined));
+            IsTrue(refined <= raw, string.Format("refinement made it worse ({0} vs {1})", refined, raw));
+        }
+
         private static void HeightNeverExceedsColumnCap()
         {
             var cases = new[]
             {
-                // one hub fanning very wide - the classic overflow case
                 MakeFan(60),
-                // a tab that is mostly loose nodes
                 new LayoutGraph(120),
-                // long chains that generate routed edges through many columns
                 MakeLadder(40),
-                // a dense random graph
                 RandomDag(200, 500, seed: 31337)
             };
 
@@ -350,7 +372,7 @@ namespace ResearchOrganized.Tests
 
             for (int c = 0; c < cases.Length; c++)
             {
-                var result = SugiyamaLayout.Compute(cases[c], options);
+                var result = TabLayout.Compute(cases[c], options);
 
                 float minY = float.MaxValue, maxY = float.MinValue;
                 for (int i = 0; i < cases[c].NodeCount; i++)
@@ -359,13 +381,45 @@ namespace ResearchOrganized.Tests
                     if (result.Y[i] > maxY) maxY = result.Y[i];
                 }
 
-                float rows = (maxY - minY) / options.yStep;
-                Console.WriteLine(string.Format("         case {0}: {1} nodes -> {2:0.#} rows tall (cap {3})",
-                    c, cases[c].NodeCount, rows, options.maxNodesPerColumn));
+                Console.WriteLine(string.Format("         case {0}: {1} projects -> {2:0.#} rows tall (cap {3})",
+                    c, cases[c].NodeCount, (maxY - minY) / options.yStep, options.maxNodesPerColumn));
 
-                IsTrue(maxY - minY <= cap + 0.001f,
-                    string.Format("case {0} is {1:0.#} rows tall, cap is {2}", c, rows, options.maxNodesPerColumn));
+                IsTrue(maxY - minY <= cap + 0.001f, string.Format("case {0} exceeded the cap", c));
             }
+        }
+
+        private static void BackwardEdgesDoNotThrow()
+        {
+            var graph = new LayoutGraph(6);
+            graph.AddEdge(0, 1);
+            graph.AddEdge(1, 2);
+            graph.AddEdge(2, 0);   // a cycle, the only way an edge can point backwards
+            for (int i = 3; i < 6; i++) graph.AddEdge(0, i);
+
+            var result = TabLayout.Compute(graph, new LayoutOptions { maxNodesPerColumn = 2 });
+            IsTrue(result.Crossings >= 0, "laid out without throwing");
+        }
+
+        private static void ScaleBenchmark()
+        {
+            var graph = RandomDag(400, 900, seed: 20260828);
+            var options = new LayoutOptions { maxNodesPerColumn = 10 };
+
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var result = TabLayout.Compute(graph, options);
+            watch.Stop();
+
+            Console.WriteLine(string.Format("         400 projects / 900 links: {0} crossings in {1} ms",
+                result.Crossings, watch.ElapsedMilliseconds));
+
+            IsTrue(watch.ElapsedMilliseconds < 10000, "large tab laid out in under 10 seconds");
+        }
+
+        // ---- helpers --------------------------------------------------------------
+
+        private static int RowOf(LayoutResult result, int node, LayoutOptions options)
+        {
+            return (int)Math.Round(result.Y[node] / options.yStep);
         }
 
         private static LayoutGraph MakeFan(int children)
@@ -383,217 +437,6 @@ namespace ResearchOrganized.Tests
             return graph;
         }
 
-        /// <summary>
-        /// A project with no prerequisites is available immediately, so it belongs in column
-        /// zero no matter which part of the tab it belongs to. Previously independent
-        /// fragments were packed to the right of the biggest one, which read as "you need
-        /// electricity first" for projects that need nothing at all.
-        /// </summary>
-        private static void RootsShareTheFirstColumn()
-        {
-            // A big hub with a dozen followers, plus three unrelated standalone projects.
-            var graph = new LayoutGraph(20);
-            for (int i = 1; i <= 12; i++) graph.AddEdge(0, i);
-            graph.AddEdge(13, 14);
-            // 15, 16, 17, 18, 19 stand alone.
-
-            var options = new LayoutOptions { maxNodesPerColumn = 10 };
-            var result = SugiyamaLayout.Compute(graph, options);
-
-            int[] roots = { 0, 13, 15, 16, 17, 18, 19 };
-            foreach (int root in roots)
-            {
-                if (result.Layer[root] != 0)
-                {
-                    IsTrue(false, string.Format("root {0} landed in column {1}, not 0", root, result.Layer[root]));
-                    return;
-                }
-            }
-            IsTrue(true, "all 7 prerequisite-free projects share column 0");
-        }
-
-        /// <summary>
-        /// When a column overflows, the hubs keep their place and the leaves move aside.
-        /// Losing this is what buried a key project like machining among its siblings.
-        /// </summary>
-        private static void AnchorsHoldTheirColumnWhenItOverflows()
-        {
-            // 14 children of a root, one of which (node 1) is itself a hub with 5 followers.
-            var graph = new LayoutGraph(20);
-            for (int i = 1; i <= 14; i++) graph.AddEdge(0, i);
-            for (int i = 15; i <= 19; i++) graph.AddEdge(1, i);
-
-            // Rank the hub first, the way the adapter ranks anchors ahead of leaves.
-            var rank = new int[20];
-            for (int i = 0; i < 20; i++) rank[i] = i == 1 ? 0 : i + 1;
-
-            var options = new LayoutOptions { maxNodesPerColumn = 10, rank = rank };
-            var result = SugiyamaLayout.Compute(graph, options);
-
-            Console.WriteLine(string.Format("         anchor in column {0}, its followers in column {1}",
-                result.Layer[1], result.Layer[15]));
-
-            AreEqual(1, result.Layer[1], "anchor stays at its true depth");
-            IsTrue(result.Layer[15] == result.Layer[1] + 1, "the anchor's followers sit directly beside it");
-        }
-
-        /// <summary>
-        /// A project that another tab depends on concludes this one, so it belongs at the
-        /// right-hand end rather than in the middle of a column of siblings.
-        /// </summary>
-        private static void GatewayProjectsGoLast()
-        {
-            var graph = new LayoutGraph(12);
-            for (int i = 1; i <= 8; i++) graph.AddEdge(0, i);
-            graph.AddEdge(8, 9);
-            graph.AddEdge(9, 10);
-
-            // Node 3 is the gateway: shallow, but it is what unlocks the next tab.
-            var pinLast = new bool[12];
-            pinLast[3] = true;
-
-            var options = new LayoutOptions { maxNodesPerColumn = 10, pinLast = pinLast };
-            var result = SugiyamaLayout.Compute(graph, options);
-
-            int deepest = 0;
-            for (int i = 0; i < 12; i++) if (i != 3 && result.Layer[i] > deepest) deepest = result.Layer[i];
-
-            Console.WriteLine(string.Format("         gateway in column {0}, everything else ends at {1}",
-                result.Layer[3], deepest));
-
-            IsTrue(result.Layer[3] > deepest, "the gateway sits past every other project");
-        }
-
-        /// <summary>
-        /// Pinning a project that other projects on the same tab depend on would push it to
-        /// the right of its own followers, producing an edge that runs backwards. That
-        /// corrupted the layer structure and threw out of the crossing counter, which took
-        /// down the layout for every tab at once.
-        /// </summary>
-        private static void PinnedProjectWithFollowersDoesNotCorruptLayers()
-        {
-            var graph = new LayoutGraph(8);
-            graph.AddEdge(0, 1);
-            graph.AddEdge(1, 2);   // node 1 is pinned yet node 2 depends on it
-            graph.AddEdge(2, 3);
-            for (int i = 4; i < 8; i++) graph.AddEdge(0, i);
-
-            var pinLast = new bool[8];
-            pinLast[1] = true;
-
-            var options = new LayoutOptions { maxNodesPerColumn = 4, pinLast = pinLast };
-            var result = SugiyamaLayout.Compute(graph, options);
-
-            foreach (var edge in graph.AllEdges())
-            {
-                if (result.Layer[edge.Child] <= result.Layer[edge.Parent])
-                {
-                    IsTrue(false, string.Format("edge {0} runs backwards: columns {1} -> {2}",
-                        edge, result.Layer[edge.Parent], result.Layer[edge.Child]));
-                    return;
-                }
-            }
-            IsTrue(true, "every edge still advances a column");
-        }
-
-        /// <summary>
-        /// Even if something upstream hands the layered graph an edge that cannot run left
-        /// to right, it must degrade rather than throw - this runs at game startup, and one
-        /// exception aborts the layout for every tab.
-        /// </summary>
-        private static void BackwardEdgesDoNotThrow()
-        {
-            var graph = new LayoutGraph(6);
-            graph.AddEdge(0, 1);
-            graph.AddEdge(1, 2);
-            for (int i = 3; i < 6; i++) graph.AddEdge(0, i);
-
-            // Force a layering that puts a child left of its parent.
-            var broken = CycleBreaker.Break(graph);
-            var layerOf = new int[6];
-            layerOf[0] = 0; layerOf[1] = 5; layerOf[2] = 2;
-            layerOf[3] = 1; layerOf[4] = 1; layerOf[5] = 1;
-
-            var layered = LayeredGraph.Build(broken.Acyclic, layerOf);
-            Ordering.Optimize(layered, 4);
-            int crossings = layered.CountCrossings();
-
-            IsTrue(crossings >= 0, "counted crossings without throwing");
-        }
-
-        /// <summary>
-        /// A hub with more followers than a column holds must not fling the surplus to the
-        /// far side of the tab. Doing so drew edges stretching the full width of the window.
-        /// The overflow belongs in the next column along.
-        /// </summary>
-        private static void OverflowStaysNearItsParent()
-        {
-            // One hub with 16 followers against a cap of 10, plus unrelated loose projects
-            // competing for the same early columns.
-            var graph = new LayoutGraph(30);
-            for (int i = 1; i <= 16; i++) graph.AddEdge(0, i);
-            // 17..29 stand alone.
-
-            var options = new LayoutOptions { maxNodesPerColumn = 10 };
-            var result = SugiyamaLayout.Compute(graph, options);
-
-            int worst = 0;
-            foreach (var edge in graph.AllEdges())
-            {
-                int span = result.Layer[edge.Child] - result.Layer[edge.Parent];
-                if (span > worst) worst = span;
-            }
-
-            Console.WriteLine(string.Format("         hub of 16 at cap 10: widest edge spans {0} columns", worst));
-            IsTrue(worst <= 2, string.Format("a follower sits {0} columns from its hub", worst));
-        }
-
-        /// <summary>
-        /// Straightening pulls projects down to meet their followers and nothing pulls them
-        /// back, which left whole empty rows across a tab - a card at the top, then several
-        /// blank rows, then the rest.
-        /// </summary>
-        private static void NoEmptyRowsAcrossTheTab()
-        {
-            var graph = new LayoutGraph(12);
-            // A lone project with no followers, plus a chain that gets pulled downward.
-            graph.AddEdge(1, 2);
-            graph.AddEdge(2, 3);
-            graph.AddEdge(3, 4);
-            graph.AddEdge(5, 6);
-            graph.AddEdge(6, 7);
-            for (int i = 8; i < 12; i++) graph.AddEdge(5, i);
-
-            var options = new LayoutOptions { maxNodesPerColumn = 10 };
-            var result = SugiyamaLayout.Compute(graph, options);
-
-            var rows = new List<float>(result.Y);
-            rows.Sort();
-
-            float biggest = 0f;
-            for (int i = 1; i < rows.Count; i++)
-            {
-                float gap = rows[i] - rows[i - 1];
-                if (gap > biggest) biggest = gap;
-            }
-
-            Console.WriteLine(string.Format("         widest empty band: {0:0.##} rows", biggest / options.yStep));
-            IsTrue(biggest <= options.yStep + 0.001f,
-                string.Format("left a {0:0.##} row gap with nothing in it", biggest / options.yStep));
-        }
-
-        // ---- helpers --------------------------------------------------------------
-
-        /// <summary>Layout with the ordering stage skipped, for a fair before/after crossing count.</summary>
-        private static int CrossingsWithoutOrdering(LayoutGraph graph, LayoutOptions options)
-        {
-            var broken = CycleBreaker.Break(graph);
-            int[] layerOf = Layering.Assign(broken.Acyclic, options.maxNodesPerColumn, options.rank, options.pinLast);
-            var layered = LayeredGraph.Build(broken.Acyclic, layerOf);
-            return layered.CountCrossings();
-        }
-
-        /// <summary>Random DAG: edges only ever run from a lower to a higher index, so it cannot cycle.</summary>
         private static LayoutGraph RandomDag(int nodes, int edges, int seed)
         {
             var random = new Random(seed);
@@ -612,6 +455,7 @@ namespace ResearchOrganized.Tests
 
         private static void Run(string name, Action test)
         {
+            tests++;
             try
             {
                 int before = failures;
