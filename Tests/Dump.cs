@@ -141,6 +141,27 @@ namespace ResearchOrganized.Tests
                 if (span > worstSpan) { worstSpan = span; worstEdge = tab[edge.Parent].Name + " -> " + tab[edge.Child].Name; }
             }
 
+            // What a reader actually follows: is a project sitting next to at least one of
+            // the things it needs? A project with several prerequisites can only ever be
+            // adjacent to one of them, so counting every link understates a good layout.
+            int withParents = 0, besideOne = 0, worstNearest = 0;
+            string worstOrphan = "";
+            for (int i = 0; i < tab.Count; i++)
+            {
+                var parents = graph.ParentsOf(i);
+                if (parents.Count == 0) continue;
+                withParents++;
+
+                int nearest = int.MaxValue;
+                for (int p = 0; p < parents.Count; p++)
+                {
+                    int span = result.Layer[i] - result.Layer[parents[p]];
+                    if (span < nearest) nearest = span;
+                }
+                if (nearest == 1) besideOne++;
+                if (nearest > worstNearest) { worstNearest = nearest; worstOrphan = tab[i].Name; }
+            }
+
             int occupied = 0;
             foreach (var pair in perColumn) occupied += pair.Value;
             double fill = columns == 0 ? 0 : (double)occupied / (columns * rows);
@@ -151,6 +172,9 @@ namespace ResearchOrganized.Tests
             Console.WriteLine(string.Format("links spanning one column: {0} of {1} ({2:0.#}%)",
                 adjacent, inTabEdges, inTabEdges == 0 ? 0 : 100.0 * adjacent / inTabEdges));
             Console.WriteLine(string.Format("widest link: {0} columns  {1}", worstSpan, worstEdge));
+            Console.WriteLine(string.Format("projects beside a prerequisite: {0} of {1} ({2:0.#}%)",
+                besideOne, withParents, withParents == 0 ? 0 : 100.0 * besideOne / withParents));
+            Console.WriteLine(string.Format("furthest from its nearest prerequisite: {0} columns  {1}", worstNearest, worstOrphan));
             Console.WriteLine(string.Format("crossings: {0}", result.Crossings));
 
             Console.Write("column heights:");

@@ -80,13 +80,24 @@ namespace ResearchOrganized.Layout
             int[] depth = ComputeDepth(acyclic);
             int[] primaryParent = ChoosePrimaryParents(acyclic, depth, options.rank);
 
-            var groups = BuildGroups(acyclic, depth, primaryParent, options.rank);
-            Allocate(groups, depth, options);
-            Refine(acyclic, groups, options.refineSweeps);
+            // Projects with nothing attached are set aside first. On a real tab they are
+            // most of the cards - Spacer has 96 projects and only 56 links - and if they
+            // compete for columns with the tree they fill the very slots a parent needs to
+            // sit beside its followers, which is what stranded starflight basics four
+            // columns from its own drive.
+            var connected = new List<int>();
+            var loose = new List<int>();
+            for (int node = 0; node < acyclic.NodeCount; node++)
+            {
+                if (acyclic.ChildrenOf(node).Count > 0 || acyclic.ParentsOf(node).Count > 0) connected.Add(node);
+                else loose.Add(node);
+            }
+
+            var groups = BuildGroups(acyclic, depth, primaryParent, options.rank, connected);
 
             var column = new int[graph.NodeCount];
             var row = new int[graph.NodeCount];
-            Project(groups, column, row);
+            Allocate(acyclic, groups, depth, column, row, options);
 
             // Pulling a card next to its followers leaves a hole where it used to be, and
             // drops it into whatever row was free - which splits the block it landed in.
@@ -94,9 +105,11 @@ namespace ResearchOrganized.Layout
             // two alternate until they settle.
             for (int pass = 0; pass < 3; pass++)
             {
-                PullParentsBesideFollowers(acyclic, depth, column, row, options);
-                RepackColumns(column, row, primaryParent, options);
+                PullParentsBesideFollowers(acyclic, depth, column, row, connected, options);
+                RepackColumns(column, row, primaryParent, connected, options);
             }
+
+            PlaceLoose(loose, column, row, connected, options);
             CompactRows(column, row);
 
             for (int node = 0; node < graph.NodeCount; node++)
@@ -157,12 +170,12 @@ namespace ResearchOrganized.Layout
             return primary;
         }
 
-        private static List<Group> BuildGroups(LayoutGraph graph, int[] depth, int[] primaryParent, int[] rank)
+        private static List<Group> BuildGroups(LayoutGraph graph, int[] depth, int[] primaryParent, int[] rank, List<int> members)
         {
             var byKey = new Dictionary<long, Group>();
             var ordered = new List<Group>();
 
-            for (int node = 0; node < graph.NodeCount; node++)
+            foreach (int node in members)
             {
                 long key = ((long)depth[node] << 32) ^ (uint)(primaryParent[node] + 1);
 
@@ -198,72 +211,99 @@ namespace ResearchOrganized.Layout
         /// Hands every group a contiguous run of cells. Depths are laid out in order and each
         /// occupies its own band of columns, so a follower is always right of its parent.
         /// </summary>
-        private static void Allocate(List<Group> groups, int[] depth, LayoutOptions options)
+
+        /// <summary>
+        /// Hands every group a contiguous run of cells beginning in the column immediately
+        /// after its parent.
+        ///
+        /// Anchoring on the parent rather than on a shared band per depth is what keeps a
+        /// follower beside the thing it follows. Bands looked tidier in the abstract, but a
+        /// depth with many projects spans several columns, and a parent sitting at the start
+        /// of one band ended up two or three columns from followers that named it as their
+        /// only prerequisite.
+        ///
+        /// Groups are taken shallowest first so a parent always has its column before its
+        /// followers need it, and smallest first within a depth so a parent with a handful
+        /// of followers keeps them close instead of being pushed past a neighbour's two dozen.
+        /// </summary>
+        private static void Allocate(LayoutGraph graph, List<Group> groups, int[] depth, int[] column, int[] row, LayoutOptions options)
         {
             int maxRows = options.maxNodesPerColumn > 0 ? options.maxNodesPerColumn : int.MaxValue;
 
-            var byDepth = new Dictionary<int, List<Group>>();
-            int deepest = 0;
-            foreach (var group in groups)
+            var ordered = new List<Group>(groups);
+            ordered.Sort(delegate (Group a, Group b)
             {
-                List<Group> list;
-                if (!byDepth.TryGetValue(group.Depth, out list))
-                {
-                    list = new List<Group>();
-                    byDepth[group.Depth] = list;
-                }
-                list.Add(group);
-                if (group.Depth > deepest) deepest = group.Depth;
-            }
+                if (a.Depth != b.Depth) return a.Depth.CompareTo(b.Depth);
+                int bySize = a.Members.Count.CompareTo(b.Members.Count);
+                if (bySize != 0) return bySize;
+                return a.Parent.CompareTo(b.Parent);
+            });
 
-            int bandStart = 0;
+            var used = new Dictionary<int, int>();
 
-            for (int level = 0; level <= deepest; level++)
+            foreach (var group in ordered)
             {
-                List<Group> atLevel;
-                if (!byDepth.TryGetValue(level, out atLevel)) continue;
+                int c = group.Parent < 0 ? 0 : column[group.Parent] + 1;
+                int held;
+                while (used.TryGetValue(c, out held) && held >= maxRows) c++;
 
-                // Smallest groups first: a parent with a handful of followers keeps them
-                // close, rather than being displaced by a neighbour's two dozen.
-                atLevel.Sort(delegate (Group a, Group b)
+                // The block has landed further right than the parent - because the columns
+                // between were already full - so bring the parent along to meet it. Waiting
+                // for a later pass to do this fails exactly when it matters: on a full tab
+                // there is no free slot left to move into.
+                if (group.Parent >= 0 && column[group.Parent] != c - 1)
                 {
-                    int bySize = a.Members.Count.CompareTo(b.Members.Count);
-                    if (bySize != 0) return bySize;
-                    return a.Parent.CompareTo(b.Parent);
-                });
-
-                int column = bandStart;
-                int row = 0;
-                bool firstGroup = true;
-
-                foreach (var group in atLevel)
-                {
-                    if (!firstGroup && options.separateGroups && row > 0)
+                    int wanted = c - 1;
+                    int earliest = 0;
+                    var above = graph.ParentsOf(group.Parent);
+                    for (int i = 0; i < above.Count; i++)
                     {
-                        row++;
-                        if (row >= maxRows) { column++; row = 0; }
+                        if (column[above[i]] + 1 > earliest) earliest = column[above[i]] + 1;
                     }
 
-                    // A big group begins a fresh column rather than starting halfway down
-                    // one another group already filled. Otherwise its parent has no single
-                    // place to sit beside it, and the connectors leave at every angle.
-                    if (!firstGroup && row > 0 && group.Members.Count * 2 > maxRows)
+                    used.TryGetValue(wanted, out int occupancy);
+                    if (wanted >= earliest && occupancy < maxRows)
                     {
-                        column++;
-                        row = 0;
-                    }
-                    firstGroup = false;
-
-                    foreach (int unused in group.Members)
-                    {
-                        group.Cells.Add(new Cell(column, row));
-                        row++;
-                        if (row >= maxRows) { column++; row = 0; }
+                        column[group.Parent] = wanted;
+                        row[group.Parent] = occupancy;
+                        used[wanted] = occupancy + 1;
                     }
                 }
 
-                bandStart = (row > 0) ? column + 1 : Math.Max(column, bandStart);
-                if (bandStart <= column) bandStart = column + 1;
+                used.TryGetValue(c, out int r);
+
+                // A blank row divides this run from whatever shares the column, when there
+                // is room to spare one.
+                if (options.separateGroups && r > 0 && r + group.Members.Count < maxRows) r++;
+
+                foreach (int member in group.Members)
+                {
+                    // Grouping follows one parent, but a project can name several. It must
+                    // still come after all of them, or its connector would run backwards.
+                    int required = c;
+                    var parents = graph.ParentsOf(member);
+                    for (int i = 0; i < parents.Count; i++)
+                    {
+                        if (column[parents[i]] + 1 > required) required = column[parents[i]] + 1;
+                    }
+
+                    while (required > c || (used.TryGetValue(c, out held) && held >= maxRows && r >= maxRows))
+                    {
+                        if (required > c) { c = required; used.TryGetValue(c, out r); }
+                        else break;
+                    }
+
+                    column[member] = c;
+                    row[member] = r;
+                    used[c] = r + 1;
+
+                    r++;
+                    if (r >= maxRows)
+                    {
+                        c++;
+                        used.TryGetValue(c, out r);
+                    }
+                }
             }
         }
 
@@ -321,15 +361,15 @@ namespace ResearchOrganized.Layout
         /// already settled. A project never moves left, and never past its own
         /// prerequisites, so the reading order still holds.
         /// </summary>
-        private static void PullParentsBesideFollowers(LayoutGraph graph, int[] depth, int[] column, int[] row, LayoutOptions options)
+        private static void PullParentsBesideFollowers(LayoutGraph graph, int[] depth, int[] column, int[] row, List<int> connected, LayoutOptions options)
         {
             int maxRows = options.maxNodesPerColumn > 0 ? options.maxNodesPerColumn : int.MaxValue;
 
             var taken = new HashSet<long>();
-            for (int node = 0; node < graph.NodeCount; node++) taken.Add(CellKey(column[node], row[node]));
+            foreach (int node in connected) taken.Add(CellKey(column[node], row[node]));
 
             var order = new List<int>();
-            for (int node = 0; node < graph.NodeCount; node++) order.Add(node);
+            order.AddRange(connected);
             order.Sort(delegate (int a, int b)
             {
                 if (depth[a] != depth[b]) return depth[b].CompareTo(depth[a]);
@@ -395,12 +435,50 @@ namespace ResearchOrganized.Layout
         /// place - a group keeps roughly the height it already had, so nothing jumps across
         /// the tab - and a blank row goes between runs when the column has room for it.
         /// </summary>
-        private static void RepackColumns(int[] column, int[] row, int[] primaryParent, LayoutOptions options)
+        /// <summary>
+        /// Drops the projects that have nothing attached into whatever room is left, working
+        /// down each column from the bottom of what the tree already put there. They fill
+        /// the tab out rather than padding it with blanks, and because they go in last they
+        /// can never take a slot a parent needed to sit beside its followers.
+        /// </summary>
+        private static void PlaceLoose(List<int> loose, int[] column, int[] row, List<int> connected, LayoutOptions options)
+        {
+            if (loose.Count == 0) return;
+            int maxRows = options.maxNodesPerColumn > 0 ? options.maxNodesPerColumn : int.MaxValue;
+
+            var nextFree = new Dictionary<int, int>();
+            foreach (int node in connected)
+            {
+                int after = row[node] + 1;
+                int held;
+                if (!nextFree.TryGetValue(column[node], out held) || after > held) nextFree[column[node]] = after;
+            }
+
+            int target = 0;
+            foreach (int node in loose)
+            {
+                while (true)
+                {
+                    int used;
+                    if (!nextFree.TryGetValue(target, out used)) used = 0;
+                    if (used < maxRows)
+                    {
+                        column[node] = target;
+                        row[node] = used;
+                        nextFree[target] = used + 1;
+                        break;
+                    }
+                    target++;
+                }
+            }
+        }
+
+        private static void RepackColumns(int[] column, int[] row, int[] primaryParent, List<int> connected, LayoutOptions options)
         {
             int maxRows = options.maxNodesPerColumn > 0 ? options.maxNodesPerColumn : int.MaxValue;
 
             var byColumn = new Dictionary<int, List<int>>();
-            for (int node = 0; node < column.Length; node++)
+            foreach (int node in connected)
             {
                 List<int> members;
                 if (!byColumn.TryGetValue(column[node], out members))
