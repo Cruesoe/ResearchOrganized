@@ -60,7 +60,7 @@ namespace ResearchOrganized
             // followers on its own tab. Marking a tab's concluding project needs a rule based
             // on what it unlocks, not on who depends on it.
 
-            var result = SugiyamaLayout.Compute(graph, options);
+            var result = TabLayout.Compute(graph, options);
 
             for (int i = 0; i < tabNodes.Count; i++)
             {

@@ -1,0 +1,355 @@
+using System;
+using System.Collections.Generic;
+
+namespace ResearchOrganized.Layout
+{
+    public sealed class LayoutOptions
+    {
+        public float xStep = 1f;
+        public float yStep = 0.63f;
+
+        /// <summary>Hard cap on cards per column. 0 or less means unbounded.</summary>
+        public int maxNodesPerColumn = 12;
+
+        /// <summary>Leave a blank row between sibling groups when the column has room.</summary>
+        public bool separateGroups = true;
+
+        /// <summary>Passes of reordering within groups to reduce crossing lines.</summary>
+        public int refineSweeps = 4;
+
+        /// <summary>
+        /// Optional placement priority, lower first. Used to order members inside a group -
+        /// the caller puts cheap projects first - and to break ties between groups.
+        /// </summary>
+        public int[] rank;
+    }
+
+    public sealed class LayoutResult
+    {
+        public float[] X;
+        public float[] Y;
+
+        /// <summary>Column index per node.</summary>
+        public int[] Layer;
+
+        public HashSet<int> NodesInCycles = new HashSet<int>();
+        public List<LayoutGraph.Edge> ReversedEdges = new List<LayoutGraph.Edge>();
+
+        /// <summary>Edge crossings in the final arrangement. Lower is better.</summary>
+        public int Crossings;
+    }
+
+    /// <summary>
+    /// Lays out one research tab.
+    ///
+    /// The organising idea is that a reader follows GROUPS, not individual cards. A parent's
+    /// followers are allocated one contiguous run of cells - filling a column top to bottom
+    /// and wrapping into the next - and no other group is placed inside that run. So a
+    /// project with two dozen followers shows a fan landing in one solid block, instead of
+    /// two dozen lines diffusing across a uniform grid of unrelated cards.
+    ///
+    /// Everything else follows from that:
+    ///
+    ///   - Each depth occupies a contiguous band of columns. A depth wider than one column
+    ///     simply spans several, which is unavoidable once a hub has more followers than a
+    ///     column can hold, and honest about what is being shown.
+    ///   - Small groups are allocated first, so a parent with three followers keeps them
+    ///     beside it rather than being pushed past a neighbour's twenty.
+    ///   - Hubs sit at the end of their own group, next to where their followers begin.
+    ///   - Column 0 is every project with no prerequisites on this tab: available now.
+    /// </summary>
+    public static class TabLayout
+    {
+        public static LayoutResult Compute(LayoutGraph graph, LayoutOptions options)
+        {
+            if (options == null) options = new LayoutOptions();
+
+            var result = new LayoutResult
+            {
+                X = new float[graph.NodeCount],
+                Y = new float[graph.NodeCount],
+                Layer = new int[graph.NodeCount]
+            };
+            if (graph.NodeCount == 0) return result;
+
+            var broken = CycleBreaker.Break(graph);
+            result.ReversedEdges = broken.ReversedEdges;
+            result.NodesInCycles = broken.NodesInCycles;
+
+            var acyclic = broken.Acyclic;
+            int[] depth = ComputeDepth(acyclic);
+            int[] primaryParent = ChoosePrimaryParents(acyclic, depth, options.rank);
+
+            var groups = BuildGroups(acyclic, depth, primaryParent, options.rank);
+            Allocate(groups, depth, options);
+            Refine(acyclic, groups, options.refineSweeps);
+
+            var column = new int[graph.NodeCount];
+            var row = new int[graph.NodeCount];
+            foreach (var group in groups)
+            {
+                for (int i = 0; i < group.Members.Count; i++)
+                {
+                    column[group.Members[i]] = group.Cells[i].Column;
+                    row[group.Members[i]] = group.Cells[i].Row;
+                }
+            }
+
+            for (int node = 0; node < graph.NodeCount; node++)
+            {
+                result.Layer[node] = column[node];
+                result.X[node] = column[node] * options.xStep;
+                result.Y[node] = row[node] * options.yStep;
+            }
+
+            result.Crossings = CrossingCounter.Count(acyclic, column, row);
+            return result;
+        }
+
+        private struct Cell
+        {
+            public int Column;
+            public int Row;
+
+            public Cell(int column, int row)
+            {
+                Column = column;
+                Row = row;
+            }
+        }
+
+        private sealed class Group
+        {
+            public int Depth;
+            public int Parent;               // -1 for the roots
+            public List<int> Members = new List<int>();
+            public List<Cell> Cells = new List<Cell>();
+        }
+
+        /// <summary>
+        /// Every node hangs off exactly one parent for grouping purposes: the deepest one,
+        /// so the group sits as far right as the prerequisites actually require. Remaining
+        /// prerequisites still draw their lines, they just do not decide the grouping.
+        /// </summary>
+        private static int[] ChoosePrimaryParents(LayoutGraph graph, int[] depth, int[] rank)
+        {
+            var primary = new int[graph.NodeCount];
+            for (int node = 0; node < graph.NodeCount; node++)
+            {
+                var parents = graph.ParentsOf(node);
+                int best = -1;
+                for (int i = 0; i < parents.Count; i++)
+                {
+                    int candidate = parents[i];
+                    if (best < 0
+                        || depth[candidate] > depth[best]
+                        || (depth[candidate] == depth[best] && RankOf(rank, candidate) < RankOf(rank, best)))
+                    {
+                        best = candidate;
+                    }
+                }
+                primary[node] = best;
+            }
+            return primary;
+        }
+
+        private static List<Group> BuildGroups(LayoutGraph graph, int[] depth, int[] primaryParent, int[] rank)
+        {
+            var byKey = new Dictionary<long, Group>();
+            var ordered = new List<Group>();
+
+            for (int node = 0; node < graph.NodeCount; node++)
+            {
+                long key = ((long)depth[node] << 32) ^ (uint)(primaryParent[node] + 1);
+
+                Group group;
+                if (!byKey.TryGetValue(key, out group))
+                {
+                    group = new Group { Depth = depth[node], Parent = primaryParent[node] };
+                    byKey[key] = group;
+                    ordered.Add(group);
+                }
+                group.Members.Add(node);
+            }
+
+            foreach (var group in ordered)
+            {
+                // Hubs last, so a hub sits beside where its own followers start. Otherwise
+                // by rank, which the caller orders cheapest first.
+                group.Members.Sort(delegate (int a, int b)
+                {
+                    bool hubA = graph.ChildrenOf(a).Count > 0;
+                    bool hubB = graph.ChildrenOf(b).Count > 0;
+                    if (hubA != hubB) return hubA ? 1 : -1;
+                    int byRank = RankOf(rank, a).CompareTo(RankOf(rank, b));
+                    if (byRank != 0) return byRank;
+                    return a.CompareTo(b);
+                });
+            }
+
+            return ordered;
+        }
+
+        /// <summary>
+        /// Hands every group a contiguous run of cells. Depths are laid out in order and each
+        /// occupies its own band of columns, so a follower is always right of its parent.
+        /// </summary>
+        private static void Allocate(List<Group> groups, int[] depth, LayoutOptions options)
+        {
+            int maxRows = options.maxNodesPerColumn > 0 ? options.maxNodesPerColumn : int.MaxValue;
+
+            var byDepth = new Dictionary<int, List<Group>>();
+            int deepest = 0;
+            foreach (var group in groups)
+            {
+                List<Group> list;
+                if (!byDepth.TryGetValue(group.Depth, out list))
+                {
+                    list = new List<Group>();
+                    byDepth[group.Depth] = list;
+                }
+                list.Add(group);
+                if (group.Depth > deepest) deepest = group.Depth;
+            }
+
+            int bandStart = 0;
+
+            for (int level = 0; level <= deepest; level++)
+            {
+                List<Group> atLevel;
+                if (!byDepth.TryGetValue(level, out atLevel)) continue;
+
+                // Smallest groups first: a parent with a handful of followers keeps them
+                // close, rather than being displaced by a neighbour's two dozen.
+                atLevel.Sort(delegate (Group a, Group b)
+                {
+                    int bySize = a.Members.Count.CompareTo(b.Members.Count);
+                    if (bySize != 0) return bySize;
+                    return a.Parent.CompareTo(b.Parent);
+                });
+
+                int column = bandStart;
+                int row = 0;
+                bool firstGroup = true;
+
+                foreach (var group in atLevel)
+                {
+                    if (!firstGroup && options.separateGroups && row > 0)
+                    {
+                        row++;
+                        if (row >= maxRows) { column++; row = 0; }
+                    }
+                    firstGroup = false;
+
+                    foreach (int unused in group.Members)
+                    {
+                        group.Cells.Add(new Cell(column, row));
+                        row++;
+                        if (row >= maxRows) { column++; row = 0; }
+                    }
+                }
+
+                bandStart = (row > 0) ? column + 1 : Math.Max(column, bandStart);
+                if (bandStart <= column) bandStart = column + 1;
+            }
+        }
+
+        /// <summary>
+        /// Shuffles members within their own group - never across groups, so the blocks stay
+        /// intact - to pull each card near the average position of what it connects to.
+        /// </summary>
+        private static void Refine(LayoutGraph graph, List<Group> groups, int sweeps)
+        {
+            if (sweeps < 1) return;
+
+            var row = new int[graph.NodeCount];
+            var column = new int[graph.NodeCount];
+            Project(groups, column, row);
+
+            for (int sweep = 0; sweep < sweeps; sweep++)
+            {
+                bool downward = (sweep % 2) == 0;
+
+                foreach (var group in groups)
+                {
+                    if (group.Members.Count < 2) continue;
+
+                    var keys = new Dictionary<int, double>();
+                    for (int i = 0; i < group.Members.Count; i++)
+                    {
+                        int node = group.Members[i];
+                        var neighbours = downward ? graph.ParentsOf(node) : graph.ChildrenOf(node);
+                        keys[node] = neighbours.Count == 0 ? row[node] : Average(neighbours, row);
+                    }
+
+                    group.Members.Sort(delegate (int a, int b)
+                    {
+                        int byKey = keys[a].CompareTo(keys[b]);
+                        if (byKey != 0) return byKey;
+                        return a.CompareTo(b);
+                    });
+                }
+
+                Project(groups, column, row);
+            }
+        }
+
+        private static void Project(List<Group> groups, int[] column, int[] row)
+        {
+            foreach (var group in groups)
+            {
+                for (int i = 0; i < group.Members.Count && i < group.Cells.Count; i++)
+                {
+                    column[group.Members[i]] = group.Cells[i].Column;
+                    row[group.Members[i]] = group.Cells[i].Row;
+                }
+            }
+        }
+
+        private static double Average(IReadOnlyList<int> nodes, int[] row)
+        {
+            double total = 0;
+            for (int i = 0; i < nodes.Count; i++) total += row[nodes[i]];
+            return total / nodes.Count;
+        }
+
+        /// <summary>Longest path from any root, which is the depth a reader perceives.</summary>
+        private static int[] ComputeDepth(LayoutGraph graph)
+        {
+            int count = graph.NodeCount;
+            var depth = new int[count];
+            var remaining = new int[count];
+
+            var ready = new List<int>();
+            for (int i = 0; i < count; i++)
+            {
+                remaining[i] = graph.ParentsOf(i).Count;
+                if (remaining[i] == 0) ready.Add(i);
+            }
+
+            while (ready.Count > 0)
+            {
+                int pick = 0;
+                for (int i = 1; i < ready.Count; i++) if (ready[i] < ready[pick]) pick = i;
+
+                int node = ready[pick];
+                ready.RemoveAt(pick);
+
+                var children = graph.ChildrenOf(node);
+                for (int c = 0; c < children.Count; c++)
+                {
+                    int child = children[c];
+                    if (depth[node] + 1 > depth[child]) depth[child] = depth[node] + 1;
+                    if (--remaining[child] == 0) ready.Add(child);
+                }
+            }
+
+            return depth;
+        }
+
+        private static int RankOf(int[] rank, int node)
+        {
+            return rank != null ? rank[node] : node;
+        }
+    }
+}

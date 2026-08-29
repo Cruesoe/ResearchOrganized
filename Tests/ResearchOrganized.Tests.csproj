@@ -46,20 +46,11 @@
     <Compile Include="..\Source\Layout\CycleBreaker.cs">
       <Link>Layout\CycleBreaker.cs</Link>
     </Compile>
-    <Compile Include="..\Source\Layout\Layering.cs">
-      <Link>Layout\Layering.cs</Link>
+    <Compile Include="..\Source\Layout\CrossingCounter.cs">
+      <Link>Layout\CrossingCounter.cs</Link>
     </Compile>
-    <Compile Include="..\Source\Layout\LayeredGraph.cs">
-      <Link>Layout\LayeredGraph.cs</Link>
-    </Compile>
-    <Compile Include="..\Source\Layout\Ordering.cs">
-      <Link>Layout\Ordering.cs</Link>
-    </Compile>
-    <Compile Include="..\Source\Layout\CoordinateAssigner.cs">
-      <Link>Layout\CoordinateAssigner.cs</Link>
-    </Compile>
-    <Compile Include="..\Source\Layout\SugiyamaLayout.cs">
-      <Link>Layout\SugiyamaLayout.cs</Link>
+    <Compile Include="..\Source\Layout\TabLayout.cs">
+      <Link>Layout\TabLayout.cs</Link>
     </Compile>
     <Compile Include="Program.cs" />
   </ItemGroup>
