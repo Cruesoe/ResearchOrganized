@@ -17,6 +17,20 @@ namespace ResearchOrganized
     /// </summary>
     public static class ResearchOrganizedLayout
     {
+        /// <summary>
+        /// Node Research (ferny.noderesearch) generates one of these per tech level - a node
+        /// with no in-game function beyond "advance to the next era", meant to read as that
+        /// era's last item regardless of what prerequisites it happens to carry. Matched by
+        /// name rather than a reference to that mod's assembly, so this works whether or not
+        /// it is installed.
+        /// </summary>
+        private const string EraCapstonePrefix = "BRM_Emergence_";
+
+        public static bool IsEraCapstone(ResearchProjectDef def)
+        {
+            return def.defName != null && def.defName.StartsWith(EraCapstonePrefix, System.StringComparison.Ordinal);
+        }
+
         private static readonly Dictionary<ResearchProjectDef, List<ResearchProjectDef>> cachedPrereqs =
             new Dictionary<ResearchProjectDef, List<ResearchProjectDef>>();
 
@@ -61,13 +75,14 @@ namespace ResearchOrganized
             options.epoch = new int[tabNodes.Count];
             options.isAnchor = new bool[tabNodes.Count];
             options.anchorOrder = new int[tabNodes.Count];
-            options.tieRank = new int[tabNodes.Count];
+            options.isCapstone = new bool[tabNodes.Count];
 
             for (int i = 0; i < tabNodes.Count; i++)
             {
                 options.epoch[i] = (int)tabNodes[i].techLevel;
                 options.isAnchor[i] = anchors.Contains(tabNodes[i]);
                 anchorOrder.TryGetValue(tabNodes[i], out options.anchorOrder[i]);
+                options.isCapstone[i] = IsEraCapstone(tabNodes[i]);
             }
             options.tieRank = BuildTieRank(tabNodes);
 

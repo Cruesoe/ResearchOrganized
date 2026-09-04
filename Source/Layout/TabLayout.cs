@@ -25,6 +25,13 @@ namespace ResearchOrganized.Layout
 
         /// <summary>Tie-break for otherwise-equal placement choices, lower first - the caller puts cheap projects first.</summary>
         public int[] tieRank;
+
+        /// <summary>
+        /// A node that always goes last in its epoch, after everything else is placed,
+        /// regardless of what prerequisites it does or does not have - an era's "advance to
+        /// the next tech level" node, from mods like Node Research.
+        /// </summary>
+        public bool[] isCapstone;
     }
 
     public sealed class LayoutResult
@@ -72,8 +79,9 @@ namespace ResearchOrganized.Layout
             var isAnchor = options.isAnchor ?? new bool[graph.NodeCount];
             var anchorOrder = options.anchorOrder ?? new int[graph.NodeCount];
             var tieRank = options.tieRank ?? DefaultRank(graph.NodeCount);
+            var isCapstone = options.isCapstone ?? new bool[graph.NodeCount];
 
-            EpochLayout.Compute(broken.Acyclic, options, epoch, isAnchor, anchorOrder, tieRank, column, row);
+            EpochLayout.Compute(broken.Acyclic, options, epoch, isAnchor, anchorOrder, tieRank, isCapstone, column, row);
 
             for (int node = 0; node < graph.NodeCount; node++)
             {
