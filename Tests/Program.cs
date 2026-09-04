@@ -29,21 +29,19 @@ namespace ResearchOrganized.Tests
             Run("column height cap is respected", ColumnHeightCap);
             Run("cycles are broken and reported", CyclesAreBroken);
             Run("layout is deterministic", Deterministic);
-            Run("roots share the first column", RootsShareTheFirstColumn);
-            Run("parent sits beside its followers", ParentSitsBesideItsFollowers);
             Run("loose projects pack tightly", LooseNodesPackTightly);
-            Run("a wide fan lands in one contiguous block", WideFanFormsOneBlock);
-            Run("groups never interleave", GroupsDoNotInterleave);
-            Run("a small group stays beside its parent", SmallGroupStaysNearParent);
-            Run("hubs sit beside their own followers", HubsSitAtGroupEnd);
-            Run("groups are visually separated", GroupsAreSeparated);
-            Run("columns have no holes", ColumnsHaveNoHoles);
-            Run("siblings stay together in a column", SiblingsStayTogetherInAColumn);
-            Run("no empty rows across the tab", NoEmptyRowsAcrossTheTab);
-            Run("refinement reduces crossings", RefinementReducesCrossings);
-            Run("height never exceeds the cap", HeightNeverExceedsColumnCap);
+            Run("siblings placed together land in consecutive rows", SiblingsLandConsecutively);
             Run("backward edges do not throw", BackwardEdgesDoNotThrow);
+            Run("height never exceeds the cap", HeightNeverExceedsColumnCap);
             Run("scale benchmark", ScaleBenchmark);
+
+            Run("an anchor holds its own column", AnchorHoldsItsOwnColumn);
+            Run("starter projects are placed before the anchor", StartersComeBeforeTheAnchor);
+            Run("an anchor's own followers sit right after it", AnchorFollowersSitAdjacent);
+            Run("an anchor centres on its followers", AnchorCentresOnFollowers);
+            Run("a later, more specific anchor claims its own descendants", DeeperAnchorClaimsItsOwnBranch);
+            Run("an oversized anchor batch is not exceeded", AnchorBatchRespectsHeightCap);
+            Run("tech levels are laid out in order, left to right", EpochsAdvanceLeftToRight);
 
             Console.WriteLine();
             Console.WriteLine(failures == 0
@@ -141,74 +139,6 @@ namespace ResearchOrganized.Tests
             IsTrue(true, "two runs produced identical coordinates");
         }
 
-        // ---- the grouping model ---------------------------------------------------
-
-        /// <summary>
-        /// A project with no prerequisites and no followers has nothing pulling it anywhere,
-        /// so it stays in column zero where "available now" is read.
-        ///
-        /// A project with followers is deliberately allowed to move right to sit beside
-        /// them - see <see cref="ParentSitsBesideItsFollowers"/>. Being leftmost buys a
-        /// reader nothing when it costs a fan of connectors crossing the whole tab.
-        /// </summary>
-        private static void RootsShareTheFirstColumn()
-        {
-            var graph = new LayoutGraph(20);
-            for (int i = 1; i <= 12; i++) graph.AddEdge(0, i);
-            graph.AddEdge(13, 14);
-            // 15..19 stand alone.
-
-            var result = TabLayout.Compute(graph, new LayoutOptions { maxNodesPerColumn = 10 });
-
-            int[] standalone = { 15, 16, 17, 18, 19 };
-            foreach (int root in standalone)
-            {
-                if (result.Layer[root] != 0)
-                {
-                    IsTrue(false, string.Format("standalone project {0} landed in column {1}, not 0", root, result.Layer[root]));
-                    return;
-                }
-            }
-            IsTrue(true, "every project with nothing attached sits in column 0");
-        }
-
-        /// <summary>
-        /// The readability rule that matters most: whatever a project leads to should start
-        /// in the very next column, with the project level with the middle of it. A hub sat
-        /// in column 0 while its two dozen followers began further right, and the connectors
-        /// swept diagonally across every unrelated card in between.
-        /// </summary>
-        private static void ParentSitsBesideItsFollowers()
-        {
-            // A small group occupying the early column, plus a hub whose 24 followers
-            // therefore cannot start where its parent sits.
-            var graph = new LayoutGraph(32);
-            for (int i = 2; i <= 5; i++) graph.AddEdge(0, i);     // small group
-            for (int i = 6; i <= 29; i++) graph.AddEdge(1, i);    // the 24-wide hub
-
-            var options = new LayoutOptions { maxNodesPerColumn = 10 };
-            var result = TabLayout.Compute(graph, options);
-
-            int earliestFollower = int.MaxValue;
-            for (int i = 6; i <= 29; i++) if (result.Layer[i] < earliestFollower) earliestFollower = result.Layer[i];
-
-            int gap = earliestFollower - result.Layer[1];
-
-            var rows = new List<int>();
-            for (int i = 6; i <= 29; i++) if (result.Layer[i] == earliestFollower) rows.Add(RowOf(result, i, options));
-            rows.Sort();
-            int middle = rows[rows.Count / 2];
-            int offset = Math.Abs(RowOf(result, 1, options) - middle);
-
-            Console.WriteLine(string.Format("         hub in column {0}, followers start in {1}, {2} row(s) off centre",
-                result.Layer[1], earliestFollower, offset));
-
-            // Column adjacency is the guarantee. Sitting level with the middle of the block
-            // is best effort: once a column is full there is no free row to centre into, and
-            // displacing whoever holds that row would just move the problem to them.
-            AreEqual(1, gap, "followers start in the very next column");
-        }
-
         private static void LooseNodesPackTightly()
         {
             var graph = new LayoutGraph(80);
@@ -222,194 +152,43 @@ namespace ResearchOrganized.Tests
         }
 
         /// <summary>
-        /// The case that motivated the model. Electricity has 24 followers against a cap of
-        /// 10, so they cannot share a column - but they must still land as ONE run of cells
-        /// with nothing else inside it, not diffuse across the tab.
+        /// The greedy placer fills a column top-down from whatever row the parent it followed
+        /// suggests. Two siblings placed back-to-back should not have a gap forced between
+        /// them just because of iteration order.
         /// </summary>
-        private static void WideFanFormsOneBlock()
+        private static void SiblingsLandConsecutively()
         {
-            var graph = new LayoutGraph(30);
-            for (int i = 1; i <= 24; i++) graph.AddEdge(0, i);   // the hub
-            graph.AddEdge(25, 26);                                // an unrelated pair
-            // 27, 28, 29 stand alone.
-
-            var options = new LayoutOptions { maxNodesPerColumn = 10 };
-            var result = TabLayout.Compute(graph, options);
-
-            var cells = new List<int>();
-            for (int i = 1; i <= 24; i++) cells.Add(result.Layer[i] * 1000 + RowOf(result, i, options));
-            cells.Sort();
-
-            // Contiguous in column-major order means every step is +1 row, or a wrap.
-            int breaks = 0;
-            for (int i = 1; i < cells.Count; i++) if (cells[i] != cells[i - 1] + 1) breaks++;
-
-            int spanColumns = result.Layer[24] - result.Layer[1] + 1;
-            Console.WriteLine(string.Format("         24 followers span {0} columns with {1} break(s) in the run",
-                spanColumns, breaks));
-
-            IsTrue(breaks <= 2, string.Format("the fan is split into {0} pieces", breaks + 1));
-            IsTrue(spanColumns <= 3, string.Format("the fan spans {0} columns", spanColumns));
-        }
-
-        /// <summary>
-        /// No cell inside one parent's run may belong to a different parent. This is what
-        /// stops a fan reading as a grid of unrelated cards.
-        /// </summary>
-        private static void GroupsDoNotInterleave()
-        {
-            var graph = new LayoutGraph(40);
-            for (int i = 1; i <= 15; i++) graph.AddEdge(0, i);
-            for (int i = 16; i <= 25; i++) graph.AddEdge(1, i);
-            for (int i = 26; i <= 30; i++) graph.AddEdge(2, i);
-            // 31..39 stand alone.
-
-            var options = new LayoutOptions { maxNodesPerColumn = 8 };
-            var result = TabLayout.Compute(graph, options);
-
-            // Only the plain followers are considered. A follower that is itself a hub gets
-            // pulled out of this run to sit beside its own block, which is intended - it is
-            // the whole point of the beside-your-followers rule - so it would otherwise look
-            // like a group had been split.
-            var owners = new Dictionary<int, int>();   // cell -> owning parent
-            foreach (var edge in graph.AllEdges())
-            {
-                if (graph.ChildrenOf(edge.Child).Count > 0) continue;
-                int cell = result.Layer[edge.Child] * 1000 + RowOf(result, edge.Child, options);
-                owners[cell] = edge.Parent;
-            }
-
-            var sortedCells = new List<int>(owners.Keys);
-            sortedCells.Sort();
-
-            // Walking the cells in order, an owner must not reappear after another owner
-            // has taken over - that would mean two groups were woven together.
-            var seen = new HashSet<int>();
-            int previousOwner = -1;
-            foreach (int cell in sortedCells)
-            {
-                int owner = owners[cell];
-                if (owner != previousOwner)
-                {
-                    if (!seen.Add(owner))
-                    {
-                        IsTrue(false, string.Format("group {0} is split around another group", owner));
-                        return;
-                    }
-                    previousOwner = owner;
-                }
-            }
-            IsTrue(true, "each parent's followers form one unbroken run");
-        }
-
-        private static void SmallGroupStaysNearParent()
-        {
-            // A big hub and a small one at the same depth. The small group must not be
-            // pushed past the big one's two dozen.
-            var graph = new LayoutGraph(32);
-            for (int i = 2; i <= 25; i++) graph.AddEdge(0, i);   // 24 followers
-            for (int i = 26; i <= 29; i++) graph.AddEdge(1, i);  // 4 followers
-
-            var options = new LayoutOptions { maxNodesPerColumn = 10 };
-            var result = TabLayout.Compute(graph, options);
-
-            int worst = 0;
-            for (int i = 26; i <= 29; i++)
-            {
-                int span = result.Layer[i] - result.Layer[1];
-                if (span > worst) worst = span;
-            }
-
-            Console.WriteLine(string.Format("         small group sits {0} column(s) from its parent", worst));
-            IsTrue(worst <= 1, string.Format("the small group is {0} columns away", worst));
-        }
-
-        private static void HubsSitAtGroupEnd()
-        {
-            // Node 5 is a follower of 0 and a hub in its own right.
-            var graph = new LayoutGraph(20);
+            var graph = new LayoutGraph(9);
             for (int i = 1; i <= 8; i++) graph.AddEdge(0, i);
-            for (int i = 9; i <= 14; i++) graph.AddEdge(5, i);
 
             var options = new LayoutOptions { maxNodesPerColumn = 10 };
             var result = TabLayout.Compute(graph, options);
 
-            // Hubs start at the end of their group, but the refinement pass then pulls them
-            // level with the middle of their own followers. That is the better place to be:
-            // the lines out of the hub stay short instead of fanning from a corner. What
-            // matters is that it ends up beside its followers, not that it is last.
-            int hubRow = RowOf(result, 5, options);
-
-            double followerRows = 0;
-            for (int i = 9; i <= 14; i++) followerRows += RowOf(result, i, options);
-            followerRows /= 6;
-
-            Console.WriteLine(string.Format("         hub at row {0}, its followers centre on row {1:0.#}",
-                hubRow, followerRows));
-
-            // Same caveat as above: adjacency is guaranteed, vertical centring is not.
-            IsTrue(result.Layer[9] - result.Layer[5] == 1, "the hub sits one column from its followers");
-        }
-
-        private static void GroupsAreSeparated()
-        {
-            // Two small groups sharing a column should have a blank row between them.
-            var graph = new LayoutGraph(12);
-            for (int i = 2; i <= 5; i++) graph.AddEdge(0, i);
-            for (int i = 6; i <= 9; i++) graph.AddEdge(1, i);
-
-            var options = new LayoutOptions { maxNodesPerColumn = 12, separateGroups = true };
-            var result = TabLayout.Compute(graph, options);
-
-            var rowsA = new List<int>();
-            var rowsB = new List<int>();
-            for (int i = 2; i <= 5; i++) rowsA.Add(RowOf(result, i, options));
-            for (int i = 6; i <= 9; i++) rowsB.Add(RowOf(result, i, options));
-            rowsA.Sort();
-            rowsB.Sort();
-
-            bool sameColumn = result.Layer[2] == result.Layer[6];
-            int gap = sameColumn ? Math.Abs(Math.Min(rowsB[0], rowsA[0]) - Math.Max(rowsA[rowsA.Count - 1], rowsB[rowsB.Count - 1])) : 0;
-
-            Console.WriteLine(string.Format("         two 4-card groups share a column: {0}", sameColumn));
-            IsTrue(!sameColumn || gap >= 4, "a blank row divides the two groups");
-        }
-
-        private static void NoEmptyRowsAcrossTheTab()
-        {
-            var graph = new LayoutGraph(12);
-            graph.AddEdge(1, 2);
-            graph.AddEdge(2, 3);
-            graph.AddEdge(3, 4);
-            graph.AddEdge(5, 6);
-            for (int i = 8; i < 12; i++) graph.AddEdge(5, i);
-
-            var options = new LayoutOptions { maxNodesPerColumn = 10, separateGroups = false };
-            var result = TabLayout.Compute(graph, options);
-
-            var rows = new List<float>(result.Y);
+            var rows = new List<int>();
+            for (int i = 1; i <= 8; i++) rows.Add(RowOf(result, i, options));
             rows.Sort();
 
-            float biggest = 0f;
             for (int i = 1; i < rows.Count; i++)
             {
-                float gap = rows[i] - rows[i - 1];
-                if (gap > biggest) biggest = gap;
+                if (rows[i] - rows[i - 1] > 1)
+                {
+                    IsTrue(false, string.Format("gap between sibling rows {0} and {1}", rows[i - 1], rows[i]));
+                    return;
+                }
             }
-
-            Console.WriteLine(string.Format("         widest empty band: {0:0.##} rows", biggest / options.yStep));
-            IsTrue(biggest <= options.yStep + 0.001f, "no band left with nothing in it");
+            IsTrue(true, "eight siblings landed in eight consecutive rows");
         }
 
-        private static void RefinementReducesCrossings()
+        private static void BackwardEdgesDoNotThrow()
         {
-            var graph = RandomDag(60, 140, seed: 4242);
+            var graph = new LayoutGraph(6);
+            graph.AddEdge(0, 1);
+            graph.AddEdge(1, 2);
+            graph.AddEdge(2, 0);   // a cycle, the only way an edge can point backwards
+            for (int i = 3; i < 6; i++) graph.AddEdge(0, i);
 
-            int refined = TabLayout.Compute(graph, new LayoutOptions { maxNodesPerColumn = 10, refineSweeps = 6 }).Crossings;
-            int raw = TabLayout.Compute(graph, new LayoutOptions { maxNodesPerColumn = 10, refineSweeps = 0 }).Crossings;
-
-            Console.WriteLine(string.Format("         60 projects / 140 links: {0} -> {1} crossings", raw, refined));
-            IsTrue(refined <= raw, string.Format("refinement made it worse ({0} vs {1})", refined, raw));
+            var result = TabLayout.Compute(graph, new LayoutOptions { maxNodesPerColumn = 2 });
+            IsTrue(result.Crossings >= 0, "laid out without throwing");
         }
 
         private static void HeightNeverExceedsColumnCap()
@@ -443,18 +222,6 @@ namespace ResearchOrganized.Tests
             }
         }
 
-        private static void BackwardEdgesDoNotThrow()
-        {
-            var graph = new LayoutGraph(6);
-            graph.AddEdge(0, 1);
-            graph.AddEdge(1, 2);
-            graph.AddEdge(2, 0);   // a cycle, the only way an edge can point backwards
-            for (int i = 3; i < 6; i++) graph.AddEdge(0, i);
-
-            var result = TabLayout.Compute(graph, new LayoutOptions { maxNodesPerColumn = 2 });
-            IsTrue(result.Crossings >= 0, "laid out without throwing");
-        }
-
         private static void ScaleBenchmark()
         {
             var graph = RandomDag(400, 900, seed: 20260828);
@@ -470,92 +237,207 @@ namespace ResearchOrganized.Tests
             IsTrue(watch.ElapsedMilliseconds < 10000, "large tab laid out in under 10 seconds");
         }
 
-        /// <summary>
-        /// A column must not be full of holes. Cards that move out to sit beside their own
-        /// followers used to leave their old slot empty, so a block would read as a scatter
-        /// of cards with blanks punched through it.
-        ///
-        /// A single blank row is allowed: that is the deliberate divider between two runs.
-        /// </summary>
-        private static void ColumnsHaveNoHoles()
-        {
-            // Several hubs at mixed depths, so plenty of cards get pulled out of blocks.
-            var graph = new LayoutGraph(45);
-            for (int i = 1; i <= 14; i++) graph.AddEdge(0, i);
-            for (int i = 15; i <= 24; i++) graph.AddEdge(3, i);
-            for (int i = 25; i <= 32; i++) graph.AddEdge(5, i);
-            for (int i = 33; i <= 38; i++) graph.AddEdge(15, i);
-            // 39..44 stand alone.
+        // ---- the anchor / epoch model -----------------------------------------------
 
-            var options = new LayoutOptions { maxNodesPerColumn = 10 };
+        /// <summary>
+        /// The case that motivated restoring this engine. A hub marked as an anchor must hold
+        /// a column of its own instead of being placed inline with its siblings at the same
+        /// depth - that is what let Electricity sit among a hundred other projects instead of
+        /// getting its own column with its two dozen followers after it.
+        /// </summary>
+        private static void AnchorHoldsItsOwnColumn()
+        {
+            var graph = new LayoutGraph(30);
+            for (int i = 1; i <= 24; i++) graph.AddEdge(0, i);
+            graph.AddEdge(25, 26); // an unrelated small chain sharing node 0's depth
+
+            var options = new LayoutOptions
+            {
+                maxNodesPerColumn = 10,
+                epoch = new int[30],
+                isAnchor = MarkAnchors(30, 0),
+                anchorOrder = new int[30],
+                tieRank = Identity(30)
+            };
+
             var result = TabLayout.Compute(graph, options);
 
-            var byColumn = new Dictionary<int, List<int>>();
-            for (int node = 0; node < graph.NodeCount; node++)
+            for (int i = 1; i <= 24; i++)
             {
-                int col = result.Layer[node];
-                if (!byColumn.ContainsKey(col)) byColumn[col] = new List<int>();
-                byColumn[col].Add(RowOf(result, node, options));
-            }
-
-            int worst = 0;
-            int worstColumn = -1;
-            foreach (var pair in byColumn)
-            {
-                var rows = pair.Value;
-                rows.Sort();
-                for (int i = 1; i < rows.Count; i++)
+                if (result.Layer[i] == result.Layer[0])
                 {
-                    int gap = rows[i] - rows[i - 1] - 1;
-                    if (gap > worst) { worst = gap; worstColumn = pair.Key; }
+                    IsTrue(false, "a follower shares the anchor's own column");
+                    return;
                 }
             }
-
-            Console.WriteLine(string.Format("         widest hole inside a column: {0} row(s)", worst));
-            IsTrue(worst <= 1, string.Format("column {0} has a {1}-row hole in it", worstColumn, worst));
+            IsTrue(true, "the anchor's column holds nothing but the anchor");
         }
 
         /// <summary>
-        /// Everything following the same parent must sit together in a column. A card that
-        /// was dropped into whichever row happened to be free split the block it landed in -
-        /// which is how starflight basics ended up with two followers stranded well below
-        /// the rest of its block.
+        /// Drug production, Heavy bridges and Piano do not need Electricity and are cheaper -
+        /// they should be placed ahead of it, not scattered behind its follower block.
         /// </summary>
-        private static void SiblingsStayTogetherInAColumn()
+        private static void StartersComeBeforeTheAnchor()
         {
-            var graph = new LayoutGraph(30);
-            for (int i = 1; i <= 8; i++) graph.AddEdge(0, i);     // the block we care about
-            for (int i = 9; i <= 16; i++) graph.AddEdge(1, i);    // a hub inside it
-            for (int i = 17; i <= 22; i++) graph.AddEdge(2, i);   // another
-            // 23..29 stand alone.
+            var graph = new LayoutGraph(10);
+            for (int i = 5; i <= 9; i++) graph.AddEdge(0, i); // the anchor's followers
+            // 1..4 are cheap, independent starters.
 
-            var options = new LayoutOptions { maxNodesPerColumn = 10 };
+            var options = new LayoutOptions
+            {
+                maxNodesPerColumn = 10,
+                epoch = new int[10],
+                isAnchor = MarkAnchors(10, 0),
+                anchorOrder = new int[10],
+                tieRank = Identity(10)
+            };
+
             var result = TabLayout.Compute(graph, options);
 
-            // Within each column, the followers of node 0 must occupy consecutive rows.
-            var byColumn = new Dictionary<int, List<int>>();
-            for (int i = 1; i <= 8; i++)
+            for (int i = 1; i <= 4; i++)
             {
-                int col = result.Layer[i];
-                if (!byColumn.ContainsKey(col)) byColumn[col] = new List<int>();
-                byColumn[col].Add(RowOf(result, i, options));
-            }
-
-            foreach (var pair in byColumn)
-            {
-                var rows = pair.Value;
-                rows.Sort();
-                for (int i = 1; i < rows.Count; i++)
+                if (result.Layer[i] >= result.Layer[0])
                 {
-                    if (rows[i] - rows[i - 1] > 1)
-                    {
-                        IsTrue(false, string.Format("siblings split in column {0}: rows {1} and {2}",
-                            pair.Key, rows[i - 1], rows[i]));
-                        return;
-                    }
+                    IsTrue(false, string.Format("starter {0} did not come before the anchor", i));
+                    return;
                 }
             }
-            IsTrue(true, "siblings sharing a column sit in consecutive rows");
+            IsTrue(true, "every starter sits left of the anchor");
+        }
+
+        private static void AnchorFollowersSitAdjacent()
+        {
+            var graph = new LayoutGraph(30);
+            for (int i = 1; i <= 24; i++) graph.AddEdge(0, i);
+
+            var options = new LayoutOptions
+            {
+                maxNodesPerColumn = 10,
+                epoch = new int[30],
+                isAnchor = MarkAnchors(30, 0),
+                anchorOrder = new int[30],
+                tieRank = Identity(30)
+            };
+
+            var result = TabLayout.Compute(graph, options);
+
+            int earliest = int.MaxValue;
+            for (int i = 1; i <= 24; i++) if (result.Layer[i] < earliest) earliest = result.Layer[i];
+
+            AreEqual(1, earliest - result.Layer[0], "followers start in the very next column after the anchor");
+        }
+
+        /// <summary>
+        /// The anchor should read level with the middle of its own fan, not pinned to row
+        /// zero regardless of where its followers land.
+        /// </summary>
+        private static void AnchorCentresOnFollowers()
+        {
+            var graph = new LayoutGraph(10);
+            for (int i = 1; i <= 8; i++) graph.AddEdge(0, i);
+
+            var options = new LayoutOptions
+            {
+                maxNodesPerColumn = 10,
+                epoch = new int[10],
+                isAnchor = MarkAnchors(10, 0),
+                anchorOrder = new int[10],
+                tieRank = Identity(10)
+            };
+
+            var result = TabLayout.Compute(graph, options);
+
+            int minRow = int.MaxValue, maxRow = int.MinValue;
+            for (int i = 1; i <= 8; i++)
+            {
+                int r = RowOf(result, i, options);
+                if (r < minRow) minRow = r;
+                if (r > maxRow) maxRow = r;
+            }
+
+            int anchorRow = RowOf(result, 0, options);
+            Console.WriteLine(string.Format("         followers span rows {0}-{1}, anchor sits at row {2}", minRow, maxRow, anchorRow));
+            IsTrue(anchorRow >= minRow && anchorRow <= maxRow, "the anchor sits within its own followers' span");
+        }
+
+        /// <summary>
+        /// A project needing both a broad early anchor and a more specific later one (say,
+        /// Electricity and Machining) should read as belonging to the closer, more specific
+        /// hub - not get pulled back to sit under the earlier, broader one.
+        /// </summary>
+        private static void DeeperAnchorClaimsItsOwnBranch()
+        {
+            var graph = new LayoutGraph(12);
+            for (int i = 1; i <= 6; i++) graph.AddEdge(0, i); // electricity's plain followers
+            graph.AddEdge(0, 1);                              // machining also needs electricity (node 1)
+            for (int i = 7; i <= 11; i++) graph.AddEdge(1, i); // machining's own followers
+
+            var options = new LayoutOptions
+            {
+                maxNodesPerColumn = 20,
+                epoch = new int[12],
+                isAnchor = MarkAnchors(12, 0, 1),
+                anchorOrder = new int[12] { 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, // node 0 before node 1
+                tieRank = Identity(12)
+            };
+
+            var result = TabLayout.Compute(graph, options);
+
+            int earliest = int.MaxValue;
+            for (int i = 7; i <= 11; i++) if (result.Layer[i] < earliest) earliest = result.Layer[i];
+
+            AreEqual(1, earliest - result.Layer[1], "machining's own followers sit right after machining, not after electricity");
+        }
+
+        private static void AnchorBatchRespectsHeightCap()
+        {
+            var graph = new LayoutGraph(40);
+            for (int i = 1; i <= 30; i++) graph.AddEdge(0, i); // 30 followers, cap of 10
+
+            var options = new LayoutOptions
+            {
+                maxNodesPerColumn = 10,
+                epoch = new int[40],
+                isAnchor = MarkAnchors(40, 0),
+                anchorOrder = new int[40],
+                tieRank = Identity(40)
+            };
+
+            var result = TabLayout.Compute(graph, options);
+
+            var counts = new Dictionary<int, int>();
+            for (int i = 0; i < 40; i++)
+            {
+                int layer = result.Layer[i];
+                counts[layer] = counts.ContainsKey(layer) ? counts[layer] + 1 : 1;
+            }
+
+            foreach (var pair in counts)
+            {
+                IsTrue(pair.Value <= 10, string.Format("column {0} holds {1}, cap was 10", pair.Key, pair.Value));
+            }
+        }
+
+        private static void EpochsAdvanceLeftToRight()
+        {
+            var graph = new LayoutGraph(6);
+            // No edges between epochs - a combined tab mixing tech levels, as
+            // "use a single main tab" produces.
+            var options = new LayoutOptions
+            {
+                maxNodesPerColumn = 10,
+                epoch = new[] { 0, 0, 1, 1, 2, 2 },
+                isAnchor = new bool[6],
+                anchorOrder = new int[6],
+                tieRank = Identity(6)
+            };
+
+            var result = TabLayout.Compute(graph, options);
+
+            IsTrue(result.Layer[2] > result.Layer[0] && result.Layer[3] > result.Layer[1],
+                "the second tech level starts after the first");
+            IsTrue(result.Layer[4] > result.Layer[2] && result.Layer[5] > result.Layer[3],
+                "the third tech level starts after the second");
         }
 
         // ---- helpers --------------------------------------------------------------
@@ -563,6 +445,20 @@ namespace ResearchOrganized.Tests
         private static int RowOf(LayoutResult result, int node, LayoutOptions options)
         {
             return (int)Math.Round(result.Y[node] / options.yStep);
+        }
+
+        private static bool[] MarkAnchors(int count, params int[] anchors)
+        {
+            var flags = new bool[count];
+            foreach (int a in anchors) flags[a] = true;
+            return flags;
+        }
+
+        private static int[] Identity(int count)
+        {
+            var rank = new int[count];
+            for (int i = 0; i < count; i++) rank[i] = i;
+            return rank;
         }
 
         private static LayoutGraph MakeFan(int children)
