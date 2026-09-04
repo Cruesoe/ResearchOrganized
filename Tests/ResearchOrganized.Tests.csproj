@@ -52,6 +52,9 @@
     <Compile Include="..\Source\Layout\TabLayout.cs">
       <Link>Layout\TabLayout.cs</Link>
     </Compile>
+    <Compile Include="..\Source\Layout\EpochLayout.cs">
+      <Link>Layout\EpochLayout.cs</Link>
+    </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Dump.cs" />
   </ItemGroup>

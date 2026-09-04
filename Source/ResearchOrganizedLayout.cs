@@ -33,8 +33,14 @@ namespace ResearchOrganized
         /// <summary>
         /// Lays out one tab. Only prerequisites between two projects on this same tab become
         /// edges; a prerequisite living on another tab cannot constrain a position here.
+        ///
+        /// <paramref name="anchors"/> and <paramref name="anchorOrder"/> come from
+        /// <see cref="ResearchOrganizedMain.OrganizeTabsAndLayout"/>, which finds them once
+        /// across every project so a hub is recognised the same way regardless of which tab
+        /// it ends up on.
         /// </summary>
-        public static void ApplyLayout(List<ResearchProjectDef> tabNodes, string tabName)
+        public static void ApplyLayout(List<ResearchProjectDef> tabNodes, string tabName,
+            HashSet<ResearchProjectDef> anchors, Dictionary<ResearchProjectDef, int> anchorOrder)
         {
             if (tabNodes == null || tabNodes.Count == 0) return;
 
@@ -52,13 +58,18 @@ namespace ResearchOrganized
             }
 
             var options = BuildOptions(tabName);
-            options.rank = BuildRank(tabNodes, graph);
-            // No gateway pinning. The rule that "something on a later tab depends on this"
-            // matches almost every project that leads into the next era - recurve bow, for
-            // one, which then sat isolated in a far column of the neolithic tab. Worse, it
-            // could not match microelectronics, the case it was written for, because that has
-            // followers on its own tab. Marking a tab's concluding project needs a rule based
-            // on what it unlocks, not on who depends on it.
+            options.epoch = new int[tabNodes.Count];
+            options.isAnchor = new bool[tabNodes.Count];
+            options.anchorOrder = new int[tabNodes.Count];
+            options.tieRank = new int[tabNodes.Count];
+
+            for (int i = 0; i < tabNodes.Count; i++)
+            {
+                options.epoch[i] = (int)tabNodes[i].techLevel;
+                options.isAnchor[i] = anchors.Contains(tabNodes[i]);
+                anchorOrder.TryGetValue(tabNodes[i], out options.anchorOrder[i]);
+            }
+            options.tieRank = BuildTieRank(tabNodes);
 
             var result = TabLayout.Compute(graph, options);
 
@@ -72,50 +83,25 @@ namespace ResearchOrganized
         }
 
         /// <summary>
-        /// Placement priority within a column, lowest first. Two ideas, in order:
-        ///
-        /// 1. Anchors - projects with many direct children on this tab - come first. They
-        ///    are the hubs the rest of the tab hangs off, so they must hold their own depth
-        ///    column and never be the ones pushed aside when a column fills up.
-        /// 2. Then cheapest first, because that is roughly the order a colony researches in,
-        ///    and it keeps the early projects to the left where the eye starts.
-        ///
-        /// Counting only direct in-tab children, as the original did, is what makes this
-        /// work for modded trees too: it needs no list of known project names.
+        /// Tie-break for otherwise-equal placement choices, lowest first: cheapest project
+        /// first, since that is roughly the order a colony researches in and keeps the early
+        /// projects to the left where the eye starts.
         /// </summary>
-        private static int[] BuildRank(List<ResearchProjectDef> tabNodes, LayoutGraph graph)
+        private static int[] BuildTieRank(List<ResearchProjectDef> tabNodes)
         {
-            int minorThreshold = ResearchOrganizedMod.settings.minorAnchorChildThreshold;
-            int majorThreshold = ResearchOrganizedMod.settings.majorAnchorChildThreshold;
-
             var order = new List<int>(tabNodes.Count);
             for (int i = 0; i < tabNodes.Count; i++) order.Add(i);
 
             order.Sort(delegate (int a, int b)
             {
-                int tierA = AnchorTier(graph.ChildrenOf(a).Count, minorThreshold, majorThreshold);
-                int tierB = AnchorTier(graph.ChildrenOf(b).Count, minorThreshold, majorThreshold);
-                if (tierA != tierB) return tierA.CompareTo(tierB);
-
-                int childCompare = graph.ChildrenOf(b).Count.CompareTo(graph.ChildrenOf(a).Count);
-                if (childCompare != 0) return childCompare;
-
                 int costCompare = tabNodes[a].baseCost.CompareTo(tabNodes[b].baseCost);
                 if (costCompare != 0) return costCompare;
-
                 return string.Compare(tabNodes[a].defName, tabNodes[b].defName, System.StringComparison.Ordinal);
             });
 
             var rank = new int[tabNodes.Count];
             for (int position = 0; position < order.Count; position++) rank[order[position]] = position;
             return rank;
-        }
-
-        private static int AnchorTier(int directChildren, int minorThreshold, int majorThreshold)
-        {
-            if (majorThreshold > 0 && directChildren >= majorThreshold) return 0;
-            if (minorThreshold > 0 && directChildren >= minorThreshold) return 1;
-            return 2;
         }
 
         private static LayoutOptions BuildOptions(string tabName)
@@ -153,6 +139,24 @@ namespace ResearchOrganized
             Log.Warning($"[Research: Organized] Circular research dependencies on tab '{tabName}'. " +
                         $"Reversed for layout purposes: [{string.Join(", ", described)}]. " +
                         $"Affected projects are outlined in red. This usually means a mod conflict or malformed XML.");
+        }
+
+        /// <summary>Every project this one depends on, directly or transitively, for layout purposes.</summary>
+        public static HashSet<ResearchProjectDef> GetAllAncestors(ResearchProjectDef node)
+        {
+            var ancestors = new HashSet<ResearchProjectDef>();
+            var stack = new Stack<ResearchProjectDef>();
+            stack.Push(node);
+
+            while (stack.Count > 0)
+            {
+                var current = stack.Pop();
+                foreach (var pre in GetDirectPrereqs(current))
+                {
+                    if (ancestors.Add(pre)) stack.Push(pre);
+                }
+            }
+            return ancestors;
         }
 
         /// <summary>

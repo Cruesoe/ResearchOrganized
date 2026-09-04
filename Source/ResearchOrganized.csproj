@@ -61,6 +61,7 @@
     <Compile Include="Layout\CycleBreaker.cs" />
     <Compile Include="Layout\CrossingCounter.cs" />
     <Compile Include="Layout\TabLayout.cs" />
+    <Compile Include="Layout\EpochLayout.cs" />
     <Compile Include="ResearchOrganizedMain.cs" />
     <Compile Include="ResearchOrganizedMod.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

@@ -115,6 +115,9 @@ namespace ResearchOrganized
                 HideEmptyTabs(activeTabs);
                 SortAndIndexTabs();
 
+                Dictionary<ResearchProjectDef, int> anchorOrder;
+                var anchors = FindAnchors(out anchorOrder);
+
                 foreach (var tab in activeTabs)
                 {
                     if (IgnoredTabs.Contains(tab.defName)) continue;
@@ -125,7 +128,7 @@ namespace ResearchOrganized
                     // abort this loop, leaving every remaining tab at its authored layout.
                     try
                     {
-                        ResearchOrganizedLayout.ApplyLayout(projects, tab.defName);
+                        ResearchOrganizedLayout.ApplyLayout(projects, tab.defName, anchors, anchorOrder);
                     }
                     catch (Exception ex)
                     {
@@ -214,6 +217,74 @@ namespace ResearchOrganized
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Finds the hubs each tab should be built around: a project with enough same-tab
+        /// follow-ups is a hub, and once it is, its own children stop counting toward whether
+        /// something upstream of it also qualifies - so a chain of hubs is not inflated by
+        /// double-counting the same descendants.
+        ///
+        /// Evaluated bottom-up (deepest projects first) so that "already an anchor" is known
+        /// for every child before its ancestors are checked. This is what the original mod
+        /// used to isolate a big hub like Electricity onto its own column instead of burying
+        /// it among a hundred other projects at the same depth.
+        /// </summary>
+        private static HashSet<ResearchProjectDef> FindAnchors(out Dictionary<ResearchProjectDef, int> anchorOrder)
+        {
+            var allProjects = DefDatabase<ResearchProjectDef>.AllDefsListForReading;
+
+            var childrenMap = new Dictionary<ResearchProjectDef, List<ResearchProjectDef>>();
+            foreach (var proj in allProjects)
+            {
+                foreach (var pre in ResearchOrganizedLayout.GetDirectPrereqs(proj))
+                {
+                    if (proj.tab == null || pre.tab == null || proj.tab != pre.tab) continue;
+                    if (!childrenMap.TryGetValue(pre, out var list)) childrenMap[pre] = list = new List<ResearchProjectDef>();
+                    list.Add(proj);
+                }
+            }
+
+            var ancestorCounts = new Dictionary<ResearchProjectDef, int>(allProjects.Count);
+            foreach (var proj in allProjects) ancestorCounts[proj] = ResearchOrganizedLayout.GetAllAncestors(proj).Count;
+
+            var bottomUp = new List<ResearchProjectDef>(allProjects);
+            bottomUp.Sort((a, b) => ancestorCounts[b].CompareTo(ancestorCounts[a]));
+
+            int minorThreshold = ResearchOrganizedMod.settings.minorAnchorChildThreshold;
+            int majorThreshold = ResearchOrganizedMod.settings.majorAnchorChildThreshold;
+
+            var majorAnchors = new HashSet<ResearchProjectDef>();
+            var minorAnchors = new HashSet<ResearchProjectDef>();
+
+            foreach (var proj in bottomUp)
+            {
+                if (!childrenMap.TryGetValue(proj, out var children)) continue;
+
+                int nonMajorChildren = children.Count(c => !majorAnchors.Contains(c));
+                if (majorThreshold > 0 && nonMajorChildren >= majorThreshold) { majorAnchors.Add(proj); continue; }
+
+                int nonAnchorChildren = children.Count(c => !majorAnchors.Contains(c) && !minorAnchors.Contains(c));
+                if (minorThreshold > 0 && nonAnchorChildren >= minorThreshold) minorAnchors.Add(proj);
+            }
+
+            var anchors = new HashSet<ResearchProjectDef>(majorAnchors);
+            anchors.UnionWith(minorAnchors);
+
+            var anchorList = new List<ResearchProjectDef>(anchors);
+            anchorList.Sort((a, b) =>
+            {
+                int byDepth = ancestorCounts[a].CompareTo(ancestorCounts[b]);
+                if (byDepth != 0) return byDepth;
+                int byTier = (majorAnchors.Contains(a) ? 0 : 1).CompareTo(majorAnchors.Contains(b) ? 0 : 1);
+                if (byTier != 0) return byTier;
+                return string.CompareOrdinal(a.defName, b.defName);
+            });
+
+            anchorOrder = new Dictionary<ResearchProjectDef, int>(anchorList.Count);
+            for (int i = 0; i < anchorList.Count; i++) anchorOrder[anchorList[i]] = i;
+
+            return anchors;
         }
 
         private static void MapProjectsToTabs()

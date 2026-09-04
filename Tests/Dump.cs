@@ -69,10 +69,25 @@ namespace ResearchOrganized.Tests
                 }
             }
 
-            var rank = new int[tab.Count];
-            for (int i = 0; i < tab.Count; i++) rank[i] = i;
+            var tieRank = new int[tab.Count];
+            for (int i = 0; i < tab.Count; i++) tieRank[i] = i; // already cheapest-first from the sort above
 
-            var options = new LayoutOptions { maxNodesPerColumn = cap, rank = rank };
+            const int minorAnchorThreshold = 3;
+            const int majorAnchorThreshold = 7;
+            bool[] isAnchor;
+            int[] anchorOrder;
+            FindAnchors(tab, graph, minorAnchorThreshold, majorAnchorThreshold, out isAnchor, out anchorOrder);
+
+            var epoch = new int[tab.Count]; // one tech level per Dump run, so every project shares an epoch
+
+            var options = new LayoutOptions
+            {
+                maxNodesPerColumn = cap,
+                epoch = epoch,
+                isAnchor = isAnchor,
+                anchorOrder = anchorOrder,
+                tieRank = tieRank
+            };
             var result = TabLayout.Compute(graph, options);
 
             Render(tab, graph, result, options);
@@ -184,6 +199,72 @@ namespace ResearchOrganized.Tests
                 Console.Write(" " + held);
             }
             Console.WriteLine("   (cap " + options.maxNodesPerColumn + ")");
+        }
+
+        /// <summary>
+        /// Mirrors ResearchOrganizedMain.FindAnchors: bottom-up by ancestor depth, a project
+        /// with enough non-anchor children becomes a hub, and its own children then stop
+        /// counting toward whether something upstream of it also qualifies.
+        /// </summary>
+        private static void FindAnchors(List<Project> tab, LayoutGraph graph, int minorThreshold, int majorThreshold,
+            out bool[] isAnchor, out int[] anchorOrder)
+        {
+            int count = tab.Count;
+            var ancestorCounts = new int[count];
+            for (int i = 0; i < count; i++) ancestorCounts[i] = CountAncestors(graph, i);
+
+            var bottomUp = new List<int>(count);
+            for (int i = 0; i < count; i++) bottomUp.Add(i);
+            bottomUp.Sort((a, b) => ancestorCounts[b].CompareTo(ancestorCounts[a]));
+
+            var majorAnchors = new HashSet<int>();
+            var minorAnchors = new HashSet<int>();
+
+            foreach (int node in bottomUp)
+            {
+                var children = graph.ChildrenOf(node);
+                if (children.Count == 0) continue;
+
+                int nonMajor = 0;
+                for (int i = 0; i < children.Count; i++) if (!majorAnchors.Contains(children[i])) nonMajor++;
+                if (majorThreshold > 0 && nonMajor >= majorThreshold) { majorAnchors.Add(node); continue; }
+
+                int nonAnchor = 0;
+                for (int i = 0; i < children.Count; i++) if (!majorAnchors.Contains(children[i]) && !minorAnchors.Contains(children[i])) nonAnchor++;
+                if (minorThreshold > 0 && nonAnchor >= minorThreshold) minorAnchors.Add(node);
+            }
+
+            isAnchor = new bool[count];
+            foreach (int a in majorAnchors) isAnchor[a] = true;
+            foreach (int a in minorAnchors) isAnchor[a] = true;
+
+            var anchorList = new List<int>();
+            for (int i = 0; i < count; i++) if (isAnchor[i]) anchorList.Add(i);
+            anchorList.Sort((a, b) =>
+            {
+                int byDepth = ancestorCounts[a].CompareTo(ancestorCounts[b]);
+                if (byDepth != 0) return byDepth;
+                int byTier = (majorAnchors.Contains(a) ? 0 : 1).CompareTo(majorAnchors.Contains(b) ? 0 : 1);
+                if (byTier != 0) return byTier;
+                return string.CompareOrdinal(tab[a].Name, tab[b].Name);
+            });
+
+            anchorOrder = new int[count];
+            for (int position = 0; position < anchorList.Count; position++) anchorOrder[anchorList[position]] = position;
+        }
+
+        private static int CountAncestors(LayoutGraph graph, int node)
+        {
+            var ancestors = new HashSet<int>();
+            var stack = new Stack<int>();
+            stack.Push(node);
+            while (stack.Count > 0)
+            {
+                int current = stack.Pop();
+                var parents = graph.ParentsOf(current);
+                for (int i = 0; i < parents.Count; i++) if (ancestors.Add(parents[i])) stack.Push(parents[i]);
+            }
+            return ancestors.Count;
         }
 
         private static Dictionary<string, Project> Load(string path)
