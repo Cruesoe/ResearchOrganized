@@ -42,6 +42,8 @@ namespace ResearchOrganized.Tests
             Run("a later, more specific anchor claims its own descendants", DeeperAnchorClaimsItsOwnBranch);
             Run("an oversized anchor batch is not exceeded", AnchorBatchRespectsHeightCap);
             Run("tech levels are laid out in order, left to right", EpochsAdvanceLeftToRight);
+            Run("a capstone lands after everything else in its era", CapstoneLandsLast);
+            Run("a capstone with no prerequisites still lands last", CapstoneWithNoPrerequisitesStillLandsLast);
 
             Console.WriteLine();
             Console.WriteLine(failures == 0
@@ -438,6 +440,62 @@ namespace ResearchOrganized.Tests
                 "the second tech level starts after the first");
             IsTrue(result.Layer[4] > result.Layer[2] && result.Layer[5] > result.Layer[3],
                 "the third tech level starts after the second");
+        }
+
+        /// <summary>
+        /// An era's "advance to the next tech level" node (Node Research's Emergence nodes,
+        /// for one) must read as the last thing in its era, even when it does carry real
+        /// prerequisites into a hub's fan.
+        /// </summary>
+        private static void CapstoneLandsLast()
+        {
+            var graph = new LayoutGraph(11);
+            for (int i = 1; i <= 8; i++) graph.AddEdge(0, i); // an anchor and its followers
+            graph.AddEdge(0, 9);                              // the capstone also needs the anchor
+            // 10 stands alone.
+
+            var options = new LayoutOptions
+            {
+                maxNodesPerColumn = 10,
+                epoch = new int[11],
+                isAnchor = MarkAnchors(11, 0),
+                anchorOrder = new int[11],
+                tieRank = Identity(11),
+                isCapstone = MarkAnchors(11, 9)
+            };
+
+            var result = TabLayout.Compute(graph, options);
+
+            for (int i = 0; i < 11; i++)
+            {
+                if (i == 9) continue;
+                IsTrue(result.Layer[9] > result.Layer[i], string.Format("capstone did not land after project {0}", i));
+            }
+        }
+
+        private static void CapstoneWithNoPrerequisitesStillLandsLast()
+        {
+            var graph = new LayoutGraph(6);
+            for (int i = 1; i <= 4; i++) graph.AddEdge(0, i);
+            // node 5 is the capstone, with no edges at all - as Node Research creates one
+            // before its own prerequisite-wiring pass runs.
+
+            var options = new LayoutOptions
+            {
+                maxNodesPerColumn = 10,
+                epoch = new int[6],
+                isAnchor = MarkAnchors(6, 0),
+                anchorOrder = new int[6],
+                tieRank = Identity(6),
+                isCapstone = MarkAnchors(6, 5)
+            };
+
+            var result = TabLayout.Compute(graph, options);
+
+            for (int i = 0; i < 5; i++)
+            {
+                IsTrue(result.Layer[5] > result.Layer[i], string.Format("unlinked capstone did not land after project {0}", i));
+            }
         }
 
         // ---- helpers --------------------------------------------------------------

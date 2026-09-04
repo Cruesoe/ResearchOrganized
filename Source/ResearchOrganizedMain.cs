@@ -64,6 +64,24 @@ namespace ResearchOrganized
             // untouched, so it only ever added overhead. Cross-tab line suppression is still
             // unimplemented; see the README.
 
+            // Some mods create their own ResearchProjectDefs from their own static
+            // constructor - Node Research's per-era "advance to the next tech level" nodes,
+            // for one - and static constructor order between mods is not guaranteed, so a
+            // pass run here can run before those defs exist. Game.FinalizeInit fires once an
+            // actual game has started, which is guaranteed to be after every mod's static
+            // constructor has finished, so redoing the pass there catches anything created
+            // late instead of leaving it wherever its creator left it.
+            var finalizeInitMethod = AccessTools.Method(typeof(Game), nameof(Game.FinalizeInit));
+            if (finalizeInitMethod != null)
+            {
+                harmony.Patch(finalizeInitMethod, postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(OnGameFinalizeInit)));
+            }
+
+            OrganizeTabsAndLayout();
+        }
+
+        private static void OnGameFinalizeInit()
+        {
             OrganizeTabsAndLayout();
         }
 
@@ -237,6 +255,8 @@ namespace ResearchOrganized
             var childrenMap = new Dictionary<ResearchProjectDef, List<ResearchProjectDef>>();
             foreach (var proj in allProjects)
             {
+                if (ResearchOrganizedLayout.IsEraCapstone(proj)) continue; // never counts toward another project's hub status
+
                 foreach (var pre in ResearchOrganizedLayout.GetDirectPrereqs(proj))
                 {
                     if (proj.tab == null || pre.tab == null || proj.tab != pre.tab) continue;
@@ -259,6 +279,7 @@ namespace ResearchOrganized
 
             foreach (var proj in bottomUp)
             {
+                if (ResearchOrganizedLayout.IsEraCapstone(proj)) continue; // never itself a hub - it always goes last, not off to the side with a fan of its own
                 if (!childrenMap.TryGetValue(proj, out var children)) continue;
 
                 int nonMajorChildren = children.Count(c => !majorAnchors.Contains(c));

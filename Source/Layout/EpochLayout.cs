@@ -29,6 +29,7 @@ namespace ResearchOrganized.Layout
             bool[] isAnchor,
             int[] anchorOrder,
             int[] tieRank,
+            bool[] isCapstone,
             int[] column,
             int[] row)
         {
@@ -43,8 +44,18 @@ namespace ResearchOrganized.Layout
 
             foreach (int epochValue in DistinctSorted(epoch))
             {
+                // A capstone (an era's "advance to the next tech level" node, from mods like
+                // Node Research) is not part of the normal hub/starter placement at all - it
+                // is placed once everything else in the era is down, so it always reads as
+                // the last thing in it regardless of what prerequisites it does or does not
+                // have.
                 var members = new List<int>();
-                for (int node = 0; node < n; node++) if (epoch[node] == epochValue) members.Add(node);
+                var capstones = new List<int>();
+                for (int node = 0; node < n; node++)
+                {
+                    if (epoch[node] != epochValue) continue;
+                    if (isCapstone[node]) capstones.Add(node); else members.Add(node);
+                }
 
                 var epochAnchors = new List<int>();
                 foreach (int node in members) if (isAnchor[node]) epochAnchors.Add(node);
@@ -204,6 +215,11 @@ namespace ResearchOrganized.Layout
                 if (orphaned.Count > 0)
                 {
                     PlaceNodesDAG(orphaned, ref currentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
+                }
+
+                if (capstones.Count > 0)
+                {
+                    PlaceNodesDAG(capstones, ref currentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
                 }
             }
         }
