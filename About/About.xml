@@ -25,13 +25,11 @@
 		<li>GonDragon.TTPF</li>
 		<li>cruesoe.eotrtechtree</li>
 	</incompatibleWith>
-	<loadBefore>
-		<li>ferny.noderesearch</li>
-	</loadBefore>
 	<loadAfter>
 		<li>OskarPotocki.VFE.Tribals</li>
 		<li>OskarPotocki.VFE.Medieval2</li>
 		<li>vanillaexpanded.gravship</li>
+		<li>ferny.noderesearch</li>
 		<li>ferny.progressionattire</li>
 		<li>ferny.progressioncore</li>
 		<li>ferny.progressionstorage</li>
