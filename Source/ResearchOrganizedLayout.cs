@@ -31,6 +31,39 @@ namespace ResearchOrganized
             return def.defName != null && def.defName.StartsWith(EraCapstonePrefix, System.StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// Node Research marks its foundation technologies with a "ResearchFoundationExtension"
+        /// mod extension. Matched by type name rather than a reference to that mod's assembly,
+        /// so this works whether or not it is installed.
+        /// </summary>
+        private const string FoundationExtensionName = "ResearchFoundationExtension";
+
+        private static readonly Dictionary<ResearchProjectDef, bool> foundationCache =
+            new Dictionary<ResearchProjectDef, bool>();
+
+        public static bool IsFoundationTech(ResearchProjectDef def)
+        {
+            if (def == null) return false;
+            if (foundationCache.TryGetValue(def, out bool cached)) return cached;
+
+            bool isFoundation = false;
+            List<DefModExtension> extensions = def.modExtensions;
+            if (extensions != null)
+            {
+                for (int i = 0; i < extensions.Count; i++)
+                {
+                    if (extensions[i]?.GetType().Name == FoundationExtensionName)
+                    {
+                        isFoundation = true;
+                        break;
+                    }
+                }
+            }
+
+            foundationCache[def] = isFoundation;
+            return isFoundation;
+        }
+
         private static readonly Dictionary<ResearchProjectDef, List<ResearchProjectDef>> cachedPrereqs =
             new Dictionary<ResearchProjectDef, List<ResearchProjectDef>>();
 
@@ -42,6 +75,7 @@ namespace ResearchOrganized
         {
             cachedPrereqs.Clear();
             cyclicNodes.Clear();
+            foundationCache.Clear();
         }
 
         /// <summary>

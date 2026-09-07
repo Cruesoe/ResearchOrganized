@@ -20,6 +20,12 @@ namespace ResearchOrganized
         private const float NormalBrightness = 0.5f;
         private const float UnavailableBrightness = 0.2f;
 
+        /// <summary>Marks Node Research's foundation technologies. Nothing else in this UI is gold.
+        /// Muted and semi-transparent so it reads as a hint, not an alert like the red cyclic border.</summary>
+        private static readonly Color FoundationGold = new Color(0.75f, 0.62f, 0.32f, 0.65f);
+        private const float FoundationBorderSize = 1.5f;
+        private const string FoundationTechTooltip = "Foundation technology";
+
         private static readonly Dictionary<TechLevel, ColorSet> TabColors = new Dictionary<TechLevel, ColorSet>();
         private static readonly Dictionary<string, ColorSet> TabColorOverrides = new Dictionary<string, ColorSet>();
         private static readonly Dictionary<string, TechLevel> TabToThemeMap = new Dictionary<string, TechLevel>();
@@ -457,8 +463,12 @@ namespace ResearchOrganized
                 unfilledBgColor = project.IsFinished ? set.finished : !project.PrerequisitesCompleted ? set.unavailable : set.normal;
                 bgColor = set.finished;
             }
+            bool isFoundation = ResearchOrganizedLayout.IsFoundationTech(project);
+            if (isFoundation) { borderColor = FoundationGold; borderSize = Mathf.Max(borderSize, FoundationBorderSize); }
             if (ResearchOrganizedLayout.cyclicNodes.Contains(project)) { borderColor = Color.red; borderSize = 2f; }
-            return Widgets.CustomButtonText(ref rect, label, bgColor, textColor, borderColor, unfilledBgColor, cacheHeight, borderSize, doMouseOverSound, active, project.ProgressPercent);
+            bool result = Widgets.CustomButtonText(ref rect, label, bgColor, textColor, borderColor, unfilledBgColor, cacheHeight, borderSize, doMouseOverSound, active, project.ProgressPercent);
+            if (isFoundation) TooltipHandler.TipRegion(rect, FoundationTechTooltip);
+            return result;
         }
 
         private static ColorSet ResolveColorSet(ResearchProjectDef project)
