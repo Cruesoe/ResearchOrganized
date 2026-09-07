@@ -77,12 +77,32 @@ namespace ResearchOrganized
                 harmony.Patch(finalizeInitMethod, postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(OnGameFinalizeInit)));
             }
 
+            // A research tab with neither a generalTitle nor a generalDescription - every tab
+            // this mod adds, and vanilla's Main tab - still gets a tooltip, because vanilla's
+            // ResearchTabRecord.GetTip colorizes the missing title and so hands TabDrawer
+            // "<color=#FFFFFFFF></color>", which passes its NullOrEmpty check. The result is an
+            // empty black box trailing the cursor along the tab strip. Blank the tip when
+            // nothing but markup survives, which is the one case TabDrawer does skip.
+            var researchTabRecordType = AccessTools.Inner(typeof(MainTabWindow_Research), "ResearchTabRecord");
+            var tabTipMethod = researchTabRecordType != null ? AccessTools.Method(researchTabRecordType, "GetTip") : null;
+            if (tabTipMethod != null)
+            {
+                harmony.Patch(tabTipMethod, postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(BlankEmptyTabTip)));
+            }
+
             OrganizeTabsAndLayout();
         }
 
         private static void OnGameFinalizeInit()
         {
             OrganizeTabsAndLayout();
+        }
+
+        /// <summary>Turns a tab tooltip that renders as nothing but markup into an empty string,
+        /// which is what TabDrawer checks before deciding to show a tooltip at all.</summary>
+        public static void BlankEmptyTabTip(ref string __result)
+        {
+            if (!__result.NullOrEmpty() && __result.StripTags().Trim().Length == 0) __result = "";
         }
 
         public static void RefreshColors()
