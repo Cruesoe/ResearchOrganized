@@ -16,6 +16,8 @@ namespace ResearchOrganized
         private const string MultiAnalyzerDef = "MultiAnalyzer";
         private const string HiTechBenchDef = "HiTechResearchBench";
         private const string TabAnomalyDef = "Anomaly";
+        private const string TabGravtechDef = "VGE_Gravtech";
+        private const string GravtechExtensionName = "GravtechResearchExtension";
 
         private const float NormalBrightness = 0.5f;
         private const float UnavailableBrightness = 0.2f;
@@ -145,6 +147,19 @@ namespace ResearchOrganized
             TabToThemeMap["TabSpacer"] = TechLevel.Spacer;
             TabToThemeMap["TabUltra"] = TechLevel.Ultra;
             TabToThemeMap["TabArchotech"] = TechLevel.Archotech;
+
+            // Vanilla Gravship Expanded's gravtech tab is left where the tab pass found it, and
+            // the projects on it span tech levels - Odyssey's OrbitalTech is still Industrial - so
+            // colouring them per project draws that one tab in mixed colours. Gravtech is
+            // spacer-era content, so pin the whole tab to spacer. The defName covers the tab as it
+            // ships; the sweep below covers a rename, since that extension is what VGE itself uses
+            // to recognise a gravtech tab. A tabThemes entry in a config def still wins over both,
+            // because LoadConfigs runs after this.
+            TabToThemeMap[TabGravtechDef] = TechLevel.Spacer;
+            foreach (var tab in DefDatabase<ResearchTabDef>.AllDefs)
+            {
+                if (tab.modExtensions != null && tab.modExtensions.Any(e => e.GetType().Name == GravtechExtensionName)) TabToThemeMap[tab.defName] = TechLevel.Spacer;
+            }
         }
 
         public static void OrganizeTabsAndLayout()
