@@ -4,6 +4,7 @@
 	<name>Research: Organized</name>
 	<author>Cruesoe</author>
 	<packageId>cruesoe.research.organized</packageId>
+	<modVersion>260907</modVersion>
 	<description>This mod sorts research into their appropriate tech level tabs.</description>
 	<supportedVersions>
 		<li>1.6</li>
