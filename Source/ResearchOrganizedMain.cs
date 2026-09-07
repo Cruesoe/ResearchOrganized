@@ -207,6 +207,11 @@ namespace ResearchOrganized
                 // keeps real columns at least xStep (1.0) apart and rows at least yStep
                 // (0.63) apart.
                 ResearchProjectDef.GenerateNonOverlappingCoordinates();
+
+                // Everything above has just moved projects off the tab Node Research parks
+                // them on, so tell it where they went. Without this its own collapse is a
+                // no-op - it still believes it holds - and its window comes up empty.
+                NodeResearchCompat.SyncTabs();
             }
             catch (Exception ex) { Log.Error($"[Research: Organized] Master Organizer Error: {ex}"); }
         }
@@ -395,6 +400,10 @@ namespace ResearchOrganized
                 if (defsListField == null || defsByNameField == null) return;
                 var defsList = (List<ResearchTabDef>)defsListField.GetValue(null);
                 var defsByName = (Dictionary<string, ResearchTabDef>)defsByNameField.GetValue(null);
+                // Vanilla's Main tab is emptied by the pass above and hidden with the rest of
+                // the empties. Node Research still collapses onto it and reads it back through
+                // its own DefsOf field and a fixed tab strip, never through this database, so
+                // the removal costs it nothing and keeps an empty tab out of the vanilla window.
                 var toRemove = defsList.Where(t => !activeTabs.Contains(t) && !IgnoredTabs.Contains(t.defName)).ToList();
                 foreach (var tab in toRemove)
                 {
@@ -493,6 +502,57 @@ namespace ResearchOrganized
             if (tabName != null && TabToThemeMap.TryGetValue(tabName, out var techLevel)) return TabColors[techLevel];
             if (TabColors.TryGetValue(project.techLevel, out var byTechLevel)) return byTechLevel;
             return TabColors[TechLevel.Undefined];
+        }
+
+        /// <summary>Node Research (ferny.noderesearch) parks every project its own window draws
+        /// onto vanilla's Main tab, remembering where each came from so its "open the vanilla
+        /// menu" button can put them back. Both halves of that go wrong when this mod reorganises
+        /// the same projects: its collapse returns early while it believes it still holds, so its
+        /// window lists an empty Main tab, and the tabs it would restore are the ones from before
+        /// this mod sorted them. Pointing it at the finished layout fixes both, and lets the user
+        /// switch between the two windows. Reflective and entirely optional - with Node Research
+        /// absent, or its internals renamed, every call here is a no-op.</summary>
+        private static class NodeResearchCompat
+        {
+            private const string StartupTypeName = "BetterResearchMenu.Startup";
+
+            private static bool resolved;
+            private static FieldInfo originalTabsField;
+            private static FieldInfo isCollapsedField;
+
+            public static bool Active
+            {
+                get { Resolve(); return originalTabsField != null && isCollapsedField != null; }
+            }
+
+            /// <summary>Repoints Node Research's remembered tabs at wherever this pass left each
+            /// project, and clears its collapsed flag so its next window open really re-collapses.</summary>
+            public static void SyncTabs()
+            {
+                if (!Active) return;
+                try
+                {
+                    var remembered = (Dictionary<ResearchProjectDef, ResearchTabDef>)originalTabsField.GetValue(null);
+                    if (remembered != null)
+                    {
+                        foreach (var project in DefDatabase<ResearchProjectDef>.AllDefs) remembered[project] = project.tab;
+                    }
+                    isCollapsedField.SetValue(null, false);
+                }
+                catch (Exception ex) { Log.Error($"[Research: Organized] Node Research sync error: {ex.Message}"); }
+            }
+
+            private static void Resolve()
+            {
+                if (resolved) return;
+                resolved = true;
+                var startupType = AccessTools.TypeByName(StartupTypeName);
+                if (startupType == null) return;
+                var tabs = AccessTools.Field(startupType, "originalTabs");
+                var collapsed = AccessTools.Field(startupType, "isCollapsed");
+                if (tabs != null && tabs.FieldType == typeof(Dictionary<ResearchProjectDef, ResearchTabDef>)) originalTabsField = tabs;
+                if (collapsed != null && collapsed.FieldType == typeof(bool)) isCollapsedField = collapsed;
+            }
         }
     }
 }
