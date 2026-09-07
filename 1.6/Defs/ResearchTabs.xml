@@ -4,51 +4,61 @@
 	<ResearchTabDef>
 		<defName>TabAnimal</defName>
 			<label>Primitive</label>
+			<description>Primitive-era research.</description>
 	</ResearchTabDef>
 
 	<ResearchTabDef>
 		<defName>TabNeolithic</defName>
 			<label>Neolithic</label>
+			<description>Neolithic-era research.</description>
 	</ResearchTabDef>
-	
+
 	<ResearchTabDef>
 		<defName>TabMedieval</defName>
 			<label>Medieval</label>
+			<description>Medieval-era research.</description>
 	</ResearchTabDef>
 
 	<ResearchTabDef>
 		<defName>TabIndustrial</defName>
 			<label>Industrial</label>
+			<description>Industrial-era research.</description>
 	</ResearchTabDef>
-  
+
 	<ResearchTabDef>
 		<defName>TabHighIndustrial</defName>
 			<label>high industrial</label>
+			<description>High Industrial-era research.</description>
 	</ResearchTabDef>
-  
+
 	<ResearchTabDef>
 		<defName>TabLateIndustrial</defName>
 			<label>late industrial</label>
+			<description>Late Industrial-era research.</description>
 	</ResearchTabDef>
 
 	<ResearchTabDef>
 		<defName>TabSpacer</defName>
 			<label>Spacer</label>
+			<description>Spacer-era research.</description>
 	</ResearchTabDef>
 
 	<ResearchTabDef>
 		<defName>TabUltra</defName>
 			<label>Ultra</label>
+			<description>Ultra-era research.</description>
 	</ResearchTabDef>
 
 	<ResearchTabDef>
 		<defName>TabArchotech</defName>
 			<label>Archotech</label>
+			<description>Archotech-era research.</description>
 	</ResearchTabDef>
 
 	<ResearchTabDef>
 		<defName>TabMisc</defName>
 			<label>Miscellaneous</label>
+			<description>Miscellaneous research not tied to a specific era.</description>
 	</ResearchTabDef>
 
 </Defs>
