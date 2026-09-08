@@ -10,6 +10,7 @@ namespace ResearchOrganized
         public int minorAnchorChildThreshold = 3;
         public int majorAnchorChildThreshold = 7;
         public bool disableCustomColors = false;
+        public bool showTabProjectCounts = false;
 
         public Color colorUndefined = new Color(0.60f, 0.60f, 0.60f);
         public Color colorAnimal = new Color(0.45f, 0.33f, 0.24f);
@@ -28,6 +29,7 @@ namespace ResearchOrganized
             Scribe_Values.Look(ref minorAnchorChildThreshold, "minorAnchorChildThreshold", 3);
             Scribe_Values.Look(ref majorAnchorChildThreshold, "majorAnchorChildThreshold", 7);
             Scribe_Values.Look(ref disableCustomColors, "disableCustomColors", false);
+            Scribe_Values.Look(ref showTabProjectCounts, "showTabProjectCounts", false);
             Scribe_Values.Look(ref colorUndefined, "colorUndefined", new Color(0.60f, 0.60f, 0.60f));
             Scribe_Values.Look(ref colorAnimal, "colorAnimal", new Color(0.45f, 0.33f, 0.24f));
             Scribe_Values.Look(ref colorNeolithic, "colorNeolithic", new Color(0.40f, 0.00f, 0.00f));
@@ -45,6 +47,7 @@ namespace ResearchOrganized
             minorAnchorChildThreshold = defaults.minorAnchorChildThreshold;
             majorAnchorChildThreshold = defaults.majorAnchorChildThreshold;
             disableCustomColors = defaults.disableCustomColors;
+            showTabProjectCounts = defaults.showTabProjectCounts;
             colorUndefined = defaults.colorUndefined;
             colorAnimal = defaults.colorAnimal;
             colorNeolithic = defaults.colorNeolithic;
@@ -147,6 +150,12 @@ namespace ResearchOrganized
 
             listing.CheckboxLabeled("Disable Custom Colors", ref settings.disableCustomColors,
                 "Reverts research nodes to their default vanilla colors.");
+
+            listing.Gap();
+
+            listing.CheckboxLabeled("Show Tab Project Counts", ref settings.showTabProjectCounts,
+                "Shows completed/total project counts next to each tab's name, and adds project and "
+              + "research point totals to its tooltip.");
 
             listing.Gap();
 

@@ -39,6 +39,9 @@ namespace ResearchOrganized
 
         private static readonly List<ResearchTabDef> hiddenTabs = new List<ResearchTabDef>();
 
+        private static FieldInfo researchTabRecordDefField;
+        private static FieldInfo researchWindowTabsField;
+
         private static readonly Dictionary<ResearchProjectDef, bool> reqMultiCache = new Dictionary<ResearchProjectDef, bool>();
         private static readonly Dictionary<ResearchProjectDef, bool> reqHiTechCache = new Dictionary<ResearchProjectDef, bool>();
 
@@ -97,6 +100,19 @@ namespace ResearchOrganized
             {
                 harmony.Patch(tabTipMethod, postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(BlankEmptyTabTip)));
             }
+            if (researchTabRecordType != null) researchTabRecordDefField = AccessTools.Field(researchTabRecordType, "def");
+
+            // Optional per-tab completed/total project counts (Settings). The tab strip is
+            // rebuilt from ResearchTabDef.LabelCap once in PostOpen and never touched again, so
+            // the counts are kept live by rewriting each TabRecord's label field every frame
+            // instead - the private tabs list is reached by reflection since ResearchTabRecord
+            // itself is a private nested type.
+            researchWindowTabsField = AccessTools.Field(typeof(MainTabWindow_Research), "tabs");
+            var doWindowContentsMethod = AccessTools.Method(typeof(MainTabWindow_Research), "DoWindowContents");
+            if (doWindowContentsMethod != null && researchWindowTabsField != null && researchTabRecordDefField != null)
+            {
+                harmony.Patch(doWindowContentsMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(UpdateTabLabelsWithCounts)));
+            }
 
             OrganizeTabsAndLayout();
         }
@@ -107,10 +123,67 @@ namespace ResearchOrganized
         }
 
         /// <summary>Turns a tab tooltip that renders as nothing but markup into an empty string,
-        /// which is what TabDrawer checks before deciding to show a tooltip at all.</summary>
-        public static void BlankEmptyTabTip(ref string __result)
+        /// which is what TabDrawer checks before deciding to show a tooltip at all. Also appends
+        /// live completed/total project and research point counts when that setting is on - even
+        /// onto a tab that would otherwise have gone tipless, which is why this runs after the
+        /// blanking rather than being skipped by it.</summary>
+        public static void BlankEmptyTabTip(object __instance, ref string __result)
         {
             if (!__result.NullOrEmpty() && __result.StripTags().Trim().Length == 0) __result = "";
+
+            if (!ResearchOrganizedMod.settings.showTabProjectCounts || researchTabRecordDefField == null) return;
+            if (!(researchTabRecordDefField.GetValue(__instance) is ResearchTabDef tabDef)) return;
+
+            string counts = BuildTabCountsTooltip(tabDef);
+            __result = __result.NullOrEmpty() ? counts : __result + "\n\n" + counts;
+        }
+
+        /// <summary>Rewrites every research tab's label to include its completed/total project
+        /// count, live, whenever the setting is on. Runs every frame the research window draws
+        /// since the game rebuilds nothing about the tab strip after it is first opened.</summary>
+        public static void UpdateTabLabelsWithCounts(object __instance)
+        {
+            if (!(researchWindowTabsField.GetValue(__instance) is System.Collections.IEnumerable tabRecords)) return;
+
+            foreach (object tabRecordObj in tabRecords)
+            {
+                if (!(researchTabRecordDefField.GetValue(tabRecordObj) is ResearchTabDef tabDef)) continue;
+                var tabRecord = (TabRecord)tabRecordObj;
+                tabRecord.label = ResearchOrganizedMod.settings.showTabProjectCounts
+                    ? $"{tabDef.LabelCap} {BuildTabProjectCountLabel(tabDef)}"
+                    : tabDef.LabelCap;
+            }
+        }
+
+        private static void GetTabStats(ResearchTabDef tabDef, out int completedProjects, out int totalProjects, out float completedPoints, out float totalPoints)
+        {
+            completedProjects = 0;
+            totalProjects = 0;
+            completedPoints = 0f;
+            totalPoints = 0f;
+            foreach (var project in DefDatabase<ResearchProjectDef>.AllDefsListForReading)
+            {
+                if (project.tab != tabDef) continue;
+                totalProjects++;
+                totalPoints += project.Cost;
+                if (project.IsFinished)
+                {
+                    completedProjects++;
+                    completedPoints += project.Cost;
+                }
+            }
+        }
+
+        private static string BuildTabProjectCountLabel(ResearchTabDef tabDef)
+        {
+            GetTabStats(tabDef, out int completed, out int total, out _, out _);
+            return $"{completed}/{total}";
+        }
+
+        private static string BuildTabCountsTooltip(ResearchTabDef tabDef)
+        {
+            GetTabStats(tabDef, out int completedProjects, out int totalProjects, out float completedPoints, out float totalPoints);
+            return $"Projects: {completedProjects}/{totalProjects}\nResearch points: {completedPoints:F0}/{totalPoints:F0}";
         }
 
         public static void RefreshColors()
