@@ -154,8 +154,8 @@ namespace ResearchOrganized
             listing.Gap();
 
             listing.CheckboxLabeled("Show Tab Project Counts", ref settings.showTabProjectCounts,
-                "Shows completed/total project counts next to each tab's name, and adds project and "
-              + "research point totals to its tooltip.");
+                "Shows completed/total project counts next to each tab's name. Every tab's tooltip "
+              + "always shows project and research point totals, regardless of this setting.");
 
             listing.Gap();
 

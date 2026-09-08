@@ -123,15 +123,16 @@ namespace ResearchOrganized
         }
 
         /// <summary>Turns a tab tooltip that renders as nothing but markup into an empty string,
-        /// which is what TabDrawer checks before deciding to show a tooltip at all. Also appends
-        /// live completed/total project and research point counts when that setting is on - even
-        /// onto a tab that would otherwise have gone tipless, which is why this runs after the
-        /// blanking rather than being skipped by it.</summary>
+        /// which is what TabDrawer checks before deciding to show a tooltip at all. Always appends
+        /// live completed/total project and research point counts, independent of the "Show Tab
+        /// Project Counts" setting that only controls the tab header text - even onto a tab that
+        /// would otherwise have gone tipless, which is why this runs after the blanking rather
+        /// than being skipped by it.</summary>
         public static void BlankEmptyTabTip(object __instance, ref string __result)
         {
             if (!__result.NullOrEmpty() && __result.StripTags().Trim().Length == 0) __result = "";
 
-            if (!ResearchOrganizedMod.settings.showTabProjectCounts || researchTabRecordDefField == null) return;
+            if (researchTabRecordDefField == null) return;
             if (!(researchTabRecordDefField.GetValue(__instance) is ResearchTabDef tabDef)) return;
 
             string counts = BuildTabCountsTooltip(tabDef);

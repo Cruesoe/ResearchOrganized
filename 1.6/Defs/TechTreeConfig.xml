@@ -10,6 +10,7 @@
 
 		<ignoredTabs>
 			<li>VGE_Gravtech</li>
+			<li>TabAnimal</li>
 		</ignoredTabs>
 
 		<tabOrder>
@@ -71,22 +72,6 @@
 				</children>
 			</li>
 		</virtualLinks>
-
-	</ResearchOrganized.ResearchOrganizedConfig>
-
-	<!--
-		Per-tab spacing override. A config with targetTabs applies its steps only to those
-		tabs; the def above, having none, sets the global defaults.
-	-->
-	<ResearchOrganized.ResearchOrganizedConfig>
-		<defName>AnimalTabLayout</defName>
-
-		<targetTabs>
-			<li>TabAnimal</li>
-		</targetTabs>
-
-		<xStep>1.2</xStep>
-		<yStep>1.0</yStep>
 
 	</ResearchOrganized.ResearchOrganizedConfig>
 
