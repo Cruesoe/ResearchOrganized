@@ -75,7 +75,8 @@ namespace ResearchOrganized.Layout
             };
             if (graph.NodeCount == 0) return result;
 
-            var broken = CycleBreaker.Break(graph);
+            var tieRank = options.tieRank ?? DefaultRank(graph.NodeCount);
+            var broken = CycleBreaker.Break(graph, tieRank);
             result.ReversedEdges = broken.ReversedEdges;
             result.NodesInCycles = broken.NodesInCycles;
 
@@ -85,11 +86,10 @@ namespace ResearchOrganized.Layout
             var epoch = options.epoch ?? new int[graph.NodeCount];
             var isAnchor = options.isAnchor ?? new bool[graph.NodeCount];
             var anchorOrder = options.anchorOrder ?? new int[graph.NodeCount];
-            var tieRank = options.tieRank ?? DefaultRank(graph.NodeCount);
             var isCapstone = options.isCapstone ?? new bool[graph.NodeCount];
 
             EpochLayout.Compute(broken.Acyclic, options, epoch, isAnchor, anchorOrder, tieRank, isCapstone, column, row);
-            result.InitialCrossings = CrossingCounter.Count(broken.Acyclic, column, row);
+            result.InitialCrossings = CrossingCounter.Count(broken.Acyclic, column, row, options.xStep, options.yStep);
             RowOptimizer.Improve(broken.Acyclic, options, isAnchor, column, row);
 
             for (int node = 0; node < graph.NodeCount; node++)
@@ -99,7 +99,7 @@ namespace ResearchOrganized.Layout
                 result.Y[node] = row[node] * options.yStep;
             }
 
-            result.Crossings = CrossingCounter.Count(broken.Acyclic, column, row);
+            result.Crossings = CrossingCounter.Count(broken.Acyclic, column, row, options.xStep, options.yStep);
             return result;
         }
 

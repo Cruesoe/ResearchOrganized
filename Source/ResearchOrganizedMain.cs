@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
+using ResearchOrganized.Layout;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -16,9 +17,7 @@ namespace ResearchOrganized
         private const string MultiAnalyzerDef = "MultiAnalyzer";
         private const string HiTechBenchDef = "HiTechResearchBench";
         private const string TabAnomalyDef = "Anomaly";
-        private const string TabAnimalDef = "TabAnimal";
         private const string TabGravtechDef = "VGE_Gravtech";
-        private const string TabVfeTribalsBasicsDef = "VFET_Basics";
         private const string GravtechExtensionName = "GravtechResearchExtension";
 
         private const float NormalBrightness = 0.5f;
@@ -35,9 +34,11 @@ namespace ResearchOrganized
         private static readonly Dictionary<string, TechLevel> TabToThemeMap = new Dictionary<string, TechLevel>();
 
         public static List<string> IgnoredTabs = new List<string>();
+        public static List<string> PreservedTabs = new List<string>();
         public static List<string> GlobalTabOrder = new List<string>();
         public static Dictionary<ResearchProjectDef, List<ResearchProjectDef>> VirtualPrereqsCache = new Dictionary<ResearchProjectDef, List<ResearchProjectDef>>();
         public static Dictionary<string, LayoutConfig> TabLayouts = new Dictionary<string, LayoutConfig>();
+        public static Dictionary<TechLevel, string> TechLevelTabOverrides = new Dictionary<TechLevel, string>();
 
         private static readonly List<ResearchTabDef> hiddenTabs = new List<ResearchTabDef>();
 
@@ -295,8 +296,10 @@ namespace ResearchOrganized
         private static void ResetCaches()
         {
             IgnoredTabs.Clear();
+            PreservedTabs.Clear();
             GlobalTabOrder.Clear();
             TabLayouts.Clear();
+            TechLevelTabOverrides.Clear();
             reqMultiCache.Clear();
             reqHiTechCache.Clear();
             VirtualPrereqsCache.Clear();
@@ -308,8 +311,12 @@ namespace ResearchOrganized
             foreach (var config in DefDatabase<ResearchOrganizedConfig>.AllDefs)
             {
                 if (config.ignoredTabs != null) IgnoredTabs.AddRange(config.ignoredTabs);
+                if (config.preservedTabs != null) PreservedTabs.AddRange(config.preservedTabs);
                 if (config.tabOrder != null) GlobalTabOrder.AddRange(config.tabOrder);
                 if (config.tabThemes != null) foreach (var entry in config.tabThemes) if (!string.IsNullOrEmpty(entry.tabName)) TabToThemeMap[entry.tabName] = entry.techLevel;
+                if (config.techLevelTabs != null)
+                    foreach (var entry in config.techLevelTabs)
+                        if (!string.IsNullOrEmpty(entry.tabName)) TechLevelTabOverrides[entry.techLevel] = entry.tabName;
                 if (config.targetTabs != null && config.targetTabs.Count > 0)
                 {
                     foreach (var tabName in config.targetTabs)
@@ -330,11 +337,10 @@ namespace ResearchOrganized
                 ProcessLinks(config.visibleLinks, false);
             }
 
-            // VFE Tribals' Basics tab replaces this mod's generic Animal tab. It must not
-            // inherit TabAnimal's normal "leave authored coordinates alone" exception:
-            // Basics is the one Animal-era tab and should receive the generated layout.
-            if (DefDatabase<ResearchTabDef>.GetNamedSilentFail(TabVfeTribalsBasicsDef) != null)
-                IgnoredTabs.RemoveAll(tabName => tabName == TabAnimalDef);
+            // When a configured override replaces an ignored built-in tab, let the empty
+            // built-in tab be removed rather than retaining two tabs for the same era.
+            foreach (var pair in TechLevelTabOverrides)
+                IgnoredTabs.Remove("Tab" + pair.Key);
         }
 
         private static void ProcessLinks(IEnumerable<ResearchLinkBase> links, bool isVirtual)
@@ -442,23 +448,39 @@ namespace ResearchOrganized
             var highInd = DefDatabase<ResearchTabDef>.GetNamed("TabHighIndustrial", false);
             var lateInd = DefDatabase<ResearchTabDef>.GetNamed("TabLateIndustrial", false);
             var ind = DefDatabase<ResearchTabDef>.GetNamed("TabIndustrial", false);
-            var vfeTribalsBasics = DefDatabase<ResearchTabDef>.GetNamed(TabVfeTribalsBasicsDef, false);
             bool combineIndustrial = ResearchOrganizedMod.settings.combineIndustrial;
             foreach (var project in DefDatabase<ResearchProjectDef>.AllDefs)
             {
-                if (anomalyTab != null && (project.knowledgeCategory != null || project.tab == anomalyTab)) { project.tab = anomalyTab; continue; }
-                // When VFE Tribals is active, its Basics tab is the Animal-era tab. Route
-                // every Animal project there, including projects supplied by other mods.
-                if (vfeTribalsBasics != null && project.techLevel == TechLevel.Animal) { project.tab = vfeTribalsBasics; continue; }
-                if (project.tab != null && IgnoredTabs.Contains(project.tab.defName)) continue;
-                if (project.techLevel == TechLevel.Industrial)
+                string currentTab = project.tab?.defName;
+                TechLevelTabOverrides.TryGetValue(project.techLevel, out string overrideTabName);
+                var defaultTab = DefDatabase<ResearchTabDef>.GetNamed("Tab" + project.techLevel, false);
+                bool isIndustrial = project.techLevel == TechLevel.Industrial;
+                bool preserveCurrent = currentTab != null && PreservedTabs.Contains(currentTab);
+                bool ignoreCurrent = currentTab != null && IgnoredTabs.Contains(currentTab);
+                bool inspectIndustrialRequirements = isIndustrial && !combineIndustrial
+                    && overrideTabName == null && !preserveCurrent && !ignoreCurrent;
+
+                string targetName = TabRoutingPolicy.Resolve(new TabRoutingPolicy.Request
                 {
-                    if (combineIndustrial) project.tab = ind;
-                    else project.tab = (lateInd != null && RequiresBuildingCached(project, MultiAnalyzerDef, reqMultiCache)) ? lateInd : (highInd != null && RequiresBuildingCached(project, HiTechBenchDef, reqHiTechCache)) ? highInd : ind;
-                }
-                else
+                    CurrentTab = currentTab,
+                    AnomalyTab = anomalyTab?.defName,
+                    OverrideTab = overrideTabName,
+                    DefaultTab = defaultTab?.defName,
+                    IndustrialTab = ind?.defName,
+                    HighIndustrialTab = highInd?.defName,
+                    LateIndustrialTab = lateInd?.defName,
+                    IsAnomaly = project.knowledgeCategory != null || project.tab == anomalyTab,
+                    CurrentTabIgnored = ignoreCurrent,
+                    CurrentTabPreserved = preserveCurrent,
+                    IsIndustrial = isIndustrial,
+                    CombineIndustrial = combineIndustrial,
+                    RequiresHighTechBench = inspectIndustrialRequirements && RequiresBuildingCached(project, HiTechBenchDef, reqHiTechCache),
+                    RequiresMultiAnalyzer = inspectIndustrialRequirements && RequiresBuildingCached(project, MultiAnalyzerDef, reqMultiCache)
+                });
+
+                if (targetName != null)
                 {
-                    var target = DefDatabase<ResearchTabDef>.GetNamed("Tab" + project.techLevel, false);
+                    var target = DefDatabase<ResearchTabDef>.GetNamed(targetName, false);
                     if (target != null) project.tab = target;
                 }
             }

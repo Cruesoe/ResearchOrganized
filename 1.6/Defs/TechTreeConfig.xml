@@ -13,6 +13,17 @@
 			<li>TabAnimal</li>
 		</ignoredTabs>
 
+		<preservedTabs>
+			<li MayRequire="OskarPotocki.VFE.Tribals">VFET_Basics</li>
+		</preservedTabs>
+
+		<techLevelTabs>
+			<li MayRequire="OskarPotocki.VFE.Tribals">
+				<techLevel>Animal</techLevel>
+				<tabName>VFET_Basics</tabName>
+			</li>
+		</techLevelTabs>
+
 		<tabOrder>
 			<li>Main</li>
 			<li MayRequire="OskarPotocki.VFE.Tribals">VFET_Basics</li>

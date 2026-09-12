@@ -21,10 +21,17 @@ namespace ResearchOrganized
         public TechLevel techLevel = TechLevel.Undefined;
     }
 
+    public class TechLevelTabEntry
+    {
+        public TechLevel techLevel = TechLevel.Undefined;
+        public string tabName = "";
+    }
+
     public class ResearchOrganizedConfig : Def
     {
         public List<string> targetTabs = new List<string>();
         public List<string> ignoredTabs = new List<string>();
+        public List<string> preservedTabs = new List<string>();
         public List<string> tabOrder = new List<string>();
         public List<VirtualLink> virtualLinks = new List<VirtualLink>();
         public List<VisibleLink> visibleLinks = new List<VisibleLink>();
@@ -34,6 +41,7 @@ namespace ResearchOrganized
         public int maxNodesPerColumn = -1;
 
         public List<TabThemeEntry> tabThemes = new List<TabThemeEntry>();
+        public List<TechLevelTabEntry> techLevelTabs = new List<TechLevelTabEntry>();
     }
 
     public class LayoutConfig

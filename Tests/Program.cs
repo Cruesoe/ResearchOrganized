@@ -28,15 +28,23 @@ namespace ResearchOrganized.Tests
             Run("every follower is right of its parent", ChildAlwaysRightOfParent);
             Run("column height cap is respected", ColumnHeightCap);
             Run("cycles are broken and reported", CyclesAreBroken);
+            Run("cycle reversal is deterministic and acyclic", CycleReversalIsDeterministic);
             Run("long-edge crossings are counted", LongEdgeCrossingsAreCounted);
             Run("row optimizer removes a crossing", RowOptimizerRemovesCrossing);
             Run("row optimizer respects authored rows", RowOptimizerRespectsAuthoredRows);
+            Run("tab override replaces an ignored built-in tab", TabOverrideReplacesIgnoredTab);
+            Run("preserved tab keeps its membership", PreservedTabKeepsMembership);
+            Run("anomaly routing has highest priority", AnomalyRoutingHasHighestPriority);
+            Run("industrial routing selects the required tier", IndustrialRoutingSelectsRequiredTier);
             Run("layout is deterministic", Deterministic);
             Run("loose projects pack tightly", LooseNodesPackTightly);
             Run("siblings placed together land in consecutive rows", SiblingsLandConsecutively);
             Run("backward edges do not throw", BackwardEdgesDoNotThrow);
             Run("height never exceeds the cap", HeightNeverExceedsColumnCap);
             Run("scale benchmark", ScaleBenchmark);
+            Run("VFE Tribals Basics fixture remains readable", VfeTribalsBasicsFixture);
+            Run("real modlist Industrial fixture remains stable", RealModlistIndustrialFixture);
+            Run("real modlist Spacer fixture remains stable", RealModlistSpacerFixture);
 
             Run("an anchor holds its own column", AnchorHoldsItsOwnColumn);
             Run("starter projects are placed before the anchor", StartersComeBeforeTheAnchor);
@@ -129,6 +137,53 @@ namespace ResearchOrganized.Tests
                 "the complete strongly connected component was reported");
         }
 
+        private static void CycleReversalIsDeterministic()
+        {
+            int[,] edges = { { 0, 1 }, { 0, 2 }, { 1, 2 }, { 2, 3 }, { 3, 0 }, { 3, 1 } };
+            var first = new LayoutGraph(4);
+            var second = new LayoutGraph(4);
+            for (int i = 0; i < edges.GetLength(0); i++) first.AddEdge(edges[i, 0], edges[i, 1]);
+            for (int i = edges.GetLength(0) - 1; i >= 0; i--) second.AddEdge(edges[i, 0], edges[i, 1]);
+
+            var rank = new[] { 3, 0, 2, 1 };
+            CycleBreaker.Result firstResult = CycleBreaker.Break(first, rank);
+            CycleBreaker.Result secondResult = CycleBreaker.Break(second, rank);
+
+            AreEqual(ReversedEdgeSet(firstResult), ReversedEdgeSet(secondResult),
+                "insertion order did not change the selected feedback edges");
+            IsTrue(IsAcyclic(firstResult.Acyclic) && IsAcyclic(secondResult.Acyclic),
+                "reversing the selected feedback edges produced a DAG");
+        }
+
+        private static string ReversedEdgeSet(CycleBreaker.Result result)
+        {
+            var names = new List<string>();
+            foreach (LayoutGraph.Edge edge in result.ReversedEdges) names.Add(edge.ToString());
+            names.Sort(StringComparer.Ordinal);
+            return string.Join(",", names.ToArray());
+        }
+
+        private static bool IsAcyclic(LayoutGraph graph)
+        {
+            var indegree = new int[graph.NodeCount];
+            var queue = new Queue<int>();
+            for (int node = 0; node < graph.NodeCount; node++)
+            {
+                indegree[node] = graph.ParentsOf(node).Count;
+                if (indegree[node] == 0) queue.Enqueue(node);
+            }
+
+            int visited = 0;
+            while (queue.Count > 0)
+            {
+                int node = queue.Dequeue();
+                visited++;
+                foreach (int child in graph.ChildrenOf(node))
+                    if (--indegree[child] == 0) queue.Enqueue(child);
+            }
+            return visited == graph.NodeCount;
+        }
+
         private static void LongEdgeCrossingsAreCounted()
         {
             var graph = new LayoutGraph(4);
@@ -169,6 +224,67 @@ namespace ResearchOrganized.Tests
 
             AreEqual(1, rows[0], "first project returned to its authored row");
             AreEqual(0, rows[1], "second project returned to its authored row");
+        }
+
+        private static void TabOverrideReplacesIgnoredTab()
+        {
+            string target = TabRoutingPolicy.Resolve(new TabRoutingPolicy.Request
+            {
+                CurrentTab = "TabAnimal",
+                CurrentTabIgnored = true,
+                OverrideTab = "VFET_Basics",
+                DefaultTab = "TabAnimal"
+            });
+            AreEqual("VFET_Basics", target, "configured Animal override won over ignored TabAnimal");
+        }
+
+        private static void PreservedTabKeepsMembership()
+        {
+            string target = TabRoutingPolicy.Resolve(new TabRoutingPolicy.Request
+            {
+                CurrentTab = "ExternalAuthoredTab",
+                CurrentTabPreserved = true,
+                DefaultTab = "TabNeolithic"
+            });
+            AreEqual("ExternalAuthoredTab", target, "preserved external tab remained assigned");
+        }
+
+        private static void AnomalyRoutingHasHighestPriority()
+        {
+            string target = TabRoutingPolicy.Resolve(new TabRoutingPolicy.Request
+            {
+                CurrentTab = "ExternalAuthoredTab",
+                AnomalyTab = "Anomaly",
+                OverrideTab = "VFET_Basics",
+                IsAnomaly = true,
+                CurrentTabPreserved = true
+            });
+            AreEqual("Anomaly", target, "knowledge project remained on Anomaly");
+        }
+
+        private static void IndustrialRoutingSelectsRequiredTier()
+        {
+            var request = new TabRoutingPolicy.Request
+            {
+                CurrentTab = "Main",
+                DefaultTab = "TabIndustrial",
+                IndustrialTab = "TabIndustrial",
+                HighIndustrialTab = "TabHighIndustrial",
+                LateIndustrialTab = "TabLateIndustrial",
+                IsIndustrial = true,
+                RequiresHighTechBench = true,
+                RequiresMultiAnalyzer = true
+            };
+            AreEqual("TabLateIndustrial", TabRoutingPolicy.Resolve(request),
+                "multi-analyzer project selected Late Industrial");
+
+            request.RequiresMultiAnalyzer = false;
+            AreEqual("TabHighIndustrial", TabRoutingPolicy.Resolve(request),
+                "hi-tech bench project selected High Industrial");
+
+            request.CombineIndustrial = true;
+            AreEqual("TabIndustrial", TabRoutingPolicy.Resolve(request),
+                "combined setting selected main Industrial");
         }
 
         private static void Deterministic()
@@ -285,6 +401,56 @@ namespace ResearchOrganized.Tests
 
             IsTrue(result.Crossings <= result.InitialCrossings, "row optimization did not increase crossings");
             IsTrue(watch.ElapsedMilliseconds < 10000, "large tab laid out in under 10 seconds");
+        }
+
+        private static void VfeTribalsBasicsFixture()
+        {
+            LayoutGraph graph = RepresentativeFixtures.VfeTribalsBasics();
+            AreEqual(13, graph.NodeCount, "VFE Tribals Basics project count");
+            VerifyRepresentativeFixture(graph, "VFE Tribals Basics", 2000);
+        }
+
+        private static void RealModlistIndustrialFixture()
+        {
+            int count;
+            LayoutGraph graph = RepresentativeFixtures.LoadTechLevel("Industrial", out count);
+            IsTrue(count >= 200, "active-modlist Industrial fixture retained its breadth");
+            VerifyRepresentativeFixture(graph, "active-modlist Industrial", 10000);
+        }
+
+        private static void RealModlistSpacerFixture()
+        {
+            int count;
+            LayoutGraph graph = RepresentativeFixtures.LoadTechLevel("Spacer", out count);
+            IsTrue(count >= 80, "active-modlist Spacer fixture retained its breadth");
+            VerifyRepresentativeFixture(graph, "active-modlist Spacer", 5000);
+        }
+
+        private static void VerifyRepresentativeFixture(LayoutGraph graph, string name, long maximumMilliseconds)
+        {
+            var options = new LayoutOptions { maxNodesPerColumn = 10, tieRank = Identity(graph.NodeCount) };
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            LayoutResult first = TabLayout.Compute(graph, options);
+            watch.Stop();
+            LayoutResult second = TabLayout.Compute(graph, options);
+
+            bool dependenciesAdvance = true;
+            foreach (LayoutGraph.Edge edge in graph.AllEdges())
+                if (first.Layer[edge.Child] <= first.Layer[edge.Parent]) { dependenciesAdvance = false; break; }
+            IsTrue(dependenciesAdvance, name + " keeps every child right of its parent");
+            IsTrue(first.Crossings <= first.InitialCrossings, name + " optimization does not increase crossings");
+            IsTrue(ArraysEqual(first.X, second.X) && ArraysEqual(first.Y, second.Y), name + " layout is deterministic");
+            IsTrue(watch.ElapsedMilliseconds < maximumMilliseconds,
+                string.Format("{0} completes in under {1} ms (was {2} ms)", name, maximumMilliseconds, watch.ElapsedMilliseconds));
+            Console.WriteLine(string.Format("         {0}: {1} nodes, {2} -> {3} crossings in {4} ms",
+                name, graph.NodeCount, first.InitialCrossings, first.Crossings, watch.ElapsedMilliseconds));
+        }
+
+        private static bool ArraysEqual(float[] first, float[] second)
+        {
+            if (first.Length != second.Length) return false;
+            for (int i = 0; i < first.Length; i++) if (Math.Abs(first[i] - second[i]) > 0.0001f) return false;
+            return true;
         }
 
         // ---- the anchor / epoch model -----------------------------------------------
@@ -628,6 +794,16 @@ namespace ResearchOrganized.Tests
         {
             checks++;
             if (expected != actual)
+            {
+                failures++;
+                Console.WriteLine(string.Format("         {0}: expected {1}, got {2}", message, expected, actual));
+            }
+        }
+
+        private static void AreEqual(string expected, string actual, string message)
+        {
+            checks++;
+            if (!string.Equals(expected, actual, StringComparison.Ordinal))
             {
                 failures++;
                 Console.WriteLine(string.Format("         {0}: expected {1}, got {2}", message, expected, actual));

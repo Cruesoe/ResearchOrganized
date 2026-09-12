@@ -15,5 +15,6 @@
       under Source\Layout is deliberately free of those dependencies so it can be tested here.
     -->
     <Compile Include="..\Source\Layout\*.cs" LinkBase="Layout" />
+    <None Include="..\Tools\research-graph.txt" Link="Fixtures\research-graph.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
