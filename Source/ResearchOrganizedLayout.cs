@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using RimWorld;
@@ -12,7 +13,7 @@ namespace ResearchOrganized
     ///
     /// Everything game-specific lives here: reading prerequisites, deciding which projects
     /// matter most on a tab, and writing coordinates back onto the defs. The layout
-    /// decisions are made by <see cref="SugiyamaLayout"/>, which knows nothing about
+    /// decisions are made by <see cref="TabLayout"/>, which knows nothing about
     /// RimWorld and is covered by the test project.
     /// </summary>
     public static class ResearchOrganizedLayout
@@ -67,6 +68,18 @@ namespace ResearchOrganized
         private static readonly Dictionary<ResearchProjectDef, List<ResearchProjectDef>> cachedPrereqs =
             new Dictionary<ResearchProjectDef, List<ResearchProjectDef>>();
 
+        private struct AuthoredPosition
+        {
+            public float X;
+            public float Y;
+        }
+
+        // Layout is reapplied after late mod initialization and settings changes. Keep the
+        // coordinates first seen for each def so reruns do not treat a generated position as
+        // the authored one.
+        private static readonly Dictionary<ResearchProjectDef, AuthoredPosition> authoredPositions =
+            new Dictionary<ResearchProjectDef, AuthoredPosition>();
+
 
         /// <summary>Projects sitting on a dependency cycle. Drawn with a red border.</summary>
         public static HashSet<ResearchProjectDef> cyclicNodes = new HashSet<ResearchProjectDef>();
@@ -110,6 +123,7 @@ namespace ResearchOrganized
             options.isAnchor = new bool[tabNodes.Count];
             options.anchorOrder = new int[tabNodes.Count];
             options.isCapstone = new bool[tabNodes.Count];
+            options.preferredRow = new int[tabNodes.Count];
 
             for (int i = 0; i < tabNodes.Count; i++)
             {
@@ -117,6 +131,12 @@ namespace ResearchOrganized
                 options.isAnchor[i] = anchors.Contains(tabNodes[i]);
                 anchorOrder.TryGetValue(tabNodes[i], out options.anchorOrder[i]);
                 options.isCapstone[i] = IsEraCapstone(tabNodes[i]);
+                AuthoredPosition authored = GetAuthoredPosition(tabNodes[i]);
+                int preferredRow = options.yStep > 0f ? (int)Math.Round(authored.Y / options.yStep) : 0;
+                if (preferredRow < 0) preferredRow = 0;
+                if (options.maxNodesPerColumn > 0 && preferredRow >= options.maxNodesPerColumn)
+                    preferredRow = options.maxNodesPerColumn - 1;
+                options.preferredRow[i] = preferredRow;
             }
             options.tieRank = BuildTieRank(tabNodes);
 
@@ -145,12 +165,28 @@ namespace ResearchOrganized
             {
                 int costCompare = tabNodes[a].baseCost.CompareTo(tabNodes[b].baseCost);
                 if (costCompare != 0) return costCompare;
+                AuthoredPosition authoredA = GetAuthoredPosition(tabNodes[a]);
+                AuthoredPosition authoredB = GetAuthoredPosition(tabNodes[b]);
+                int xCompare = authoredA.X.CompareTo(authoredB.X);
+                if (xCompare != 0) return xCompare;
+                int yCompare = authoredA.Y.CompareTo(authoredB.Y);
+                if (yCompare != 0) return yCompare;
                 return string.Compare(tabNodes[a].defName, tabNodes[b].defName, System.StringComparison.Ordinal);
             });
 
             var rank = new int[tabNodes.Count];
             for (int position = 0; position < order.Count; position++) rank[order[position]] = position;
             return rank;
+        }
+
+        private static AuthoredPosition GetAuthoredPosition(ResearchProjectDef def)
+        {
+            if (!authoredPositions.TryGetValue(def, out AuthoredPosition position))
+            {
+                position = new AuthoredPosition { X = def.researchViewX, Y = def.researchViewY };
+                authoredPositions[def] = position;
+            }
+            return position;
         }
 
         private static LayoutOptions BuildOptions(string tabName)

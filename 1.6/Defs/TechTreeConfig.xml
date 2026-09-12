@@ -15,6 +15,7 @@
 
 		<tabOrder>
 			<li>Main</li>
+			<li MayRequire="OskarPotocki.VFE.Tribals">VFET_Basics</li>
 			<li>TabAnimal</li>
 			<li>TabNeolithic</li>
 			<li>TabMedieval</li>

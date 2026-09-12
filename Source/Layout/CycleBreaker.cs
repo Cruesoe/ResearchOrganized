@@ -18,7 +18,7 @@ namespace ResearchOrganized.Layout
             public LayoutGraph Acyclic;
             public List<LayoutGraph.Edge> ReversedEdges = new List<LayoutGraph.Edge>();
 
-            /// <summary>Nodes that sat on at least one reversed edge.</summary>
+            /// <summary>Every node belonging to a cyclic strongly connected component.</summary>
             public HashSet<int> NodesInCycles = new HashSet<int>();
         }
 
@@ -32,6 +32,7 @@ namespace ResearchOrganized.Layout
         public static Result Break(LayoutGraph graph)
         {
             var result = new Result();
+            MarkCyclicComponents(graph, result.NodesInCycles);
             var marks = new Mark[graph.NodeCount];
 
             // (node, index of next child to examine)
@@ -80,6 +81,76 @@ namespace ResearchOrganized.Layout
             var reversedSet = new HashSet<LayoutGraph.Edge>(result.ReversedEdges);
             result.Acyclic = graph.WithReversedEdges(reversedSet);
             return result;
+        }
+
+        /// <summary>
+        /// Kosaraju's algorithm. Both passes are iterative so very deep modded trees cannot
+        /// exhaust the runtime stack. Components with more than one node are cycles because
+        /// LayoutGraph rejects self-edges.
+        /// </summary>
+        private static void MarkCyclicComponents(LayoutGraph graph, HashSet<int> cyclicNodes)
+        {
+            int count = graph.NodeCount;
+            var visited = new bool[count];
+            var finishOrder = new List<int>(count);
+            var frames = new List<KeyValuePair<int, int>>();
+
+            for (int root = 0; root < count; root++)
+            {
+                if (visited[root]) continue;
+                visited[root] = true;
+                frames.Add(new KeyValuePair<int, int>(root, 0));
+
+                while (frames.Count > 0)
+                {
+                    KeyValuePair<int, int> frame = frames[frames.Count - 1];
+                    IReadOnlyList<int> children = graph.ChildrenOf(frame.Key);
+                    if (frame.Value >= children.Count)
+                    {
+                        finishOrder.Add(frame.Key);
+                        frames.RemoveAt(frames.Count - 1);
+                        continue;
+                    }
+
+                    frames[frames.Count - 1] = new KeyValuePair<int, int>(frame.Key, frame.Value + 1);
+                    int child = children[frame.Value];
+                    if (!visited[child])
+                    {
+                        visited[child] = true;
+                        frames.Add(new KeyValuePair<int, int>(child, 0));
+                    }
+                }
+            }
+
+            visited = new bool[count];
+            var stack = new List<int>();
+            for (int orderIndex = finishOrder.Count - 1; orderIndex >= 0; orderIndex--)
+            {
+                int root = finishOrder[orderIndex];
+                if (visited[root]) continue;
+
+                var component = new List<int>();
+                visited[root] = true;
+                stack.Add(root);
+                while (stack.Count > 0)
+                {
+                    int node = stack[stack.Count - 1];
+                    stack.RemoveAt(stack.Count - 1);
+                    component.Add(node);
+
+                    IReadOnlyList<int> parents = graph.ParentsOf(node);
+                    for (int i = 0; i < parents.Count; i++)
+                    {
+                        int parent = parents[i];
+                        if (visited[parent]) continue;
+                        visited[parent] = true;
+                        stack.Add(parent);
+                    }
+                }
+
+                if (component.Count > 1)
+                    for (int i = 0; i < component.Count; i++) cyclicNodes.Add(component[i]);
+            }
         }
     }
 }

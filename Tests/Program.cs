@@ -28,6 +28,9 @@ namespace ResearchOrganized.Tests
             Run("every follower is right of its parent", ChildAlwaysRightOfParent);
             Run("column height cap is respected", ColumnHeightCap);
             Run("cycles are broken and reported", CyclesAreBroken);
+            Run("long-edge crossings are counted", LongEdgeCrossingsAreCounted);
+            Run("row optimizer removes a crossing", RowOptimizerRemovesCrossing);
+            Run("row optimizer respects authored rows", RowOptimizerRespectsAuthoredRows);
             Run("layout is deterministic", Deterministic);
             Run("loose projects pack tightly", LooseNodesPackTightly);
             Run("siblings placed together land in consecutive rows", SiblingsLandConsecutively);
@@ -121,7 +124,51 @@ namespace ResearchOrganized.Tests
 
             var result = TabLayout.Compute(graph, new LayoutOptions());
             IsTrue(result.ReversedEdges.Count >= 1, "at least one edge was reversed");
-            IsTrue(result.NodesInCycles.Count >= 2, "projects on the cycle were reported");
+            AreEqual(3, result.NodesInCycles.Count, "every project on the cycle was reported");
+            IsTrue(result.NodesInCycles.Contains(0) && result.NodesInCycles.Contains(1) && result.NodesInCycles.Contains(2),
+                "the complete strongly connected component was reported");
+        }
+
+        private static void LongEdgeCrossingsAreCounted()
+        {
+            var graph = new LayoutGraph(4);
+            graph.AddEdge(0, 1);
+            graph.AddEdge(2, 3);
+            var columns = new[] { 0, 2, 0, 2 };
+            var rows = new[] { 0, 2, 2, 0 };
+
+            AreEqual(1, CrossingCounter.Count(graph, columns, rows),
+                "two long diagonal connectors crossing between columns");
+        }
+
+        private static void RowOptimizerRemovesCrossing()
+        {
+            var graph = new LayoutGraph(4);
+            graph.AddEdge(0, 3);
+            graph.AddEdge(1, 2);
+            var columns = new[] { 0, 0, 1, 1 };
+            var rows = new[] { 0, 1, 0, 1 };
+            var options = new LayoutOptions();
+
+            AreEqual(1, CrossingCounter.Count(graph, columns, rows), "crossing before optimization");
+            RowOptimizer.Improve(graph, options, new bool[4], columns, rows);
+
+            AreEqual(0, CrossingCounter.Count(graph, columns, rows), "crossing after optimization");
+            AreEqual(0, columns[0], "source column remained fixed");
+            AreEqual(1, columns[2], "destination column remained fixed");
+        }
+
+        private static void RowOptimizerRespectsAuthoredRows()
+        {
+            var graph = new LayoutGraph(2);
+            var columns = new[] { 0, 0 };
+            var rows = new[] { 0, 1 };
+            var options = new LayoutOptions { preferredRow = new[] { 1, 0 } };
+
+            RowOptimizer.Improve(graph, options, new bool[2], columns, rows);
+
+            AreEqual(1, rows[0], "first project returned to its authored row");
+            AreEqual(0, rows[1], "second project returned to its authored row");
         }
 
         private static void Deterministic()
@@ -233,9 +280,10 @@ namespace ResearchOrganized.Tests
             var result = TabLayout.Compute(graph, options);
             watch.Stop();
 
-            Console.WriteLine(string.Format("         400 projects / 900 links: {0} crossings in {1} ms",
-                result.Crossings, watch.ElapsedMilliseconds));
+            Console.WriteLine(string.Format("         400 projects / 900 links: {0} -> {1} crossings in {2} ms",
+                result.InitialCrossings, result.Crossings, watch.ElapsedMilliseconds));
 
+            IsTrue(result.Crossings <= result.InitialCrossings, "row optimization did not increase crossings");
             IsTrue(watch.ElapsedMilliseconds < 10000, "large tab laid out in under 10 seconds");
         }
 

@@ -27,6 +27,12 @@ namespace ResearchOrganized.Layout
         public int[] tieRank;
 
         /// <summary>
+        /// Preferred row for each node, normally derived from its authored Y coordinate.
+        /// Used only as a tie-break after connector crossings, never as a hard constraint.
+        /// </summary>
+        public int[] preferredRow;
+
+        /// <summary>
         /// A node that always goes last in its epoch, after everything else is placed,
         /// regardless of what prerequisites it does or does not have - an era's "advance to
         /// the next tech level" node, from mods like Node Research.
@@ -45,6 +51,7 @@ namespace ResearchOrganized.Layout
         public HashSet<int> NodesInCycles = new HashSet<int>();
         public List<LayoutGraph.Edge> ReversedEdges = new List<LayoutGraph.Edge>();
 
+        public int InitialCrossings;
         public int Crossings;
     }
 
@@ -82,6 +89,8 @@ namespace ResearchOrganized.Layout
             var isCapstone = options.isCapstone ?? new bool[graph.NodeCount];
 
             EpochLayout.Compute(broken.Acyclic, options, epoch, isAnchor, anchorOrder, tieRank, isCapstone, column, row);
+            result.InitialCrossings = CrossingCounter.Count(broken.Acyclic, column, row);
+            RowOptimizer.Improve(broken.Acyclic, options, isAnchor, column, row);
 
             for (int node = 0; node < graph.NodeCount; node++)
             {

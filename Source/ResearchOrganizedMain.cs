@@ -16,7 +16,9 @@ namespace ResearchOrganized
         private const string MultiAnalyzerDef = "MultiAnalyzer";
         private const string HiTechBenchDef = "HiTechResearchBench";
         private const string TabAnomalyDef = "Anomaly";
+        private const string TabAnimalDef = "TabAnimal";
         private const string TabGravtechDef = "VGE_Gravtech";
+        private const string TabVfeTribalsBasicsDef = "VFET_Basics";
         private const string GravtechExtensionName = "GravtechResearchExtension";
 
         private const float NormalBrightness = 0.5f;
@@ -327,6 +329,12 @@ namespace ResearchOrganized
                 ProcessLinks(config.virtualLinks, true);
                 ProcessLinks(config.visibleLinks, false);
             }
+
+            // VFE Tribals' Basics tab replaces this mod's generic Animal tab. It must not
+            // inherit TabAnimal's normal "leave authored coordinates alone" exception:
+            // Basics is the one Animal-era tab and should receive the generated layout.
+            if (DefDatabase<ResearchTabDef>.GetNamedSilentFail(TabVfeTribalsBasicsDef) != null)
+                IgnoredTabs.RemoveAll(tabName => tabName == TabAnimalDef);
         }
 
         private static void ProcessLinks(IEnumerable<ResearchLinkBase> links, bool isVirtual)
@@ -434,10 +442,14 @@ namespace ResearchOrganized
             var highInd = DefDatabase<ResearchTabDef>.GetNamed("TabHighIndustrial", false);
             var lateInd = DefDatabase<ResearchTabDef>.GetNamed("TabLateIndustrial", false);
             var ind = DefDatabase<ResearchTabDef>.GetNamed("TabIndustrial", false);
+            var vfeTribalsBasics = DefDatabase<ResearchTabDef>.GetNamed(TabVfeTribalsBasicsDef, false);
             bool combineIndustrial = ResearchOrganizedMod.settings.combineIndustrial;
             foreach (var project in DefDatabase<ResearchProjectDef>.AllDefs)
             {
                 if (anomalyTab != null && (project.knowledgeCategory != null || project.tab == anomalyTab)) { project.tab = anomalyTab; continue; }
+                // When VFE Tribals is active, its Basics tab is the Animal-era tab. Route
+                // every Animal project there, including projects supplied by other mods.
+                if (vfeTribalsBasics != null && project.techLevel == TechLevel.Animal) { project.tab = vfeTribalsBasics; continue; }
                 if (project.tab != null && IgnoredTabs.Contains(project.tab.defName)) continue;
                 if (project.techLevel == TechLevel.Industrial)
                 {

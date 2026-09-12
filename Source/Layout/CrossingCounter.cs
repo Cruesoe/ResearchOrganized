@@ -1,51 +1,102 @@
+using System;
 using System.Collections.Generic;
 
 namespace ResearchOrganized.Layout
 {
     /// <summary>
-    /// Counts how many pairs of connector lines cross. Not used to drive the layout - it is
-    /// a measurement, so a change can be shown to have improved or hurt readability rather
-    /// than argued about.
-    ///
-    /// Two edges are counted as crossing when they start in the same column as each other,
-    /// end in the same column as each other, and their endpoints are ordered oppositely.
-    /// Edges between different column pairs are ignored: they are not comparable, and
-    /// guessing at their geometry would make the number less trustworthy, not more.
+    /// Counts unique pairs of connector lines that cross. Long edges are split into virtual
+    /// segments at column boundaries so crossings through intermediate columns are included.
     /// </summary>
     public static class CrossingCounter
     {
+        private const double Epsilon = 0.000001;
+
+        private struct Segment
+        {
+            public int EdgeIndex;
+            public int Parent;
+            public int Child;
+            public double StartRow;
+            public double EndRow;
+        }
+
         public static int Count(LayoutGraph graph, int[] column, int[] row)
         {
-            var buckets = new Dictionary<long, List<LayoutGraph.Edge>>();
+            var buckets = new Dictionary<int, List<Segment>>();
+            List<LayoutGraph.Edge> edges = graph.AllEdges();
 
-            foreach (var edge in graph.AllEdges())
+            for (int edgeIndex = 0; edgeIndex < edges.Count; edgeIndex++)
             {
-                long key = ((long)column[edge.Parent] << 32) ^ (uint)column[edge.Child];
+                LayoutGraph.Edge edge = edges[edgeIndex];
+                int startColumn = column[edge.Parent];
+                int endColumn = column[edge.Child];
+                double startRow = row[edge.Parent];
+                double endRow = row[edge.Child];
 
-                List<LayoutGraph.Edge> bucket;
-                if (!buckets.TryGetValue(key, out bucket))
+                if (startColumn == endColumn) continue;
+                if (startColumn > endColumn)
                 {
-                    bucket = new List<LayoutGraph.Edge>();
-                    buckets[key] = bucket;
+                    int columnSwap = startColumn;
+                    startColumn = endColumn;
+                    endColumn = columnSwap;
+                    double rowSwap = startRow;
+                    startRow = endRow;
+                    endRow = rowSwap;
                 }
-                bucket.Add(edge);
+
+                int span = endColumn - startColumn;
+                for (int boundary = startColumn; boundary < endColumn; boundary++)
+                {
+                    double startT = (double)(boundary - startColumn) / span;
+                    double endT = (double)(boundary + 1 - startColumn) / span;
+                    var segment = new Segment
+                    {
+                        EdgeIndex = edgeIndex,
+                        Parent = edge.Parent,
+                        Child = edge.Child,
+                        StartRow = startRow + (endRow - startRow) * startT,
+                        EndRow = startRow + (endRow - startRow) * endT
+                    };
+
+                    if (!buckets.TryGetValue(boundary, out List<Segment> bucket))
+                    {
+                        bucket = new List<Segment>();
+                        buckets[boundary] = bucket;
+                    }
+                    bucket.Add(segment);
+                }
             }
 
-            int crossings = 0;
-            foreach (var bucket in buckets.Values)
+            var crossingPairs = new HashSet<long>();
+            foreach (List<Segment> bucket in buckets.Values)
             {
                 for (int i = 0; i < bucket.Count; i++)
                 {
                     for (int j = i + 1; j < bucket.Count; j++)
                     {
-                        int aStart = row[bucket[i].Parent], aEnd = row[bucket[i].Child];
-                        int bStart = row[bucket[j].Parent], bEnd = row[bucket[j].Child];
+                        Segment first = bucket[i];
+                        Segment second = bucket[j];
+                        if (first.Parent == second.Parent || first.Parent == second.Child
+                            || first.Child == second.Parent || first.Child == second.Child) continue;
+                        if (!SegmentsCross(first, second)) continue;
 
-                        if ((aStart < bStart && aEnd > bEnd) || (aStart > bStart && aEnd < bEnd)) crossings++;
+                        int low = Math.Min(first.EdgeIndex, second.EdgeIndex);
+                        int high = Math.Max(first.EdgeIndex, second.EdgeIndex);
+                        crossingPairs.Add(((long)low << 32) ^ (uint)high);
                     }
                 }
             }
-            return crossings;
+
+            return crossingPairs.Count;
+        }
+
+        private static bool SegmentsCross(Segment first, Segment second)
+        {
+            double startDifference = first.StartRow - second.StartRow;
+            double endDifference = first.EndRow - second.EndRow;
+            if (Math.Abs(startDifference) <= Epsilon && Math.Abs(endDifference) <= Epsilon) return false;
+            if (startDifference * endDifference < -Epsilon) return true;
+            return Math.Abs(startDifference) <= Epsilon || Math.Abs(endDifference) <= Epsilon;
         }
     }
 }
