@@ -8,6 +8,7 @@ RimWorld 1.6 mod. Sorts research projects into **tech-level tabs** and lays each
 - Nodes are tinted by tech level, with finished/available/unavailable brightness levels. Colours are configurable, or can be turned off entirely.
 - Empty tabs are removed from the def database and the rest are re-sorted into a configured order.
 - Projects caught in a circular dependency are drawn with a red border and named in the log, so a broken modlist diagnoses itself.
+- With Node Research active, linked emergence nodes stay beside their prerequisite branch; the VFE Tribals Basics tab also uses compact, non-overlapping spacing so the combined graph is less likely to force horizontal scrolling.
 - `virtualLinks` add prerequisite relationships for layout purposes only; `visibleLinks` also draw the connector.
 
 Requires [Harmony](https://steamcommunity.com/sharedfiles/filedetails/?id=2009463077).

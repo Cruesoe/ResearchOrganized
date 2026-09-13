@@ -87,4 +87,14 @@
 
 	</ResearchOrganized.ResearchOrganizedConfig>
 
+	<!-- Node Research adds a linked Neolithic emergence node to the Animal era. Keep the
+	     resulting Basics graph within the vanilla research viewport without overlapping cards. -->
+	<ResearchOrganized.ResearchOrganizedConfig MayRequire="ferny.noderesearch">
+		<defName>NodeResearchVfeTribalsBasicsLayout</defName>
+		<targetTabs>
+			<li>VFET_Basics</li>
+		</targetTabs>
+		<xStep>0.85</xStep>
+	</ResearchOrganized.ResearchOrganizedConfig>
+
 </Defs>

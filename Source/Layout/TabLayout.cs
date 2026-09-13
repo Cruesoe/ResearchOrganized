@@ -38,6 +38,14 @@ namespace ResearchOrganized.Layout
         /// the next tech level" node, from mods like Node Research.
         /// </summary>
         public bool[] isCapstone;
+
+        /// <summary>
+        /// Allows linked capstones to sit immediately after their furthest prerequisite
+        /// instead of after every unrelated project in the epoch. Unlinked capstones still
+        /// go last. Used for compact compatibility layouts such as Node Research's VFE
+        /// Tribals emergence node.
+        /// </summary>
+        public bool compactLinkedCapstones;
     }
 
     public sealed class LayoutResult

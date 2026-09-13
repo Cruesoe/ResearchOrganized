@@ -219,7 +219,32 @@ namespace ResearchOrganized.Layout
 
                 if (capstones.Count > 0)
                 {
-                    PlaceNodesDAG(capstones, ref currentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
+                    if (options.compactLinkedCapstones)
+                    {
+                        var linked = new List<int>();
+                        var unlinked = new List<int>();
+                        foreach (int capstone in capstones)
+                        {
+                            if (graph.ParentsOf(capstone).Count > 0) linked.Add(capstone);
+                            else unlinked.Add(capstone);
+                        }
+
+                        if (linked.Count > 0)
+                        {
+                            // A zero base lets each linked capstone derive its position from
+                            // its actual parents. Preserve currentColumn so later epochs still
+                            // begin after the complete current epoch, including unrelated arms.
+                            int compactColumn = 0;
+                            PlaceNodesDAG(linked, ref compactColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
+                            currentColumn = Math.Max(currentColumn, compactColumn);
+                        }
+                        if (unlinked.Count > 0)
+                            PlaceNodesDAG(unlinked, ref currentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
+                    }
+                    else
+                    {
+                        PlaceNodesDAG(capstones, ref currentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
+                    }
                 }
             }
         }

@@ -54,6 +54,7 @@ namespace ResearchOrganized.Tests
             Run("an oversized anchor batch is not exceeded", AnchorBatchRespectsHeightCap);
             Run("tech levels are laid out in order, left to right", EpochsAdvanceLeftToRight);
             Run("a capstone lands after everything else in its era", CapstoneLandsLast);
+            Run("a linked capstone can compact beside its prerequisites", LinkedCapstoneCanCompact);
             Run("a capstone with no prerequisites still lands last", CapstoneWithNoPrerequisitesStillLandsLast);
 
             Console.WriteLine();
@@ -710,6 +711,34 @@ namespace ResearchOrganized.Tests
             {
                 IsTrue(result.Layer[5] > result.Layer[i], string.Format("unlinked capstone did not land after project {0}", i));
             }
+        }
+
+        private static void LinkedCapstoneCanCompact()
+        {
+            var graph = new LayoutGraph(7);
+            graph.AddEdge(0, 1);
+            graph.AddEdge(1, 2);
+            graph.AddEdge(2, 3);
+            graph.AddEdge(3, 4); // unrelated deep branch
+            graph.AddEdge(5, 6); // linked emergence node
+
+            var options = new LayoutOptions
+            {
+                maxNodesPerColumn = 10,
+                epoch = new int[7],
+                isAnchor = new bool[7],
+                anchorOrder = new int[7],
+                tieRank = Identity(7),
+                isCapstone = MarkAnchors(7, 6),
+                compactLinkedCapstones = true
+            };
+
+            var result = TabLayout.Compute(graph, options);
+
+            AreEqual(result.Layer[5] + 1, result.Layer[6],
+                "linked capstone landed directly after its prerequisite");
+            IsTrue(result.Layer[6] < result.Layer[4],
+                "unrelated deep branch no longer pushed the linked capstone right");
         }
 
         // ---- helpers --------------------------------------------------------------

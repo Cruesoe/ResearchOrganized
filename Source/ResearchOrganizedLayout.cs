@@ -26,6 +26,8 @@ namespace ResearchOrganized
         /// it is installed.
         /// </summary>
         private const string EraCapstonePrefix = "BRM_Emergence_";
+        private const string NodeResearchPackageId = "ferny.noderesearch";
+        private const string VfeTribalsBasicsTab = "VFET_Basics";
 
         public static bool IsEraCapstone(ResearchProjectDef def)
         {
@@ -119,6 +121,8 @@ namespace ResearchOrganized
             }
 
             var options = BuildOptions(tabName);
+            options.compactLinkedCapstones = tabName == VfeTribalsBasicsTab
+                && ModsConfig.IsActive(NodeResearchPackageId);
             options.epoch = new int[tabNodes.Count];
             options.isAnchor = new bool[tabNodes.Count];
             options.anchorOrder = new int[tabNodes.Count];
