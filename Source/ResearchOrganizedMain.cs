@@ -210,8 +210,14 @@ namespace ResearchOrganized
         }
         private static bool semiRandomResearchActive;
 
-        public static void DrawSettingsButton(Rect leftOutRect)
+        public static void DrawSettingsButton(MainTabWindow_Research __instance, Rect leftOutRect)
         {
+            if (researchWindowWidthStale)
+            {
+                researchWindowWidthStale = false;
+                ApplyCurTab(__instance, __instance.CurTab);
+            }
+
             float right = leftOutRect.xMax;
             if (semiRandomResearchActive) right -= SemiRandomResearchButtonSize + SettingsButtonGap;
             float top = leftOutRect.yMin + (SemiRandomResearchButtonSize - SettingsButtonSize) / 2f;
@@ -265,11 +271,26 @@ namespace ResearchOrganized
                     target = selectedProject?.tab ?? DefDatabase<ResearchTabDef>.AllDefsListForReading.FirstOrDefault();
                 }
 
-                // Clearing the backing field first makes the setter recompute the view width.
-                researchWindowCurTabField.SetValue(window, null);
-                window.CurTab = target;
+                // The setter measures text through Unity's GUI, which crashes the game off the main
+                // thread, and a save loads on a background thread. There, only store the tab and
+                // let the left panel, drawn before the tree, recompute the width.
+                if (UnityData.IsInMainThread) ApplyCurTab(window, target);
+                else
+                {
+                    researchWindowCurTabField.SetValue(window, target);
+                    researchWindowWidthStale = true;
+                }
             }
             catch (Exception ex) { Log.Error($"[Research: Organized] Research window refresh error: {ex.Message}"); }
+        }
+
+        private static bool researchWindowWidthStale;
+
+        /// <summary>Sets the tab through the setter; clearing the backing field first makes it recompute the view width.</summary>
+        private static void ApplyCurTab(MainTabWindow_Research window, ResearchTabDef tab)
+        {
+            researchWindowCurTabField.SetValue(window, null);
+            window.CurTab = tab;
         }
 
         private static void OnGameFinalizeInit()
