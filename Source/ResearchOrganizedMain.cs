@@ -17,17 +17,23 @@ namespace ResearchOrganized
         private const string MultiAnalyzerDef = "MultiAnalyzer";
         private const string HiTechBenchDef = "HiTechResearchBench";
         private const string TabAnomalyDef = "Anomaly";
+        private const string MainTabDef = "Main";
         private const string TabGravtechDef = "VGE_Gravtech";
         private const string GravtechExtensionName = "GravtechResearchExtension";
 
         private const float NormalBrightness = 0.5f;
         private const float UnavailableBrightness = 0.2f;
 
-        /// <summary>Marks Node Research's foundation technologies. Nothing else in this UI is gold.
-        /// Muted and semi-transparent so it reads as a hint, not an alert like the red cyclic border.</summary>
-        private static readonly Color FoundationGold = new Color(0.75f, 0.62f, 0.32f, 0.65f);
-        private const float FoundationBorderSize = 1.5f;
+        /// <summary>Marks Node Research's foundation technologies with a small triangle in the
+        /// card's top-right corner. A border colour was tried first, but vanilla already borders
+        /// the selected project and colours the active one in similar gold, so a shape is used
+        /// instead and the border is left to vanilla. Top-right because Anomaly cards put their
+        /// knowledge icon on the left.</summary>
+        private static readonly Color FoundationGold = new Color(0.75f, 0.62f, 0.32f, 0.9f);
+        private const float FoundationNotchSize = 12f;
+        private const int FoundationNotchTextureSize = 32;
         private const string FoundationTechTooltip = "Foundation technology";
+        private static readonly Texture2D FoundationNotchTex = BuildCornerNotchTexture(FoundationNotchTextureSize);
 
         private static readonly Dictionary<TechLevel, ColorSet> TabColors = new Dictionary<TechLevel, ColorSet>();
         private static readonly Dictionary<string, ColorSet> TabColorOverrides = new Dictionary<string, ColorSet>();
@@ -42,7 +48,21 @@ namespace ResearchOrganized
 
         private static readonly List<ResearchTabDef> hiddenTabs = new List<ResearchTabDef>();
 
+        /// <summary>The tab each project was on when this mod first saw it. Kept across passes.</summary>
+        private static readonly Dictionary<ResearchProjectDef, ResearchTabDef> authoredTabs = new Dictionary<ResearchProjectDef, ResearchTabDef>();
+
+        /// <summary>The tech level each project had when this mod first saw it. Kept across passes.</summary>
+        private static readonly Dictionary<ResearchProjectDef, TechLevel> authoredTechLevels = new Dictionary<ResearchProjectDef, TechLevel>();
+        private static string lastTechLevelReport;
+
+        /// <summary>The combined tab the last layout pass built, read every frame by the line filter.</summary>
+        private static ResearchTabDef activeCombinedTab;
+
         private static FieldInfo researchTabRecordDefField;
+        private static ConstructorInfo researchTabRecordCtor;
+        private static readonly FieldInfo researchWindowCurTabField = AccessTools.Field(typeof(MainTabWindow_Research), "curTabInt");
+        private static readonly FieldInfo researchWindowSelectedProjectField = AccessTools.Field(typeof(MainTabWindow_Research), "selectedProject");
+        private static readonly MethodInfo researchWindowUpdateSelectedMethod = AccessTools.Method(typeof(MainTabWindow_Research), "UpdateSelectedProject");
         private static FieldInfo researchWindowTabsField;
 
         private static readonly Dictionary<ResearchProjectDef, bool> reqMultiCache = new Dictionary<ResearchProjectDef, bool>();
@@ -71,12 +91,12 @@ namespace ResearchOrganized
             if (listProjectsMethod != null)
             {
                 harmony.Patch(listProjectsMethod, transpiler: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(ColorTranspiler)));
+                harmony.Patch(listProjectsMethod, transpiler: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(CrossEraLineTranspiler)));
             }
 
-            // A DrawConnections patch used to be registered here to suppress connection lines
-            // running between tabs, but its transpiler returned the instruction stream
-            // untouched, so it only ever added overhead. Cross-tab line suppression is still
-            // unimplemented; see the README.
+            // Vanilla 1.6 already skips lines to prerequisites on other tabs. The second
+            // transpiler above also skips lines between eras on the combined tab and lines to
+            // emergence nodes; see PrerequisiteLineTab.
 
             // Some mods create their own ResearchProjectDefs from their own static
             // constructor - Node Research's per-era "advance to the next tech level" nodes,
@@ -103,7 +123,12 @@ namespace ResearchOrganized
             {
                 harmony.Patch(tabTipMethod, postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(BlankEmptyTabTip)));
             }
-            if (researchTabRecordType != null) researchTabRecordDefField = AccessTools.Field(researchTabRecordType, "def");
+            if (researchTabRecordType != null)
+            {
+                researchTabRecordDefField = AccessTools.Field(researchTabRecordType, "def");
+                researchTabRecordCtor = AccessTools.Constructor(researchTabRecordType,
+                    new[] { typeof(ResearchTabDef), typeof(string), typeof(Action), typeof(Func<bool>) });
+            }
 
             // Optional per-tab completed/total project counts (Settings). The tab strip is
             // rebuilt from ResearchTabDef.LabelCap once in PostOpen and never touched again, so
@@ -117,7 +142,155 @@ namespace ResearchOrganized
                 harmony.Patch(doWindowContentsMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(UpdateTabLabelsWithCounts)));
             }
 
+            // A small gear in the corner of the research window's left panel that opens this
+            // mod's settings. Semi Random Research draws its own button in that same corner
+            // from the same method, so ours sits just left of it when that mod is loaded.
+            var drawLeftRectMethod = AccessTools.Method(typeof(MainTabWindow_Research), "DrawLeftRect");
+            if (drawLeftRectMethod != null)
+            {
+                harmony.Patch(drawLeftRectMethod, postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(DrawSettingsButton)));
+            }
+            semiRandomResearchActive = AccessTools.TypeByName(SemiRandomResearchPatchType) != null;
+
             OrganizeTabsAndLayout();
+        }
+
+        private const string SemiRandomResearchPatchType = "CM_Semi_Random_Research.MainTabWindow_Research_Patches";
+        private const float SemiRandomResearchButtonSize = 32f;
+        private const float SettingsButtonSize = 24f;
+        private const float SettingsButtonGap = 4f;
+        private static readonly Color SettingsButtonColor = new Color(0.6f, 0.6f, 0.6f);
+        private static readonly Texture2D SettingsGearTex = BuildGearTexture(64);
+
+        /// <summary>
+        /// A white eight-toothed gear with a centre hole, tinted when drawn. Vanilla has no plain
+        /// settings gear to borrow, so it is built here like the foundation notch. Each pixel is
+        /// 4x4 supersampled for smooth edges; one tooth points straight up, and teeth taper
+        /// slightly towards the tip.
+        /// </summary>
+        private static Texture2D BuildGearTexture(int size)
+        {
+            const int teeth = 8;
+            const int samples = 4;
+            const float toothRadius = 0.47f, bodyRadius = 0.34f, holeRadius = 0.14f, toothDuty = 0.5f, taper = 0.35f;
+
+            bool Inside(float x, float y)
+            {
+                float dx = x - 0.5f, dy = y - 0.5f;
+                float r = Mathf.Sqrt(dx * dx + dy * dy);
+                if (r < holeRadius || r > toothRadius) return false;
+                if (r <= bodyRadius) return true;
+                // Screen y grows downward here, so angle -90 degrees is straight up; the 0.5
+                // offset centres a tooth there.
+                float turn = Mathf.Atan2(dy, dx) / (2f * Mathf.PI) * teeth + 0.5f;
+                float fraction = turn - Mathf.Floor(turn);
+                float halfWidth = toothDuty / 2f * (1f - taper * (r - bodyRadius) / (toothRadius - bodyRadius));
+                return Mathf.Abs(fraction - 0.5f) <= halfWidth;
+            }
+
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            for (int row = 0; row < size; row++)
+            {
+                for (int column = 0; column < size; column++)
+                {
+                    int hits = 0;
+                    for (int sy = 0; sy < samples; sy++)
+                        for (int sx = 0; sx < samples; sx++)
+                            if (Inside((column + (sx + 0.5f) / samples) / size, (row + (sy + 0.5f) / samples) / size)) hits++;
+                    float alpha = hits / (float)(samples * samples);
+                    texture.SetPixel(column, size - 1 - row, new Color(1f, 1f, 1f, alpha));
+                }
+            }
+            texture.Apply();
+            return texture;
+        }
+        private static bool semiRandomResearchActive;
+
+        public static void DrawSettingsButton(MainTabWindow_Research __instance, Rect leftOutRect)
+        {
+            if (researchWindowWidthStale)
+            {
+                researchWindowWidthStale = false;
+                ApplyCurTab(__instance, __instance.CurTab);
+            }
+
+            float right = leftOutRect.xMax;
+            if (semiRandomResearchActive) right -= SemiRandomResearchButtonSize + SettingsButtonGap;
+            float top = leftOutRect.yMin + (SemiRandomResearchButtonSize - SettingsButtonSize) / 2f;
+            var rect = new Rect(right - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
+
+            if (Widgets.ButtonImage(rect, SettingsGearTex, SettingsButtonColor, GenUI.MouseoverColor, true, "Research: Organized settings"))
+            {
+                var mod = LoadedModManager.GetMod<ResearchOrganizedMod>();
+                if (mod != null) Find.WindowStack.Add(new Dialog_ModSettings(mod));
+                Event.current.Use();
+            }
+        }
+
+        /// <summary>
+        /// Brings the research window, open or not, up to date after a re-layout. The window builds its
+        /// tab strip only in PostOpen and caches the current tab's width, so without this a
+        /// settings change made from the gear button shows removed tabs and a stale scroll
+        /// width until the window is reopened. PostOpen itself is not rerun because it also
+        /// starts the window's sounds. Mirrors what PostOpen does to the tab list.
+        /// </summary>
+        public static void RefreshOpenResearchWindow()
+        {
+            try
+            {
+                // The research tab's window is one persistent instance, reused on every open, so
+                // fix it up even while closed: its remembered tab may now be hidden, and a hidden
+                // tab's stale index would be read past the end of the tab-info flags on reopen.
+                if (Current.Game == null) return;
+                var window = MainButtonDefOf.Research?.TabWindow as MainTabWindow_Research
+                             ?? Find.WindowStack?.WindowOfType<MainTabWindow_Research>();
+                if (window == null || researchWindowTabsField == null || researchTabRecordCtor == null || researchWindowCurTabField == null) return;
+                if (!(researchWindowTabsField.GetValue(window) is System.Collections.IList tabs)) return;
+
+                tabs.Clear();
+                foreach (var tabDef in DefDatabase<ResearchTabDef>.AllDefs)
+                {
+                    var def = tabDef;
+                    Action clicked = () =>
+                    {
+                        window.CurTab = def;
+                        researchWindowUpdateSelectedMethod?.Invoke(window, new object[] { Find.ResearchManager });
+                    };
+                    Func<bool> selected = () => window.CurTab == def;
+                    tabs.Add(researchTabRecordCtor.Invoke(new object[] { def, (string)def.LabelCap, clicked, selected }));
+                }
+
+                var target = window.CurTab;
+                if (target == null || !DefDatabase<ResearchTabDef>.AllDefsListForReading.Contains(target))
+                {
+                    var selectedProject = researchWindowSelectedProjectField?.GetValue(window) as ResearchProjectDef;
+                    target = selectedProject?.tab ?? DefDatabase<ResearchTabDef>.AllDefsListForReading.FirstOrDefault();
+                }
+
+                // The setter measures text through Unity's GUI, which crashes the game off the main
+                // thread, and a save loads on a background thread. There, only store the tab and
+                // let the left panel, drawn before the tree, recompute the width.
+                if (UnityData.IsInMainThread) ApplyCurTab(window, target);
+                else
+                {
+                    researchWindowCurTabField.SetValue(window, target);
+                    researchWindowWidthStale = true;
+                }
+            }
+            catch (Exception ex) { Log.Error($"[Research: Organized] Research window refresh error: {ex.Message}"); }
+        }
+
+        private static bool researchWindowWidthStale;
+
+        /// <summary>Sets the tab through the setter; clearing the backing field first makes it recompute the view width.</summary>
+        private static void ApplyCurTab(MainTabWindow_Research window, ResearchTabDef tab)
+        {
+            researchWindowCurTabField.SetValue(window, null);
+            window.CurTab = tab;
         }
 
         private static void OnGameFinalizeInit()
@@ -232,27 +405,48 @@ namespace ResearchOrganized
             // ships; the sweep below covers a rename, since that extension is what VGE itself uses
             // to recognise a gravtech tab. A tabThemes entry in a config def still wins over both,
             // because LoadConfigs runs after this.
-            TabToThemeMap[TabGravtechDef] = TechLevel.Spacer;
             foreach (var tab in DefDatabase<ResearchTabDef>.AllDefs)
             {
-                if (tab.modExtensions != null && tab.modExtensions.Any(e => e.GetType().Name == GravtechExtensionName)) TabToThemeMap[tab.defName] = TechLevel.Spacer;
+                if (IsGravtechTab(tab)) TabToThemeMap[tab.defName] = TechLevel.Spacer;
             }
         }
+
+        /// <summary>Vanilla Gravship Expanded's gravtech tab, by defName or by the extension VGE
+        /// itself uses to recognise one.</summary>
+        private static bool IsGravtechTab(ResearchTabDef tab)
+        {
+            if (tab == null) return false;
+            if (tab.defName == TabGravtechDef) return true;
+            return tab.modExtensions != null && tab.modExtensions.Any(e => e.GetType().Name == GravtechExtensionName);
+        }
+
+        /// <summary>The single tab every project lands on under "Combine All Tabs", or null when
+        /// the option is off.</summary>
+        private static ResearchTabDef CombinedTab =>
+            ResearchOrganizedMod.settings.combineAllTabs ? DefDatabase<ResearchTabDef>.GetNamed(MainTabDef, false) : null;
 
         public static void OrganizeTabsAndLayout()
         {
             try
             {
+                // Lets Node Research finish its own start-up before this pass routes anything.
+                _ = NodeResearchCompat.Active;
                 ResetCaches();
+                var tabInfoVisibility = SnapshotTabInfoVisibility();
                 RestoreHiddenTabs();
                 LoadConfigs();
+                RaiseTechLevelsToPrerequisites();
                 MapProjectsToTabs();
+                NodeResearchCompat.RecordRouting();
                 var activeTabs = new HashSet<ResearchTabDef>(DefDatabase<ResearchProjectDef>.AllDefs.Select(p => p.tab).Where(t => t != null));
                 HideEmptyTabs(activeTabs);
                 SortAndIndexTabs();
+                RebuildTabInfoVisibility(tabInfoVisibility);
 
+                var combinedTab = CombinedTab;
+                activeCombinedTab = combinedTab;
                 Dictionary<ResearchProjectDef, int> anchorOrder;
-                var anchors = FindAnchors(out anchorOrder);
+                var anchors = FindAnchors(combinedTab, out anchorOrder);
 
                 foreach (var tab in activeTabs)
                 {
@@ -264,7 +458,8 @@ namespace ResearchOrganized
                     // abort this loop, leaving every remaining tab at its authored layout.
                     try
                     {
-                        ResearchOrganizedLayout.ApplyLayout(projects, tab.defName, anchors, anchorOrder);
+                        ResearchOrganizedLayout.ApplyLayout(projects, tab.defName, anchors, anchorOrder,
+                            eraBuckets: tab == combinedTab);
                     }
                     catch (Exception ex)
                     {
@@ -289,8 +484,60 @@ namespace ResearchOrganized
                 // them on, so tell it where they went. Without this its own collapse is a
                 // no-op - it still believes it holds - and its window comes up empty.
                 NodeResearchCompat.SyncTabs();
+
+                // Tabs may have been hidden, restored or re-indexed; the research window keeps a
+                // tab strip and current tab of its own that must follow. No-op outside a game.
+                RefreshOpenResearchWindow();
             }
             catch (Exception ex) { Log.Error($"[Research: Organized] Master Organizer Error: {ex}"); }
+        }
+
+        private static readonly FieldInfo tabInfoVisibilityField = AccessTools.Field(typeof(ResearchManager), "tabInfoVisibility");
+        private static readonly FieldInfo defMapValuesField = AccessTools.Field(typeof(DefMap<ResearchTabDef, bool>), "values");
+
+        /// <summary>
+        /// The running game's per-tab "info visible" flags, keyed by tab rather than by index.
+        ///
+        /// ResearchManager keeps them in a DefMap: a list read by ResearchTabDef.index and sized
+        /// to the tab count when the game was created or loaded. Hiding, restoring and
+        /// re-indexing tabs mid-game changes both, so without this a setting that brings tabs
+        /// back (turning "Combine All Tabs" off) reads past the end of that list and the
+        /// research window throws on every frame. Null when no game is running or the map has
+        /// not been created yet.
+        /// </summary>
+        private static Dictionary<ResearchTabDef, bool> SnapshotTabInfoVisibility()
+        {
+            if (!(GetTabInfoValues() is List<bool> values)) return null;
+            var snapshot = new Dictionary<ResearchTabDef, bool>();
+            foreach (var tab in DefDatabase<ResearchTabDef>.AllDefsListForReading)
+            {
+                if (tab.index < values.Count) snapshot[tab] = values[tab.index];
+            }
+            return snapshot;
+        }
+
+        /// <summary>Resizes the running game's per-tab flags to the tabs now in the database
+        /// and puts each tab's flag at its new index. A tab not seen before gets its default.</summary>
+        private static void RebuildTabInfoVisibility(Dictionary<ResearchTabDef, bool> snapshot)
+        {
+            if (snapshot == null || !(GetTabInfoValues() is List<bool> values)) return;
+            var tabs = DefDatabase<ResearchTabDef>.AllDefsListForReading;
+            values.Clear();
+            for (int i = 0; i < tabs.Count; i++) values.Add(false);
+            foreach (var tab in tabs)
+            {
+                if (tab.index >= values.Count) continue;
+                values[tab.index] = snapshot.TryGetValue(tab, out bool visible) ? visible : tab.visibleByDefault;
+            }
+        }
+
+        private static List<bool> GetTabInfoValues()
+        {
+            var manager = Current.Game?.researchManager;
+            if (manager == null || tabInfoVisibilityField == null || defMapValuesField == null) return null;
+            // Created lazily by TabInfoVisible, already at the right size when it is.
+            var map = tabInfoVisibilityField.GetValue(manager);
+            return map == null ? null : defMapValuesField.GetValue(map) as List<bool>;
         }
 
         private static void ResetCaches()
@@ -382,7 +629,9 @@ namespace ResearchOrganized
         /// used to isolate a big hub like Electricity onto its own column instead of burying
         /// it among a hundred other projects at the same depth.
         /// </summary>
-        private static HashSet<ResearchProjectDef> FindAnchors(out Dictionary<ResearchProjectDef, int> anchorOrder)
+        /// <param name="combinedTab">The "Combine All Tabs" tab, if any. Its era blocks are laid
+        /// out as separate tabs would be, so only a follow-up in the same era counts there.</param>
+        private static HashSet<ResearchProjectDef> FindAnchors(ResearchTabDef combinedTab, out Dictionary<ResearchProjectDef, int> anchorOrder)
         {
             var allProjects = DefDatabase<ResearchProjectDef>.AllDefsListForReading;
 
@@ -394,6 +643,7 @@ namespace ResearchOrganized
                 foreach (var pre in ResearchOrganizedLayout.GetDirectPrereqs(proj))
                 {
                     if (proj.tab == null || pre.tab == null || proj.tab != pre.tab) continue;
+                    if (proj.tab == combinedTab && ResearchOrganizedLayout.EraBucket(proj) != ResearchOrganizedLayout.EraBucket(pre)) continue;
                     if (!childrenMap.TryGetValue(pre, out var list)) childrenMap[pre] = list = new List<ResearchProjectDef>();
                     list.Add(proj);
                 }
@@ -442,6 +692,67 @@ namespace ResearchOrganized
             return anchors;
         }
 
+        /// <summary>
+        /// Raises every project to the latest tech level among its real prerequisites (hidden
+        /// ones included, layout-only virtual links not), transitively. A mod can give a
+        /// follow-up a lower tech level than what it depends on - Apex Mechanoids' Spacer
+        /// projects behind its Ultra hub - which files it on an earlier tab or era block than
+        /// its prerequisite, charges it an earlier era's research cost, and misleads anything
+        /// else reading the tech level. This changes the def itself, so all of that follows.
+        /// Projects with no tech level are left alone either way.
+        ///
+        /// Every pass starts from the tech levels first seen, so a rerun recomputes rather
+        /// than compounding.
+        /// </summary>
+        private static void RaiseTechLevelsToPrerequisites()
+        {
+            const int unranked = int.MaxValue;
+            var projects = DefDatabase<ResearchProjectDef>.AllDefsListForReading;
+            var indexOf = new Dictionary<ResearchProjectDef, int>(projects.Count);
+            var authored = new TechLevel[projects.Count];
+            var era = new int[projects.Count];
+            for (int i = 0; i < projects.Count; i++)
+            {
+                var project = projects[i];
+                indexOf[project] = i;
+                if (!authoredTechLevels.TryGetValue(project, out authored[i])) authoredTechLevels[project] = authored[i] = project.techLevel;
+                era[i] = authored[i] == TechLevel.Undefined ? unranked : (int)authored[i];
+            }
+
+            var graph = new LayoutGraph(projects.Count);
+            for (int i = 0; i < projects.Count; i++)
+            {
+                AddPrerequisiteEdges(graph, indexOf, projects[i].prerequisites, i);
+                AddPrerequisiteEdges(graph, indexOf, projects[i].hiddenPrerequisites, i);
+            }
+
+            var raised = EraPromotion.Raise(graph, era, unranked);
+            var described = new List<string>();
+            for (int i = 0; i < projects.Count; i++)
+            {
+                var level = raised[i] == unranked ? TechLevel.Undefined : (TechLevel)raised[i];
+                projects[i].techLevel = level;
+                if (level != authored[i]) described.Add($"{projects[i].defName} ({authored[i]} -> {level})");
+            }
+
+            string report = string.Join(", ", described);
+            if (described.Count > 0 && report != lastTechLevelReport)
+            {
+                Log.Message($"[Research: Organized] Raised {described.Count} project(s) to their prerequisites' tech level: [{report}]");
+            }
+            lastTechLevelReport = report;
+        }
+
+        private static void AddPrerequisiteEdges(LayoutGraph graph, Dictionary<ResearchProjectDef, int> indexOf,
+            List<ResearchProjectDef> prerequisites, int child)
+        {
+            if (prerequisites == null) return;
+            foreach (var prerequisite in prerequisites)
+            {
+                if (prerequisite != null && indexOf.TryGetValue(prerequisite, out int parent)) graph.AddEdge(parent, child);
+            }
+        }
+
         private static void MapProjectsToTabs()
         {
             var anomalyTab = DefDatabase<ResearchTabDef>.GetNamed(TabAnomalyDef, false);
@@ -449,15 +760,19 @@ namespace ResearchOrganized
             var lateInd = DefDatabase<ResearchTabDef>.GetNamed("TabLateIndustrial", false);
             var ind = DefDatabase<ResearchTabDef>.GetNamed("TabIndustrial", false);
             bool combineIndustrial = ResearchOrganizedMod.settings.combineIndustrial;
+            var combinedTab = CombinedTab;
             foreach (var project in DefDatabase<ResearchProjectDef>.AllDefs)
             {
-                string currentTab = project.tab?.defName;
+                // Route from the tab the project was authored on, not wherever the last pass left
+                // it, so turning "Combine All Tabs" back off can return it to a preserved tab.
+                if (!authoredTabs.TryGetValue(project, out var authoredTab)) authoredTabs[project] = authoredTab = project.tab;
+                string currentTab = authoredTab?.defName;
                 TechLevelTabOverrides.TryGetValue(project.techLevel, out string overrideTabName);
                 var defaultTab = DefDatabase<ResearchTabDef>.GetNamed("Tab" + project.techLevel, false);
                 bool isIndustrial = project.techLevel == TechLevel.Industrial;
                 bool preserveCurrent = currentTab != null && PreservedTabs.Contains(currentTab);
                 bool ignoreCurrent = currentTab != null && IgnoredTabs.Contains(currentTab);
-                bool inspectIndustrialRequirements = isIndustrial && !combineIndustrial
+                bool inspectIndustrialRequirements = isIndustrial && !combineIndustrial && combinedTab == null
                     && overrideTabName == null && !preserveCurrent && !ignoreCurrent;
 
                 string targetName = TabRoutingPolicy.Resolve(new TabRoutingPolicy.Request
@@ -469,9 +784,12 @@ namespace ResearchOrganized
                     IndustrialTab = ind?.defName,
                     HighIndustrialTab = highInd?.defName,
                     LateIndustrialTab = lateInd?.defName,
-                    IsAnomaly = project.knowledgeCategory != null || project.tab == anomalyTab,
+                    MainTab = combinedTab?.defName,
+                    IsAnomaly = project.knowledgeCategory != null || authoredTab == anomalyTab,
                     CurrentTabIgnored = ignoreCurrent,
                     CurrentTabPreserved = preserveCurrent,
+                    CurrentTabExcludedFromCombine = IsGravtechTab(authoredTab),
+                    CombineAll = combinedTab != null,
                     IsIndustrial = isIndustrial,
                     CombineIndustrial = combineIndustrial,
                     RequiresHighTechBench = inspectIndustrialRequirements && RequiresBuildingCached(project, HiTechBenchDef, reqHiTechCache),
@@ -512,7 +830,11 @@ namespace ResearchOrganized
                 // the empties. Node Research still collapses onto it and reads it back through
                 // its own DefsOf field and a fixed tab strip, never through this database, so
                 // the removal costs it nothing and keeps an empty tab out of the vanilla window.
-                var toRemove = defsList.Where(t => !activeTabs.Contains(t) && !IgnoredTabs.Contains(t.defName)).ToList();
+                // An ignored tab is normally kept even when empty. Under "Combine All Tabs" every
+                // tab but Gravship's has been emptied on purpose, so only that one is kept.
+                bool combineAll = ResearchOrganizedMod.settings.combineAllTabs;
+                var toRemove = defsList.Where(t => !activeTabs.Contains(t)
+                    && (combineAll ? !IsGravtechTab(t) : !IgnoredTabs.Contains(t.defName))).ToList();
                 foreach (var tab in toRemove)
                 {
                     defsList.Remove(tab);
@@ -596,11 +918,107 @@ namespace ResearchOrganized
                 bgColor = set.finished;
             }
             bool isFoundation = ResearchOrganizedLayout.IsFoundationTech(project);
-            if (isFoundation) { borderColor = FoundationGold; borderSize = Mathf.Max(borderSize, FoundationBorderSize); }
             if (ResearchOrganizedLayout.cyclicNodes.Contains(project)) { borderColor = Color.red; borderSize = 2f; }
             bool result = Widgets.CustomButtonText(ref rect, label, bgColor, textColor, borderColor, unfilledBgColor, cacheHeight, borderSize, doMouseOverSound, active, project.ProgressPercent);
-            if (isFoundation) TooltipHandler.TipRegion(rect, FoundationTechTooltip);
+            if (isFoundation)
+            {
+                var notch = new Rect(rect.xMax - FoundationNotchSize, rect.yMin, FoundationNotchSize, FoundationNotchSize);
+                Color previous = GUI.color;
+                GUI.color = FoundationGold;
+                GUI.DrawTexture(notch, FoundationNotchTex);
+                GUI.color = previous;
+                TooltipHandler.TipRegion(rect, FoundationTechTooltip);
+            }
             return result;
+        }
+
+        /// <summary>A white right-angled triangle filling the top-right half of the texture,
+        /// with a soft diagonal edge, tinted by GUI.color when drawn. Built in code so the mod
+        /// ships no texture. Unity texture rows run bottom-up, so screen row r is texture row
+        /// size - 1 - r.</summary>
+        private static Texture2D BuildCornerNotchTexture(int size)
+        {
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            for (int row = 0; row < size; row++)
+            {
+                for (int column = 0; column < size; column++)
+                {
+                    float alpha = Mathf.Clamp01(column - row + 0.5f);
+                    texture.SetPixel(column, size - 1 - row, new Color(1f, 1f, 1f, alpha));
+                }
+            }
+            texture.Apply();
+            return texture;
+        }
+
+        /// <summary>
+        /// Makes vanilla skip prerequisite lines that are only noise. ListProjects draws a line
+        /// only when the prerequisite's tab equals CurTab; this sits on the CurTab side of that
+        /// comparison and answers null to skip one, since null never equals a real tab.
+        /// Skipped:
+        /// - on the combined tab, any line between two eras;
+        /// - on any tab, a line into or out of a Node Research emergence node, unless one of
+        ///   its two ends is selected, so its highlighted requirements still show on click.
+        /// Everything else gets CurTab back unchanged, so vanilla behaves exactly as before.
+        /// </summary>
+        public static ResearchTabDef PrerequisiteLineTab(ResearchTabDef curTab, MainTabWindow_Research window,
+            ResearchProjectDef project, ResearchProjectDef prerequisite)
+        {
+            if (curTab == null) return curTab;
+            if (curTab == activeCombinedTab
+                && ResearchOrganizedLayout.EraBucket(project) != ResearchOrganizedLayout.EraBucket(prerequisite)) return null;
+            if (ResearchOrganizedLayout.IsEraCapstone(project) || ResearchOrganizedLayout.IsEraCapstone(prerequisite))
+            {
+                var selected = researchWindowSelectedProjectField?.GetValue(window);
+                if (selected != project && selected != prerequisite) return null;
+            }
+            return curTab;
+        }
+
+        /// <summary>
+        /// Routes the prerequisite-tab comparison in ListProjects' line loop through
+        /// <see cref="PrerequisiteLineTab"/>. Matches
+        /// <c>ldloc item; ldfld prerequisites</c> to learn which local holds the project, then the first
+        /// <c>ldloc prereq; ldfld tab; ldarg.0; call get_CurTab</c> after it, and appends the window,
+        /// project and prerequisite plus the helper call. Leaves the method untouched, with a
+        /// warning, if the shape is not found.
+        /// </summary>
+        public static IEnumerable<CodeInstruction> CrossEraLineTranspiler(IEnumerable<CodeInstruction> instructions)
+        {
+            var list = instructions.ToList();
+            var prerequisitesField = AccessTools.Field(typeof(ResearchProjectDef), nameof(ResearchProjectDef.prerequisites));
+            var tabField = AccessTools.Field(typeof(ResearchProjectDef), nameof(ResearchProjectDef.tab));
+            var getCurTab = AccessTools.PropertyGetter(typeof(MainTabWindow_Research), nameof(MainTabWindow_Research.CurTab));
+            var helper = AccessTools.Method(typeof(ResearchOrganizedMain), nameof(PrerequisiteLineTab));
+
+            int prerequisitesIndex = list.FindIndex(i => i.LoadsField(prerequisitesField));
+            if (prerequisitesIndex > 0 && list[prerequisitesIndex - 1].IsLdloc())
+            {
+                var loadProject = list[prerequisitesIndex - 1];
+                for (int k = prerequisitesIndex; k + 3 < list.Count; k++)
+                {
+                    if (list[k].IsLdloc() && list[k + 1].LoadsField(tabField)
+                        && list[k + 2].opcode == OpCodes.Ldarg_0 && list[k + 3].Calls(getCurTab))
+                    {
+                        list.InsertRange(k + 4, new[]
+                        {
+                            new CodeInstruction(OpCodes.Ldarg_0),
+                            new CodeInstruction(loadProject.opcode, loadProject.operand),
+                            new CodeInstruction(list[k].opcode, list[k].operand),
+                            new CodeInstruction(OpCodes.Call, helper)
+                        });
+                        return list;
+                    }
+                }
+            }
+
+            Log.Warning("[Research: Organized] Could not find the prerequisite line check in the research window; " +
+                        "lines between eras and to emergence nodes will still be drawn.");
+            return list;
         }
 
         private static ColorSet ResolveColorSet(ResearchProjectDef project)
@@ -628,12 +1046,25 @@ namespace ResearchOrganized
             private static FieldInfo originalTabsField;
             private static FieldInfo isCollapsedField;
 
+            /// <summary>The tab each project was routed to by the last pass, before Node Research
+            /// could move it.</summary>
+            private static readonly Dictionary<ResearchProjectDef, ResearchTabDef> organizedTabs = new Dictionary<ResearchProjectDef, ResearchTabDef>();
+
             public static bool Active
             {
                 get { Resolve(); return originalTabsField != null && isCollapsedField != null; }
             }
 
-            /// <summary>Repoints Node Research's remembered tabs at wherever this pass left each
+            /// <summary>Records where this pass routed every project. Called before anything else
+            /// can touch the tabs.</summary>
+            public static void RecordRouting()
+            {
+                if (!Active) return;
+                organizedTabs.Clear();
+                foreach (var project in DefDatabase<ResearchProjectDef>.AllDefs) organizedTabs[project] = project.tab;
+            }
+
+            /// <summary>Repoints Node Research's remembered tabs at wherever this pass routed each
             /// project, and clears its collapsed flag so its next window open really re-collapses.</summary>
             public static void SyncTabs()
             {
@@ -643,11 +1074,26 @@ namespace ResearchOrganized
                     var remembered = (Dictionary<ResearchProjectDef, ResearchTabDef>)originalTabsField.GetValue(null);
                     if (remembered != null)
                     {
-                        foreach (var project in DefDatabase<ResearchProjectDef>.AllDefs) remembered[project] = project.tab;
+                        foreach (var entry in organizedTabs) remembered[entry.Key] = entry.Value;
                     }
                     isCollapsedField.SetValue(null, false);
                 }
                 catch (Exception ex) { Log.Error($"[Research: Organized] Node Research sync error: {ex.Message}"); }
+            }
+
+            /// <summary>Postfix on Node Research's restore, run when its "open the vanilla menu"
+            /// button is pressed. Puts every project back on the tab this mod chose, whatever
+            /// Node Research remembered, and brings the new vanilla window's tabs up to date.</summary>
+            public static void AfterRestore()
+            {
+                try
+                {
+                    foreach (var entry in organizedTabs)
+                    {
+                        if (entry.Value != null) entry.Key.tab = entry.Value;
+                    }
+                }
+                catch (Exception ex) { Log.Error($"[Research: Organized] Node Research restore error: {ex.Message}"); }
             }
 
             private static void Resolve()
@@ -658,8 +1104,22 @@ namespace ResearchOrganized
                 if (startupType == null) return;
                 var tabs = AccessTools.Field(startupType, "originalTabs");
                 var collapsed = AccessTools.Field(startupType, "isCollapsed");
-                if (tabs != null && tabs.FieldType == typeof(Dictionary<ResearchProjectDef, ResearchTabDef>)) originalTabsField = tabs;
-                if (collapsed != null && collapsed.FieldType == typeof(bool)) isCollapsedField = collapsed;
+                if (tabs == null || tabs.FieldType != typeof(Dictionary<ResearchProjectDef, ResearchTabDef>)) return;
+                if (collapsed == null || collapsed.FieldType != typeof(bool)) return;
+
+                // Reading its fields would run Node Research's static constructor, which moves every
+                // project to Main. Run it now, before this pass routes anything, rather than midway
+                // through SyncTabs, where it left all projects on Main.
+                System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(startupType.TypeHandle);
+                originalTabsField = tabs;
+                isCollapsedField = collapsed;
+
+                var restore = AccessTools.Method(startupType, "Restore");
+                if (restore != null)
+                {
+                    new Harmony("Cruesoe.ResearchOrganized.NodeResearch").Patch(restore,
+                        postfix: new HarmonyMethod(typeof(NodeResearchCompat), nameof(AfterRestore)));
+                }
             }
         }
     }

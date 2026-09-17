@@ -1,12 +1,28 @@
+## IDE and user-local settings
 .vs/
-Source/bin/
-Source/obj/
-Tests/bin/
-Tests/obj/
+.idea/
+.vscode/
 *.user
 *.suo
-*.pdb
+*.slnx
 
-# Stray solution file left over from the earlier TechTreeProgression project,
-# which lives in its own repo (Cruesoe/TechTreeProgression).
-TechTreeProgression.slnx
+## Build and test outputs
+[Bb]in/
+[Oo]bj/
+*.pdb
+*.cache
+
+## OS
+Thumbs.db
+Desktop.ini
+
+## Local build files
+Directory.Build.props
+Directory.Build.targets
+
+## Local tooling and notes, not part of the mod
+AGENTS.md
+CLAUDE.md
+BRANDING.md
+Tests/
+Tools/

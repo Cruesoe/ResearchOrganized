@@ -12,9 +12,13 @@ namespace ResearchOrganized.Layout
             public string IndustrialTab;
             public string HighIndustrialTab;
             public string LateIndustrialTab;
+            public string MainTab;
             public bool IsAnomaly;
             public bool CurrentTabIgnored;
             public bool CurrentTabPreserved;
+            /// <summary>The current tab stays separate even when every tab is combined - Gravship's.</summary>
+            public bool CurrentTabExcludedFromCombine;
+            public bool CombineAll;
             public bool IsIndustrial;
             public bool CombineIndustrial;
             public bool RequiresHighTechBench;
@@ -24,6 +28,8 @@ namespace ResearchOrganized.Layout
         public static string Resolve(Request request)
         {
             if (request.IsAnomaly && request.AnomalyTab != null) return request.AnomalyTab;
+            if (request.CombineAll && request.MainTab != null)
+                return request.CurrentTabExcludedFromCombine ? request.CurrentTab : request.MainTab;
             if (request.OverrideTab != null) return request.OverrideTab;
             if (request.CurrentTabIgnored || request.CurrentTabPreserved) return request.CurrentTab;
 
