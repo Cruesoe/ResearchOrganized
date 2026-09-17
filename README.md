@@ -46,7 +46,7 @@ A plain console exe rather than a test framework, so it needs no test package an
 
 ## Connection lines
 
-RimWorld 1.6 already skips a connector when the prerequisite is on another tab. On the combined tab, a transpiler on the research window extends that same check so connectors between two eras are skipped too, leaving only the lines within each era block.
+RimWorld 1.6 already skips a connector when the prerequisite is on another tab. On the combined tab, a transpiler on the research window extends that same check so connectors between two eras are skipped too, leaving only the lines within each era block. On every tab, lines into or out of a Node Research emergence node are skipped too, unless one of the two projects is selected.
 
 ## Install
 

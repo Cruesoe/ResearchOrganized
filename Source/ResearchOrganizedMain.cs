@@ -94,10 +94,9 @@ namespace ResearchOrganized
                 harmony.Patch(listProjectsMethod, transpiler: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(CrossEraLineTranspiler)));
             }
 
-            // A DrawConnections patch used to be registered here to suppress connection lines
-            // running between tabs, but its transpiler returned the instruction stream
-            // untouched, so it only ever added overhead. Cross-tab line suppression is still
-            // unimplemented; see the README.
+            // Vanilla 1.6 already skips lines to prerequisites on other tabs. The second
+            // transpiler above also skips lines between eras on the combined tab and lines to
+            // emergence nodes; see PrerequisiteLineTab.
 
             // Some mods create their own ResearchProjectDefs from their own static
             // constructor - Node Research's per-era "advance to the next tech level" nodes,
@@ -874,23 +873,34 @@ namespace ResearchOrganized
         }
 
         /// <summary>
-        /// Makes vanilla skip a prerequisite line between two eras on the combined tab.
-        /// ListProjects draws a line only when the prerequisite's tab equals CurTab; this sits
-        /// on the CurTab side of that comparison and answers null for a cross-era pair, which
-        /// never equals a real tab. On every other tab, or within one era, CurTab is returned
-        /// unchanged, so vanilla behaves exactly as before.
+        /// Makes vanilla skip prerequisite lines that are only noise. ListProjects draws a line
+        /// only when the prerequisite's tab equals CurTab; this sits on the CurTab side of that
+        /// comparison and answers null to skip one, since null never equals a real tab.
+        /// Skipped:
+        /// - on the combined tab, any line between two eras;
+        /// - on any tab, a line into or out of a Node Research emergence node, unless one of
+        ///   its two ends is selected, so its highlighted requirements still show on click.
+        /// Everything else gets CurTab back unchanged, so vanilla behaves exactly as before.
         /// </summary>
-        public static ResearchTabDef PrerequisiteLineTab(ResearchTabDef curTab, ResearchProjectDef project, ResearchProjectDef prerequisite)
+        public static ResearchTabDef PrerequisiteLineTab(ResearchTabDef curTab, MainTabWindow_Research window,
+            ResearchProjectDef project, ResearchProjectDef prerequisite)
         {
-            if (curTab == null || curTab != activeCombinedTab) return curTab;
-            return ResearchOrganizedLayout.EraBucket(project) == ResearchOrganizedLayout.EraBucket(prerequisite) ? curTab : null;
+            if (curTab == null) return curTab;
+            if (curTab == activeCombinedTab
+                && ResearchOrganizedLayout.EraBucket(project) != ResearchOrganizedLayout.EraBucket(prerequisite)) return null;
+            if (ResearchOrganizedLayout.IsEraCapstone(project) || ResearchOrganizedLayout.IsEraCapstone(prerequisite))
+            {
+                var selected = researchWindowSelectedProjectField?.GetValue(window);
+                if (selected != project && selected != prerequisite) return null;
+            }
+            return curTab;
         }
 
         /// <summary>
         /// Routes the prerequisite-tab comparison in ListProjects' line loop through
         /// <see cref="PrerequisiteLineTab"/>. Matches
         /// <c>ldloc item; ldfld prerequisites</c> to learn which local holds the project, then the first
-        /// <c>ldloc prereq; ldfld tab; ldarg.0; call get_CurTab</c> after it, and appends the
+        /// <c>ldloc prereq; ldfld tab; ldarg.0; call get_CurTab</c> after it, and appends the window,
         /// project and prerequisite plus the helper call. Leaves the method untouched, with a
         /// warning, if the shape is not found.
         /// </summary>
@@ -913,6 +923,7 @@ namespace ResearchOrganized
                     {
                         list.InsertRange(k + 4, new[]
                         {
+                            new CodeInstruction(OpCodes.Ldarg_0),
                             new CodeInstruction(loadProject.opcode, loadProject.operand),
                             new CodeInstruction(list[k].opcode, list[k].operand),
                             new CodeInstruction(OpCodes.Call, helper)
@@ -923,7 +934,7 @@ namespace ResearchOrganized
             }
 
             Log.Warning("[Research: Organized] Could not find the prerequisite line check in the research window; " +
-                        "lines between eras on the combined tab will still be drawn.");
+                        "lines between eras and to emergence nodes will still be drawn.");
             return list;
         }
 
