@@ -429,12 +429,15 @@ namespace ResearchOrganized
         {
             try
             {
+                // Lets Node Research finish its own start-up before this pass routes anything.
+                _ = NodeResearchCompat.Active;
                 ResetCaches();
                 var tabInfoVisibility = SnapshotTabInfoVisibility();
                 RestoreHiddenTabs();
                 LoadConfigs();
                 RaiseTechLevelsToPrerequisites();
                 MapProjectsToTabs();
+                NodeResearchCompat.RecordRouting();
                 var activeTabs = new HashSet<ResearchTabDef>(DefDatabase<ResearchProjectDef>.AllDefs.Select(p => p.tab).Where(t => t != null));
                 HideEmptyTabs(activeTabs);
                 SortAndIndexTabs();
@@ -1043,12 +1046,25 @@ namespace ResearchOrganized
             private static FieldInfo originalTabsField;
             private static FieldInfo isCollapsedField;
 
+            /// <summary>The tab each project was routed to by the last pass, before Node Research
+            /// could move it.</summary>
+            private static readonly Dictionary<ResearchProjectDef, ResearchTabDef> organizedTabs = new Dictionary<ResearchProjectDef, ResearchTabDef>();
+
             public static bool Active
             {
                 get { Resolve(); return originalTabsField != null && isCollapsedField != null; }
             }
 
-            /// <summary>Repoints Node Research's remembered tabs at wherever this pass left each
+            /// <summary>Records where this pass routed every project. Called before anything else
+            /// can touch the tabs.</summary>
+            public static void RecordRouting()
+            {
+                if (!Active) return;
+                organizedTabs.Clear();
+                foreach (var project in DefDatabase<ResearchProjectDef>.AllDefs) organizedTabs[project] = project.tab;
+            }
+
+            /// <summary>Repoints Node Research's remembered tabs at wherever this pass routed each
             /// project, and clears its collapsed flag so its next window open really re-collapses.</summary>
             public static void SyncTabs()
             {
@@ -1058,11 +1074,26 @@ namespace ResearchOrganized
                     var remembered = (Dictionary<ResearchProjectDef, ResearchTabDef>)originalTabsField.GetValue(null);
                     if (remembered != null)
                     {
-                        foreach (var project in DefDatabase<ResearchProjectDef>.AllDefs) remembered[project] = project.tab;
+                        foreach (var entry in organizedTabs) remembered[entry.Key] = entry.Value;
                     }
                     isCollapsedField.SetValue(null, false);
                 }
                 catch (Exception ex) { Log.Error($"[Research: Organized] Node Research sync error: {ex.Message}"); }
+            }
+
+            /// <summary>Postfix on Node Research's restore, run when its "open the vanilla menu"
+            /// button is pressed. Puts every project back on the tab this mod chose, whatever
+            /// Node Research remembered, and brings the new vanilla window's tabs up to date.</summary>
+            public static void AfterRestore()
+            {
+                try
+                {
+                    foreach (var entry in organizedTabs)
+                    {
+                        if (entry.Value != null) entry.Key.tab = entry.Value;
+                    }
+                }
+                catch (Exception ex) { Log.Error($"[Research: Organized] Node Research restore error: {ex.Message}"); }
             }
 
             private static void Resolve()
@@ -1073,8 +1104,22 @@ namespace ResearchOrganized
                 if (startupType == null) return;
                 var tabs = AccessTools.Field(startupType, "originalTabs");
                 var collapsed = AccessTools.Field(startupType, "isCollapsed");
-                if (tabs != null && tabs.FieldType == typeof(Dictionary<ResearchProjectDef, ResearchTabDef>)) originalTabsField = tabs;
-                if (collapsed != null && collapsed.FieldType == typeof(bool)) isCollapsedField = collapsed;
+                if (tabs == null || tabs.FieldType != typeof(Dictionary<ResearchProjectDef, ResearchTabDef>)) return;
+                if (collapsed == null || collapsed.FieldType != typeof(bool)) return;
+
+                // Reading its fields would run Node Research's static constructor, which moves every
+                // project to Main. Run it now, before this pass routes anything, rather than midway
+                // through SyncTabs, where it left all projects on Main.
+                System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(startupType.TypeHandle);
+                originalTabsField = tabs;
+                isCollapsedField = collapsed;
+
+                var restore = AccessTools.Method(startupType, "Restore");
+                if (restore != null)
+                {
+                    new Harmony("Cruesoe.ResearchOrganized.NodeResearch").Patch(restore,
+                        postfix: new HarmonyMethod(typeof(NodeResearchCompat), nameof(AfterRestore)));
+                }
             }
         }
     }
