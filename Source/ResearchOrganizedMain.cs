@@ -17,6 +17,7 @@ namespace ResearchOrganized
         private const string MultiAnalyzerDef = "MultiAnalyzer";
         private const string HiTechBenchDef = "HiTechResearchBench";
         private const string TabAnomalyDef = "Anomaly";
+        private const string MainTabDef = "Main";
         private const string TabGravtechDef = "VGE_Gravtech";
         private const string GravtechExtensionName = "GravtechResearchExtension";
 
@@ -41,6 +42,9 @@ namespace ResearchOrganized
         public static Dictionary<TechLevel, string> TechLevelTabOverrides = new Dictionary<TechLevel, string>();
 
         private static readonly List<ResearchTabDef> hiddenTabs = new List<ResearchTabDef>();
+
+        /// <summary>The tab each project was on when this mod first saw it. Kept across passes.</summary>
+        private static readonly Dictionary<ResearchProjectDef, ResearchTabDef> authoredTabs = new Dictionary<ResearchProjectDef, ResearchTabDef>();
 
         private static FieldInfo researchTabRecordDefField;
         private static FieldInfo researchWindowTabsField;
@@ -232,12 +236,25 @@ namespace ResearchOrganized
             // ships; the sweep below covers a rename, since that extension is what VGE itself uses
             // to recognise a gravtech tab. A tabThemes entry in a config def still wins over both,
             // because LoadConfigs runs after this.
-            TabToThemeMap[TabGravtechDef] = TechLevel.Spacer;
             foreach (var tab in DefDatabase<ResearchTabDef>.AllDefs)
             {
-                if (tab.modExtensions != null && tab.modExtensions.Any(e => e.GetType().Name == GravtechExtensionName)) TabToThemeMap[tab.defName] = TechLevel.Spacer;
+                if (IsGravtechTab(tab)) TabToThemeMap[tab.defName] = TechLevel.Spacer;
             }
         }
+
+        /// <summary>Vanilla Gravship Expanded's gravtech tab, by defName or by the extension VGE
+        /// itself uses to recognise one.</summary>
+        private static bool IsGravtechTab(ResearchTabDef tab)
+        {
+            if (tab == null) return false;
+            if (tab.defName == TabGravtechDef) return true;
+            return tab.modExtensions != null && tab.modExtensions.Any(e => e.GetType().Name == GravtechExtensionName);
+        }
+
+        /// <summary>The single tab every project lands on under "Combine All Tabs", or null when
+        /// the option is off.</summary>
+        private static ResearchTabDef CombinedTab =>
+            ResearchOrganizedMod.settings.combineAllTabs ? DefDatabase<ResearchTabDef>.GetNamed(MainTabDef, false) : null;
 
         public static void OrganizeTabsAndLayout()
         {
@@ -251,8 +268,9 @@ namespace ResearchOrganized
                 HideEmptyTabs(activeTabs);
                 SortAndIndexTabs();
 
+                var combinedTab = CombinedTab;
                 Dictionary<ResearchProjectDef, int> anchorOrder;
-                var anchors = FindAnchors(out anchorOrder);
+                var anchors = FindAnchors(combinedTab, out anchorOrder);
 
                 foreach (var tab in activeTabs)
                 {
@@ -264,7 +282,8 @@ namespace ResearchOrganized
                     // abort this loop, leaving every remaining tab at its authored layout.
                     try
                     {
-                        ResearchOrganizedLayout.ApplyLayout(projects, tab.defName, anchors, anchorOrder);
+                        ResearchOrganizedLayout.ApplyLayout(projects, tab.defName, anchors, anchorOrder,
+                            eraBuckets: tab == combinedTab);
                     }
                     catch (Exception ex)
                     {
@@ -382,7 +401,9 @@ namespace ResearchOrganized
         /// used to isolate a big hub like Electricity onto its own column instead of burying
         /// it among a hundred other projects at the same depth.
         /// </summary>
-        private static HashSet<ResearchProjectDef> FindAnchors(out Dictionary<ResearchProjectDef, int> anchorOrder)
+        /// <param name="combinedTab">The "Combine All Tabs" tab, if any. Its era blocks are laid
+        /// out as separate tabs would be, so only a follow-up in the same era counts there.</param>
+        private static HashSet<ResearchProjectDef> FindAnchors(ResearchTabDef combinedTab, out Dictionary<ResearchProjectDef, int> anchorOrder)
         {
             var allProjects = DefDatabase<ResearchProjectDef>.AllDefsListForReading;
 
@@ -394,6 +415,7 @@ namespace ResearchOrganized
                 foreach (var pre in ResearchOrganizedLayout.GetDirectPrereqs(proj))
                 {
                     if (proj.tab == null || pre.tab == null || proj.tab != pre.tab) continue;
+                    if (proj.tab == combinedTab && ResearchOrganizedLayout.EraBucket(proj) != ResearchOrganizedLayout.EraBucket(pre)) continue;
                     if (!childrenMap.TryGetValue(pre, out var list)) childrenMap[pre] = list = new List<ResearchProjectDef>();
                     list.Add(proj);
                 }
@@ -449,15 +471,19 @@ namespace ResearchOrganized
             var lateInd = DefDatabase<ResearchTabDef>.GetNamed("TabLateIndustrial", false);
             var ind = DefDatabase<ResearchTabDef>.GetNamed("TabIndustrial", false);
             bool combineIndustrial = ResearchOrganizedMod.settings.combineIndustrial;
+            var combinedTab = CombinedTab;
             foreach (var project in DefDatabase<ResearchProjectDef>.AllDefs)
             {
-                string currentTab = project.tab?.defName;
+                // Route from the tab the project was authored on, not wherever the last pass left
+                // it, so turning "Combine All Tabs" back off can return it to a preserved tab.
+                if (!authoredTabs.TryGetValue(project, out var authoredTab)) authoredTabs[project] = authoredTab = project.tab;
+                string currentTab = authoredTab?.defName;
                 TechLevelTabOverrides.TryGetValue(project.techLevel, out string overrideTabName);
                 var defaultTab = DefDatabase<ResearchTabDef>.GetNamed("Tab" + project.techLevel, false);
                 bool isIndustrial = project.techLevel == TechLevel.Industrial;
                 bool preserveCurrent = currentTab != null && PreservedTabs.Contains(currentTab);
                 bool ignoreCurrent = currentTab != null && IgnoredTabs.Contains(currentTab);
-                bool inspectIndustrialRequirements = isIndustrial && !combineIndustrial
+                bool inspectIndustrialRequirements = isIndustrial && !combineIndustrial && combinedTab == null
                     && overrideTabName == null && !preserveCurrent && !ignoreCurrent;
 
                 string targetName = TabRoutingPolicy.Resolve(new TabRoutingPolicy.Request
@@ -469,9 +495,12 @@ namespace ResearchOrganized
                     IndustrialTab = ind?.defName,
                     HighIndustrialTab = highInd?.defName,
                     LateIndustrialTab = lateInd?.defName,
-                    IsAnomaly = project.knowledgeCategory != null || project.tab == anomalyTab,
+                    MainTab = combinedTab?.defName,
+                    IsAnomaly = project.knowledgeCategory != null || authoredTab == anomalyTab,
                     CurrentTabIgnored = ignoreCurrent,
                     CurrentTabPreserved = preserveCurrent,
+                    CurrentTabExcludedFromCombine = IsGravtechTab(authoredTab),
+                    CombineAll = combinedTab != null,
                     IsIndustrial = isIndustrial,
                     CombineIndustrial = combineIndustrial,
                     RequiresHighTechBench = inspectIndustrialRequirements && RequiresBuildingCached(project, HiTechBenchDef, reqHiTechCache),
@@ -512,7 +541,11 @@ namespace ResearchOrganized
                 // the empties. Node Research still collapses onto it and reads it back through
                 // its own DefsOf field and a fixed tab strip, never through this database, so
                 // the removal costs it nothing and keeps an empty tab out of the vanilla window.
-                var toRemove = defsList.Where(t => !activeTabs.Contains(t) && !IgnoredTabs.Contains(t.defName)).ToList();
+                // An ignored tab is normally kept even when empty. Under "Combine All Tabs" every
+                // tab but Gravship's has been emptied on purpose, so only that one is kept.
+                bool combineAll = ResearchOrganizedMod.settings.combineAllTabs;
+                var toRemove = defsList.Where(t => !activeTabs.Contains(t)
+                    && (combineAll ? !IsGravtechTab(t) : !IgnoredTabs.Contains(t.defName))).ToList();
                 foreach (var tab in toRemove)
                 {
                     defsList.Remove(tab);

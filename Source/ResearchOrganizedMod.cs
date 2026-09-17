@@ -6,6 +6,7 @@ namespace ResearchOrganized
 {
     public class ResearchOrganizedSettings : ModSettings
     {
+        public bool combineAllTabs = false;
         public bool combineIndustrial = false;
         public int minorAnchorChildThreshold = 3;
         public int majorAnchorChildThreshold = 7;
@@ -25,6 +26,7 @@ namespace ResearchOrganized
         public override void ExposeData()
         {
             base.ExposeData();
+            Scribe_Values.Look(ref combineAllTabs, "combineAllTabs", false);
             Scribe_Values.Look(ref combineIndustrial, "combineIndustrial", false);
             Scribe_Values.Look(ref minorAnchorChildThreshold, "minorAnchorChildThreshold", 3);
             Scribe_Values.Look(ref majorAnchorChildThreshold, "majorAnchorChildThreshold", 7);
@@ -43,6 +45,7 @@ namespace ResearchOrganized
 
         public void CopyFrom(ResearchOrganizedSettings defaults)
         {
+            combineAllTabs = defaults.combineAllTabs;
             combineIndustrial = defaults.combineIndustrial;
             minorAnchorChildThreshold = defaults.minorAnchorChildThreshold;
             majorAnchorChildThreshold = defaults.majorAnchorChildThreshold;
@@ -74,6 +77,7 @@ namespace ResearchOrganized
         };
 
         /// <summary>Values the layout was actually built with, so we know when to redo it.</summary>
+        private bool appliedCombineAllTabs;
         private bool appliedCombineIndustrial;
         private int appliedMinorAnchorThreshold;
         private int appliedMajorAnchorThreshold;
@@ -84,6 +88,7 @@ namespace ResearchOrganized
         public ResearchOrganizedMod(ModContentPack content) : base(content)
         {
             settings = GetSettings<ResearchOrganizedSettings>();
+            appliedCombineAllTabs = settings.combineAllTabs;
             appliedCombineIndustrial = settings.combineIndustrial;
             appliedMinorAnchorThreshold = settings.minorAnchorChildThreshold;
             appliedMajorAnchorThreshold = settings.majorAnchorChildThreshold;
@@ -102,7 +107,8 @@ namespace ResearchOrganized
         /// </summary>
         public override void WriteSettings()
         {
-            bool structureChanged = settings.combineIndustrial != appliedCombineIndustrial
+            bool structureChanged = settings.combineAllTabs != appliedCombineAllTabs
+                                 || settings.combineIndustrial != appliedCombineIndustrial
                                  || settings.minorAnchorChildThreshold != appliedMinorAnchorThreshold
                                  || settings.majorAnchorChildThreshold != appliedMajorAnchorThreshold;
 
@@ -111,6 +117,7 @@ namespace ResearchOrganized
 
             if (structureChanged)
             {
+                appliedCombineAllTabs = settings.combineAllTabs;
                 appliedCombineIndustrial = settings.combineIndustrial;
                 appliedMinorAnchorThreshold = settings.minorAnchorChildThreshold;
                 appliedMajorAnchorThreshold = settings.majorAnchorChildThreshold;
@@ -123,8 +130,21 @@ namespace ResearchOrganized
             Listing_Standard listing = new Listing_Standard();
             listing.Begin(inRect);
 
-            listing.CheckboxLabeled("Combine Industrial", ref settings.combineIndustrial,
-                "Merges High and Late Industrial technologies back into the main Industrial tab.");
+            listing.CheckboxLabeled("Combine All Tabs", ref settings.combineAllTabs,
+                "Puts every technology except Anomaly and Gravship on the Main tab, laid out in one "
+              + "block per tech level from left to right.");
+
+            if (settings.combineAllTabs)
+            {
+                GUI.color = Color.gray;
+                listing.Label("Combine Industrial (included in Combine All Tabs)");
+                GUI.color = Color.white;
+            }
+            else
+            {
+                listing.CheckboxLabeled("Combine Industrial", ref settings.combineIndustrial,
+                    "Merges High and Late Industrial technologies back into the main Industrial tab.");
+            }
 
             listing.Gap();
 

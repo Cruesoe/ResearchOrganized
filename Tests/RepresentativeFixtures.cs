@@ -58,5 +58,32 @@ namespace ResearchOrganized.Tests
             projectCount = selected.Count;
             return graph;
         }
+
+        /// <summary>Loads the whole active-modlist dump as one combined tab, with each project's
+        /// era bucket (tech level order, Undefined last) in <paramref name="bucket"/>.</summary>
+        public static LayoutGraph LoadAll(out int[] bucket)
+        {
+            string[] levels = { "Animal", "Neolithic", "Medieval", "Industrial", "Spacer", "Ultra", "Archotech" };
+            string path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "research-graph.txt");
+            var rows = new List<string[]>();
+            foreach (string line in File.ReadAllLines(path))
+            {
+                string[] fields = line.Split('|');
+                if (fields.Length >= 4) rows.Add(fields);
+            }
+
+            var index = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (int i = 0; i < rows.Count; i++) index[rows[i][0]] = i;
+            var graph = new LayoutGraph(rows.Count);
+            bucket = new int[rows.Count];
+            for (int child = 0; child < rows.Count; child++)
+            {
+                int level = Array.IndexOf(levels, rows[child][1]);
+                bucket[child] = level < 0 ? int.MaxValue : level + 1;
+                foreach (string prerequisite in rows[child][3].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+                    if (index.TryGetValue(prerequisite, out int parent)) graph.AddEdge(parent, child);
+            }
+            return graph;
+        }
     }
 }

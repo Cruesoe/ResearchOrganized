@@ -36,6 +36,7 @@ namespace ResearchOrganized.Tests
             Run("preserved tab keeps its membership", PreservedTabKeepsMembership);
             Run("anomaly routing has highest priority", AnomalyRoutingHasHighestPriority);
             Run("industrial routing selects the required tier", IndustrialRoutingSelectsRequiredTier);
+            Run("combine all routes everything but Anomaly and Gravship to Main", CombineAllRouting);
             Run("layout is deterministic", Deterministic);
             Run("loose projects pack tightly", LooseNodesPackTightly);
             Run("siblings placed together land in consecutive rows", SiblingsLandConsecutively);
@@ -53,6 +54,9 @@ namespace ResearchOrganized.Tests
             Run("a later, more specific anchor claims its own descendants", DeeperAnchorClaimsItsOwnBranch);
             Run("an oversized anchor batch is not exceeded", AnchorBatchRespectsHeightCap);
             Run("tech levels are laid out in order, left to right", EpochsAdvanceLeftToRight);
+            Run("era buckets never overlap, even across backward edges", EraBucketsNeverOverlap);
+            Run("an era bucket is laid out as its own tab would be", EraBucketMatchesStandaloneLayout);
+            Run("real modlist combined tab stays in era order", RealModlistCombinedFixture);
             Run("a capstone lands after everything else in its era", CapstoneLandsLast);
             Run("a linked capstone can compact beside its prerequisites", LinkedCapstoneCanCompact);
             Run("a capstone with no prerequisites still lands last", CapstoneWithNoPrerequisitesStillLandsLast);
@@ -286,6 +290,49 @@ namespace ResearchOrganized.Tests
             request.CombineIndustrial = true;
             AreEqual("TabIndustrial", TabRoutingPolicy.Resolve(request),
                 "combined setting selected main Industrial");
+        }
+
+        private static void CombineAllRouting()
+        {
+            var request = new TabRoutingPolicy.Request
+            {
+                CurrentTab = "VFET_Basics",
+                CurrentTabPreserved = true,
+                OverrideTab = "VFET_Basics",
+                DefaultTab = "TabAnimal",
+                MainTab = "Main",
+                CombineAll = true
+            };
+            AreEqual("Main", TabRoutingPolicy.Resolve(request), "preserved tab and override yielded to Main");
+
+            request.CurrentTab = "TabAnimal";
+            request.CurrentTabPreserved = false;
+            request.CurrentTabIgnored = true;
+            AreEqual("Main", TabRoutingPolicy.Resolve(request), "ignored Primitive tab yielded to Main");
+
+            request.CurrentTab = "Main";
+            request.CurrentTabIgnored = false;
+            request.IsIndustrial = true;
+            request.IndustrialTab = "TabIndustrial";
+            request.LateIndustrialTab = "TabLateIndustrial";
+            request.RequiresMultiAnalyzer = true;
+            AreEqual("Main", TabRoutingPolicy.Resolve(request), "industrial tiers yielded to Main");
+
+            request.CurrentTab = "VGE_Gravtech";
+            request.CurrentTabIgnored = true;
+            request.CurrentTabExcludedFromCombine = true;
+            AreEqual("VGE_Gravtech", TabRoutingPolicy.Resolve(request), "Gravship tab stayed separate");
+
+            request.IsAnomaly = true;
+            request.AnomalyTab = "Anomaly";
+            AreEqual("Anomaly", TabRoutingPolicy.Resolve(request), "Anomaly stayed separate");
+
+            request.IsAnomaly = false;
+            request.CurrentTabExcludedFromCombine = false;
+            request.MainTab = null;
+            request.CurrentTab = "TabIndustrial";
+            request.CurrentTabIgnored = false;
+            AreEqual("VFET_Basics", TabRoutingPolicy.Resolve(request), "a missing Main tab fell back to normal routing");
         }
 
         private static void Deterministic()
@@ -655,6 +702,97 @@ namespace ResearchOrganized.Tests
                 "the second tech level starts after the first");
             IsTrue(result.Layer[4] > result.Layer[2] && result.Layer[5] > result.Layer[3],
                 "the third tech level starts after the second");
+        }
+
+        private static void EraBucketsNeverOverlap()
+        {
+            // Bucket 1 (Animal) is a wide chain; bucket 2 (Neolithic) has a project that an
+            // Animal project depends on - a backward edge that must not pull Neolithic left.
+            var graph = new LayoutGraph(9);
+            for (int i = 0; i < 5; i++) graph.AddEdge(i, i + 1); // 0..5 Animal chain
+            graph.AddEdge(6, 7);                                 // Neolithic
+            graph.AddEdge(7, 2);                                 // Neolithic -> Animal
+            var bucket = new[] { 1, 1, 1, 1, 1, 1, 2, 2, int.MaxValue };
+            var options = new LayoutOptions
+            {
+                maxNodesPerColumn = 10,
+                epoch = bucket,
+                isAnchor = new bool[9],
+                anchorOrder = new int[9],
+                tieRank = Identity(9)
+            };
+
+            var result = TabLayout.ComputeBuckets(graph, options, bucket, 1);
+
+            int animalEnd = 0;
+            for (int i = 0; i <= 5; i++) animalEnd = Math.Max(animalEnd, result.Layer[i]);
+            AreEqual(5, animalEnd, "Animal chain kept its own columns");
+            AreEqual(animalEnd + 2, Math.Min(result.Layer[6], result.Layer[7]), "Neolithic began after a one-column gap");
+            AreEqual(result.Layer[7] + 2, result.Layer[8], "undefined tech level went last, after a gap");
+            AreEqual(0, result.ReversedEdges.Count, "a cross-bucket edge was not treated as a cycle");
+            for (int i = 0; i < 9; i++)
+                IsTrue(Math.Abs(result.X[i] - result.Layer[i] * options.xStep) < 0.0001f, "X matched the offset column");
+        }
+
+        private static void RealModlistCombinedFixture()
+        {
+            int[] bucket;
+            LayoutGraph graph = RepresentativeFixtures.LoadAll(out bucket);
+            IsTrue(graph.NodeCount >= 600, "whole active-modlist dump loaded");
+            var options = new LayoutOptions { maxNodesPerColumn = 10, epoch = bucket, tieRank = Identity(graph.NodeCount) };
+
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var result = TabLayout.ComputeBuckets(graph, options, bucket, 1);
+            watch.Stop();
+
+            var firstColumn = new Dictionary<int, int>();
+            var lastColumn = new Dictionary<int, int>();
+            for (int i = 0; i < graph.NodeCount; i++)
+            {
+                int b = bucket[i];
+                firstColumn[b] = firstColumn.ContainsKey(b) ? Math.Min(firstColumn[b], result.Layer[i]) : result.Layer[i];
+                lastColumn[b] = lastColumn.ContainsKey(b) ? Math.Max(lastColumn[b], result.Layer[i]) : result.Layer[i];
+            }
+            var order = new List<int>(firstColumn.Keys);
+            order.Sort();
+            Console.WriteLine(string.Format("         combined tab: {0} nodes, {1} eras, {2} columns, {3} crossings in {4} ms",
+                graph.NodeCount, order.Count, lastColumn[order[order.Count - 1]] + 1, result.Crossings, watch.ElapsedMilliseconds));
+
+            for (int i = 1; i < order.Count; i++)
+                AreEqual(lastColumn[order[i - 1]] + 2, firstColumn[order[i]],
+                    string.Format("era {0} began one gap column after era {1}", order[i], order[i - 1]));
+            IsTrue(watch.ElapsedMilliseconds < 10000, "combined tab laid out in under 10 seconds");
+        }
+
+        private static void EraBucketMatchesStandaloneLayout()
+        {
+            var animal = RandomDag(30, 50, seed: 11);
+            var neolithic = RandomDag(25, 40, seed: 12);
+            int n = animal.NodeCount + neolithic.NodeCount;
+            var combined = new LayoutGraph(n);
+            foreach (var e in animal.AllEdges()) combined.AddEdge(e.Parent, e.Child);
+            foreach (var e in neolithic.AllEdges()) combined.AddEdge(animal.NodeCount + e.Parent, animal.NodeCount + e.Child);
+            combined.AddEdge(0, animal.NodeCount + 3); // a forward cross-era edge
+
+            var bucket = new int[n];
+            for (int i = animal.NodeCount; i < n; i++) bucket[i] = 1;
+
+            var combinedResult = TabLayout.ComputeBuckets(combined, new LayoutOptions { tieRank = Identity(n) }, bucket, 1);
+            var animalAlone = TabLayout.Compute(animal, new LayoutOptions { tieRank = Identity(animal.NodeCount) });
+            var neolithicAlone = TabLayout.Compute(neolithic, new LayoutOptions { tieRank = Identity(neolithic.NodeCount) });
+
+            int animalWidth = 0;
+            for (int i = 0; i < animal.NodeCount; i++)
+            {
+                AreEqual(animalAlone.Layer[i], combinedResult.Layer[i], "Animal column matched standalone");
+                IsTrue(animalAlone.Y[i] == combinedResult.Y[i], "Animal row matched standalone");
+                animalWidth = Math.Max(animalWidth, animalAlone.Layer[i] + 1);
+            }
+            for (int i = 0; i < neolithic.NodeCount; i++)
+            {
+                AreEqual(neolithicAlone.Layer[i] + animalWidth + 1, combinedResult.Layer[animal.NodeCount + i], "Neolithic column matched standalone, shifted");
+                IsTrue(neolithicAlone.Y[i] == combinedResult.Y[animal.NodeCount + i], "Neolithic row matched standalone");
+            }
         }
 
         /// <summary>

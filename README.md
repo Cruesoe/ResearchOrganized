@@ -3,6 +3,7 @@
 RimWorld 1.6 mod. Sorts research projects into **tech-level tabs** and lays each tab out as a readable tree.
 
 - Projects are mapped to Primitive, Neolithic, Medieval, Industrial, High/Late Industrial, Spacer, Ultra, Archotech, Anomaly, or Miscellaneous tabs. When VFE Tribals is active, its Basics tab replaces Primitive and receives every Animal-tier project.
+- **Combine All Tabs** (mod setting) puts every project except Anomaly and Gravship on the vanilla Main tab instead. Each tech level is laid out as its own block, exactly as its tab would be, and the blocks run left to right with a blank column between them, so no era starts before the previous one ends. Projects with no tech level form the last block. Turning the setting off returns every project to the tab it would normally use, including preserved tabs.
 - Each tab gets a generated, non-overlapping layout instead of the vanilla scatter, with columns capped by `maxNodesPerColumn`.
 - Layout is computed by an anchor-aware epoch pipeline followed by a bounded row optimizer that reduces connector crossings while preserving dependency columns and column limits.
 - Nodes are tinted by tech level, with finished/available/unavailable brightness levels. Colours are configurable, or can be turned off entirely.
@@ -17,7 +18,7 @@ Incompatible with other research-tab organisers (Tech Tree, TTPF, Research Tab C
 
 ## Configuration
 
-`1.6/Defs/TechTreeConfig.xml` defines a `ResearchOrganized.ResearchOrganizedConfig` def controlling tab order, ignored and preserved tabs, tech-level tab overrides, per-tab themes, spacing (`xStep` / `yStep`), and `maxNodesPerColumn`. The VFE Tribals integration is data-driven here: `Animal` routes to `VFET_Basics`, while that external tab is preserved for any projects it authors itself. Mod settings cover anchor thresholds, combining the industrial tabs, and the per-tech-level colour palette.
+`1.6/Defs/TechTreeConfig.xml` defines a `ResearchOrganized.ResearchOrganizedConfig` def controlling tab order, ignored and preserved tabs, tech-level tab overrides, per-tab themes, spacing (`xStep` / `yStep`), and `maxNodesPerColumn`. The VFE Tribals integration is data-driven here: `Animal` routes to `VFET_Basics`, while that external tab is preserved for any projects it authors itself. Mod settings cover anchor thresholds, combining all tabs or just the industrial tabs, and the per-tech-level colour palette.
 
 ## How the layout works
 

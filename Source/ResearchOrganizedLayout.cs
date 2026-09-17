@@ -29,6 +29,19 @@ namespace ResearchOrganized
         private const string NodeResearchPackageId = "ferny.noderesearch";
         private const string VfeTribalsBasicsTab = "VFET_Basics";
 
+        /// <summary>Blank columns between two era blocks on the combined tab.</summary>
+        private const int EraGapColumns = 1;
+
+        /// <summary>
+        /// A project's era block on the combined tab, lowest drawn first. Projects with no tech
+        /// level would otherwise sort before Animal, so they go last, the way the Miscellaneous
+        /// tab does.
+        /// </summary>
+        public static int EraBucket(ResearchProjectDef def)
+        {
+            return def.techLevel == TechLevel.Undefined ? int.MaxValue : (int)def.techLevel;
+        }
+
         public static bool IsEraCapstone(ResearchProjectDef def)
         {
             return def.defName != null && def.defName.StartsWith(EraCapstonePrefix, System.StringComparison.Ordinal);
@@ -102,8 +115,11 @@ namespace ResearchOrganized
         /// across every project so a hub is recognised the same way regardless of which tab
         /// it ends up on.
         /// </summary>
+        /// <param name="eraBuckets">Lays each tech level out as a block of its own, left to
+        /// right, with a blank column between blocks - the single tab "Combine All Tabs" produces.</param>
         public static void ApplyLayout(List<ResearchProjectDef> tabNodes, string tabName,
-            HashSet<ResearchProjectDef> anchors, Dictionary<ResearchProjectDef, int> anchorOrder)
+            HashSet<ResearchProjectDef> anchors, Dictionary<ResearchProjectDef, int> anchorOrder,
+            bool eraBuckets = false)
         {
             if (tabNodes == null || tabNodes.Count == 0) return;
 
@@ -144,7 +160,17 @@ namespace ResearchOrganized
             }
             options.tieRank = BuildTieRank(tabNodes);
 
-            var result = TabLayout.Compute(graph, options);
+            LayoutResult result;
+            if (eraBuckets)
+            {
+                var bucket = new int[tabNodes.Count];
+                for (int i = 0; i < tabNodes.Count; i++) bucket[i] = EraBucket(tabNodes[i]);
+                result = TabLayout.ComputeBuckets(graph, options, bucket, EraGapColumns);
+            }
+            else
+            {
+                result = TabLayout.Compute(graph, options);
+            }
 
             for (int i = 0; i < tabNodes.Count; i++)
             {
