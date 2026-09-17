@@ -42,6 +42,23 @@ namespace ResearchOrganized
             return def.techLevel == TechLevel.Undefined ? int.MaxValue : (int)def.techLevel;
         }
 
+        /// <summary>Prerequisite edges between projects in <paramref name="tabNodes"/> only.</summary>
+        private static LayoutGraph BuildGraph(List<ResearchProjectDef> tabNodes)
+        {
+            var indexOf = new Dictionary<ResearchProjectDef, int>(tabNodes.Count);
+            for (int i = 0; i < tabNodes.Count; i++) indexOf[tabNodes[i]] = i;
+
+            var graph = new LayoutGraph(tabNodes.Count);
+            for (int i = 0; i < tabNodes.Count; i++)
+            {
+                foreach (var prereq in GetDirectPrereqs(tabNodes[i]))
+                {
+                    if (indexOf.TryGetValue(prereq, out int parentIndex)) graph.AddEdge(parentIndex, i);
+                }
+            }
+            return graph;
+        }
+
         public static bool IsEraCapstone(ResearchProjectDef def)
         {
             return def.defName != null && def.defName.StartsWith(EraCapstonePrefix, System.StringComparison.Ordinal);
@@ -123,18 +140,7 @@ namespace ResearchOrganized
         {
             if (tabNodes == null || tabNodes.Count == 0) return;
 
-            var indexOf = new Dictionary<ResearchProjectDef, int>(tabNodes.Count);
-            for (int i = 0; i < tabNodes.Count; i++) indexOf[tabNodes[i]] = i;
-
-            var graph = new LayoutGraph(tabNodes.Count);
-            for (int i = 0; i < tabNodes.Count; i++)
-            {
-                foreach (var prereq in GetDirectPrereqs(tabNodes[i]))
-                {
-                    int parentIndex;
-                    if (indexOf.TryGetValue(prereq, out parentIndex)) graph.AddEdge(parentIndex, i);
-                }
-            }
+            var graph = BuildGraph(tabNodes);
 
             var options = BuildOptions(tabName);
             options.compactLinkedCapstones = tabName == VfeTribalsBasicsTab

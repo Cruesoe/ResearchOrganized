@@ -56,6 +56,7 @@ namespace ResearchOrganized.Tests
             Run("tech levels are laid out in order, left to right", EpochsAdvanceLeftToRight);
             Run("era buckets never overlap, even across backward edges", EraBucketsNeverOverlap);
             Run("an era bucket is laid out as its own tab would be", EraBucketMatchesStandaloneLayout);
+            Run("a follow-up is raised to its prerequisite's era", FollowUpRaisedToPrerequisiteEra);
             Run("real modlist combined tab stays in era order", RealModlistCombinedFixture);
             Run("a capstone lands after everything else in its era", CapstoneLandsLast);
             Run("a linked capstone can compact beside its prerequisites", LinkedCapstoneCanCompact);
@@ -734,11 +735,52 @@ namespace ResearchOrganized.Tests
                 IsTrue(Math.Abs(result.X[i] - result.Layer[i] * options.xStep) < 0.0001f, "X matched the offset column");
         }
 
+        private static void FollowUpRaisedToPrerequisiteEra()
+        {
+            const int none = int.MaxValue;
+            // 0 Ultra hub -> 1 Spacer -> 2 Spacer; 3 Industrial -> 1.
+            // 4 has no tech level and depends on 0; 5 Spacer depends on 4.
+            // 6 <-> 7 is a cycle, Medieval and Industrial.
+            var graph = new LayoutGraph(8);
+            graph.AddEdge(0, 1);
+            graph.AddEdge(1, 2);
+            graph.AddEdge(3, 1);
+            graph.AddEdge(0, 4);
+            graph.AddEdge(4, 5);
+            graph.AddEdge(6, 7);
+            graph.AddEdge(7, 6);
+            var era = new[] { 6, 5, 5, 4, none, 5, 3, 4 };
+
+            var raised = EraPromotion.Raise(graph, era, none);
+
+            AreEqual(6, raised[0], "the hub kept its own era");
+            AreEqual(6, raised[1], "its Spacer follow-up rose to Ultra");
+            AreEqual(6, raised[2], "the follow-up's own follow-up rose too");
+            AreEqual(4, raised[3], "a prerequisite was never lowered or raised by its follow-up");
+            AreEqual(none, raised[4], "a project with no tech level was not raised");
+            AreEqual(5, raised[5], "a project with no tech level raised nothing");
+            AreEqual(4, raised[6], "a cycle settled on its latest era");
+            AreEqual(4, raised[7], "a cycle settled on its latest era");
+            AreEqual(5, era[1], "the input was left untouched");
+        }
+
         private static void RealModlistCombinedFixture()
         {
             int[] bucket;
             LayoutGraph graph = RepresentativeFixtures.LoadAll(out bucket);
             IsTrue(graph.NodeCount >= 600, "whole active-modlist dump loaded");
+
+            int raisedCount = 0;
+            var raised = EraPromotion.Raise(graph, bucket, int.MaxValue);
+            for (int i = 0; i < bucket.Length; i++) if (raised[i] != bucket[i]) raisedCount++;
+            bucket = raised;
+            foreach (var edge in graph.AllEdges())
+            {
+                if (bucket[edge.Parent] == int.MaxValue || bucket[edge.Child] == int.MaxValue) continue;
+                IsTrue(bucket[edge.Child] >= bucket[edge.Parent],
+                    string.Format("edge {0} still runs back into an earlier era", edge));
+            }
+            Console.WriteLine(string.Format("         {0} projects raised to a prerequisite's era", raisedCount));
             var options = new LayoutOptions { maxNodesPerColumn = 10, epoch = bucket, tieRank = Identity(graph.NodeCount) };
 
             var watch = System.Diagnostics.Stopwatch.StartNew();

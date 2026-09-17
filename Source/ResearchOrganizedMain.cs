@@ -46,6 +46,10 @@ namespace ResearchOrganized
         /// <summary>The tab each project was on when this mod first saw it. Kept across passes.</summary>
         private static readonly Dictionary<ResearchProjectDef, ResearchTabDef> authoredTabs = new Dictionary<ResearchProjectDef, ResearchTabDef>();
 
+        /// <summary>The tech level each project had when this mod first saw it. Kept across passes.</summary>
+        private static readonly Dictionary<ResearchProjectDef, TechLevel> authoredTechLevels = new Dictionary<ResearchProjectDef, TechLevel>();
+        private static string lastTechLevelReport;
+
         private static FieldInfo researchTabRecordDefField;
         private static ConstructorInfo researchTabRecordCtor;
         private static readonly FieldInfo researchWindowCurTabField = AccessTools.Field(typeof(MainTabWindow_Research), "curTabInt");
@@ -346,6 +350,7 @@ namespace ResearchOrganized
                 ResetCaches();
                 RestoreHiddenTabs();
                 LoadConfigs();
+                RaiseTechLevelsToPrerequisites();
                 MapProjectsToTabs();
                 var activeTabs = new HashSet<ResearchTabDef>(DefDatabase<ResearchProjectDef>.AllDefs.Select(p => p.tab).Where(t => t != null));
                 HideEmptyTabs(activeTabs);
@@ -545,6 +550,67 @@ namespace ResearchOrganized
             for (int i = 0; i < anchorList.Count; i++) anchorOrder[anchorList[i]] = i;
 
             return anchors;
+        }
+
+        /// <summary>
+        /// Raises every project to the latest tech level among its real prerequisites (hidden
+        /// ones included, layout-only virtual links not), transitively. A mod can give a
+        /// follow-up a lower tech level than what it depends on - Apex Mechanoids' Spacer
+        /// projects behind its Ultra hub - which files it on an earlier tab or era block than
+        /// its prerequisite, charges it an earlier era's research cost, and misleads anything
+        /// else reading the tech level. This changes the def itself, so all of that follows.
+        /// Projects with no tech level are left alone either way.
+        ///
+        /// Every pass starts from the tech levels first seen, so a rerun recomputes rather
+        /// than compounding.
+        /// </summary>
+        private static void RaiseTechLevelsToPrerequisites()
+        {
+            const int unranked = int.MaxValue;
+            var projects = DefDatabase<ResearchProjectDef>.AllDefsListForReading;
+            var indexOf = new Dictionary<ResearchProjectDef, int>(projects.Count);
+            var authored = new TechLevel[projects.Count];
+            var era = new int[projects.Count];
+            for (int i = 0; i < projects.Count; i++)
+            {
+                var project = projects[i];
+                indexOf[project] = i;
+                if (!authoredTechLevels.TryGetValue(project, out authored[i])) authoredTechLevels[project] = authored[i] = project.techLevel;
+                era[i] = authored[i] == TechLevel.Undefined ? unranked : (int)authored[i];
+            }
+
+            var graph = new LayoutGraph(projects.Count);
+            for (int i = 0; i < projects.Count; i++)
+            {
+                AddPrerequisiteEdges(graph, indexOf, projects[i].prerequisites, i);
+                AddPrerequisiteEdges(graph, indexOf, projects[i].hiddenPrerequisites, i);
+            }
+
+            var raised = EraPromotion.Raise(graph, era, unranked);
+            var described = new List<string>();
+            for (int i = 0; i < projects.Count; i++)
+            {
+                var level = raised[i] == unranked ? TechLevel.Undefined : (TechLevel)raised[i];
+                projects[i].techLevel = level;
+                if (level != authored[i]) described.Add($"{projects[i].defName} ({authored[i]} -> {level})");
+            }
+
+            string report = string.Join(", ", described);
+            if (described.Count > 0 && report != lastTechLevelReport)
+            {
+                Log.Message($"[Research: Organized] Raised {described.Count} project(s) to their prerequisites' tech level: [{report}]");
+            }
+            lastTechLevelReport = report;
+        }
+
+        private static void AddPrerequisiteEdges(LayoutGraph graph, Dictionary<ResearchProjectDef, int> indexOf,
+            List<ResearchProjectDef> prerequisites, int child)
+        {
+            if (prerequisites == null) return;
+            foreach (var prerequisite in prerequisites)
+            {
+                if (prerequisite != null && indexOf.TryGetValue(prerequisite, out int parent)) graph.AddEdge(parent, child);
+            }
         }
 
         private static void MapProjectsToTabs()
