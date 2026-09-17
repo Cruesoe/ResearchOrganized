@@ -47,6 +47,10 @@ namespace ResearchOrganized
         private static readonly Dictionary<ResearchProjectDef, ResearchTabDef> authoredTabs = new Dictionary<ResearchProjectDef, ResearchTabDef>();
 
         private static FieldInfo researchTabRecordDefField;
+        private static ConstructorInfo researchTabRecordCtor;
+        private static readonly FieldInfo researchWindowCurTabField = AccessTools.Field(typeof(MainTabWindow_Research), "curTabInt");
+        private static readonly FieldInfo researchWindowSelectedProjectField = AccessTools.Field(typeof(MainTabWindow_Research), "selectedProject");
+        private static readonly MethodInfo researchWindowUpdateSelectedMethod = AccessTools.Method(typeof(MainTabWindow_Research), "UpdateSelectedProject");
         private static FieldInfo researchWindowTabsField;
 
         private static readonly Dictionary<ResearchProjectDef, bool> reqMultiCache = new Dictionary<ResearchProjectDef, bool>();
@@ -107,7 +111,12 @@ namespace ResearchOrganized
             {
                 harmony.Patch(tabTipMethod, postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(BlankEmptyTabTip)));
             }
-            if (researchTabRecordType != null) researchTabRecordDefField = AccessTools.Field(researchTabRecordType, "def");
+            if (researchTabRecordType != null)
+            {
+                researchTabRecordDefField = AccessTools.Field(researchTabRecordType, "def");
+                researchTabRecordCtor = AccessTools.Constructor(researchTabRecordType,
+                    new[] { typeof(ResearchTabDef), typeof(string), typeof(Action), typeof(Func<bool>) });
+            }
 
             // Optional per-tab completed/total project counts (Settings). The tab strip is
             // rebuilt from ResearchTabDef.LabelCap once in PostOpen and never touched again, so
@@ -121,7 +130,81 @@ namespace ResearchOrganized
                 harmony.Patch(doWindowContentsMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(UpdateTabLabelsWithCounts)));
             }
 
+            // A small gear in the corner of the research window's left panel that opens this
+            // mod's settings. Semi Random Research draws its own button in that same corner
+            // from the same method, so ours sits just left of it when that mod is loaded.
+            var drawLeftRectMethod = AccessTools.Method(typeof(MainTabWindow_Research), "DrawLeftRect");
+            if (drawLeftRectMethod != null)
+            {
+                harmony.Patch(drawLeftRectMethod, postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(DrawSettingsButton)));
+            }
+            semiRandomResearchActive = AccessTools.TypeByName(SemiRandomResearchPatchType) != null;
+
             OrganizeTabsAndLayout();
+        }
+
+        private const string SemiRandomResearchPatchType = "CM_Semi_Random_Research.MainTabWindow_Research_Patches";
+        private const float SemiRandomResearchButtonSize = 32f;
+        private const float SettingsButtonSize = 24f;
+        private const float SettingsButtonGap = 4f;
+        private static readonly Color SettingsButtonColor = new Color(0.6f, 0.6f, 0.6f);
+        private static bool semiRandomResearchActive;
+
+        public static void DrawSettingsButton(Rect leftOutRect)
+        {
+            float right = leftOutRect.xMax;
+            if (semiRandomResearchActive) right -= SemiRandomResearchButtonSize + SettingsButtonGap;
+            float top = leftOutRect.yMin + (SemiRandomResearchButtonSize - SettingsButtonSize) / 2f;
+            var rect = new Rect(right - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
+
+            if (Widgets.ButtonImage(rect, TexButton.OpenInspectSettings, SettingsButtonColor, GenUI.MouseoverColor, true, "Research: Organized settings"))
+            {
+                var mod = LoadedModManager.GetMod<ResearchOrganizedMod>();
+                if (mod != null) Find.WindowStack.Add(new Dialog_ModSettings(mod));
+                Event.current.Use();
+            }
+        }
+
+        /// <summary>
+        /// Brings an open research window up to date after a re-layout. The window builds its
+        /// tab strip only in PostOpen and caches the current tab's width, so without this a
+        /// settings change made from the gear button shows removed tabs and a stale scroll
+        /// width until the window is reopened. PostOpen itself is not rerun because it also
+        /// starts the window's sounds. Mirrors what PostOpen does to the tab list.
+        /// </summary>
+        public static void RefreshOpenResearchWindow()
+        {
+            try
+            {
+                var window = Find.WindowStack?.WindowOfType<MainTabWindow_Research>();
+                if (window == null || researchWindowTabsField == null || researchTabRecordCtor == null || researchWindowCurTabField == null) return;
+                if (!(researchWindowTabsField.GetValue(window) is System.Collections.IList tabs)) return;
+
+                tabs.Clear();
+                foreach (var tabDef in DefDatabase<ResearchTabDef>.AllDefs)
+                {
+                    var def = tabDef;
+                    Action clicked = () =>
+                    {
+                        window.CurTab = def;
+                        researchWindowUpdateSelectedMethod?.Invoke(window, new object[] { Find.ResearchManager });
+                    };
+                    Func<bool> selected = () => window.CurTab == def;
+                    tabs.Add(researchTabRecordCtor.Invoke(new object[] { def, (string)def.LabelCap, clicked, selected }));
+                }
+
+                var target = window.CurTab;
+                if (target == null || !DefDatabase<ResearchTabDef>.AllDefsListForReading.Contains(target))
+                {
+                    var selectedProject = researchWindowSelectedProjectField?.GetValue(window) as ResearchProjectDef;
+                    target = selectedProject?.tab ?? DefDatabase<ResearchTabDef>.AllDefsListForReading.FirstOrDefault();
+                }
+
+                // Clearing the backing field first makes the setter recompute the view width.
+                researchWindowCurTabField.SetValue(window, null);
+                window.CurTab = target;
+            }
+            catch (Exception ex) { Log.Error($"[Research: Organized] Research window refresh error: {ex.Message}"); }
         }
 
         private static void OnGameFinalizeInit()
