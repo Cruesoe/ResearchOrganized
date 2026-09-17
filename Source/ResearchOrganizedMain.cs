@@ -161,6 +161,54 @@ namespace ResearchOrganized
         private const float SettingsButtonSize = 24f;
         private const float SettingsButtonGap = 4f;
         private static readonly Color SettingsButtonColor = new Color(0.6f, 0.6f, 0.6f);
+        private static readonly Texture2D SettingsGearTex = BuildGearTexture(64);
+
+        /// <summary>
+        /// A white eight-toothed gear with a centre hole, tinted when drawn. Vanilla has no plain
+        /// settings gear to borrow, so it is built here like the foundation notch. Each pixel is
+        /// 4x4 supersampled for smooth edges; one tooth points straight up, and teeth taper
+        /// slightly towards the tip.
+        /// </summary>
+        private static Texture2D BuildGearTexture(int size)
+        {
+            const int teeth = 8;
+            const int samples = 4;
+            const float toothRadius = 0.47f, bodyRadius = 0.34f, holeRadius = 0.14f, toothDuty = 0.5f, taper = 0.35f;
+
+            bool Inside(float x, float y)
+            {
+                float dx = x - 0.5f, dy = y - 0.5f;
+                float r = Mathf.Sqrt(dx * dx + dy * dy);
+                if (r < holeRadius || r > toothRadius) return false;
+                if (r <= bodyRadius) return true;
+                // Screen y grows downward here, so angle -90 degrees is straight up; the 0.5
+                // offset centres a tooth there.
+                float turn = Mathf.Atan2(dy, dx) / (2f * Mathf.PI) * teeth + 0.5f;
+                float fraction = turn - Mathf.Floor(turn);
+                float halfWidth = toothDuty / 2f * (1f - taper * (r - bodyRadius) / (toothRadius - bodyRadius));
+                return Mathf.Abs(fraction - 0.5f) <= halfWidth;
+            }
+
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            for (int row = 0; row < size; row++)
+            {
+                for (int column = 0; column < size; column++)
+                {
+                    int hits = 0;
+                    for (int sy = 0; sy < samples; sy++)
+                        for (int sx = 0; sx < samples; sx++)
+                            if (Inside((column + (sx + 0.5f) / samples) / size, (row + (sy + 0.5f) / samples) / size)) hits++;
+                    float alpha = hits / (float)(samples * samples);
+                    texture.SetPixel(column, size - 1 - row, new Color(1f, 1f, 1f, alpha));
+                }
+            }
+            texture.Apply();
+            return texture;
+        }
         private static bool semiRandomResearchActive;
 
         public static void DrawSettingsButton(Rect leftOutRect)
@@ -170,7 +218,7 @@ namespace ResearchOrganized
             float top = leftOutRect.yMin + (SemiRandomResearchButtonSize - SettingsButtonSize) / 2f;
             var rect = new Rect(right - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
 
-            if (Widgets.ButtonImage(rect, TexButton.OpenInspectSettings, SettingsButtonColor, GenUI.MouseoverColor, true, "Research: Organized settings"))
+            if (Widgets.ButtonImage(rect, SettingsGearTex, SettingsButtonColor, GenUI.MouseoverColor, true, "Research: Organized settings"))
             {
                 var mod = LoadedModManager.GetMod<ResearchOrganizedMod>();
                 if (mod != null) Find.WindowStack.Add(new Dialog_ModSettings(mod));
