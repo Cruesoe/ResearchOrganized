@@ -122,7 +122,6 @@ namespace ResearchOrganized
                 appliedMinorAnchorThreshold = settings.minorAnchorChildThreshold;
                 appliedMajorAnchorThreshold = settings.majorAnchorChildThreshold;
                 ResearchOrganizedMain.OrganizeTabsAndLayout();
-                ResearchOrganizedMain.RefreshOpenResearchWindow();
             }
         }
 

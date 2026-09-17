@@ -226,7 +226,7 @@ namespace ResearchOrganized
         }
 
         /// <summary>
-        /// Brings an open research window up to date after a re-layout. The window builds its
+        /// Brings the research window, open or not, up to date after a re-layout. The window builds its
         /// tab strip only in PostOpen and caches the current tab's width, so without this a
         /// settings change made from the gear button shows removed tabs and a stale scroll
         /// width until the window is reopened. PostOpen itself is not rerun because it also
@@ -236,7 +236,12 @@ namespace ResearchOrganized
         {
             try
             {
-                var window = Find.WindowStack?.WindowOfType<MainTabWindow_Research>();
+                // The research tab's window is one persistent instance, reused on every open, so
+                // fix it up even while closed: its remembered tab may now be hidden, and a hidden
+                // tab's stale index would be read past the end of the tab-info flags on reopen.
+                if (Current.Game == null) return;
+                var window = MainButtonDefOf.Research?.TabWindow as MainTabWindow_Research
+                             ?? Find.WindowStack?.WindowOfType<MainTabWindow_Research>();
                 if (window == null || researchWindowTabsField == null || researchTabRecordCtor == null || researchWindowCurTabField == null) return;
                 if (!(researchWindowTabsField.GetValue(window) is System.Collections.IList tabs)) return;
 
@@ -404,6 +409,7 @@ namespace ResearchOrganized
             try
             {
                 ResetCaches();
+                var tabInfoVisibility = SnapshotTabInfoVisibility();
                 RestoreHiddenTabs();
                 LoadConfigs();
                 RaiseTechLevelsToPrerequisites();
@@ -411,6 +417,7 @@ namespace ResearchOrganized
                 var activeTabs = new HashSet<ResearchTabDef>(DefDatabase<ResearchProjectDef>.AllDefs.Select(p => p.tab).Where(t => t != null));
                 HideEmptyTabs(activeTabs);
                 SortAndIndexTabs();
+                RebuildTabInfoVisibility(tabInfoVisibility);
 
                 var combinedTab = CombinedTab;
                 activeCombinedTab = combinedTab;
@@ -453,8 +460,60 @@ namespace ResearchOrganized
                 // them on, so tell it where they went. Without this its own collapse is a
                 // no-op - it still believes it holds - and its window comes up empty.
                 NodeResearchCompat.SyncTabs();
+
+                // Tabs may have been hidden, restored or re-indexed; the research window keeps a
+                // tab strip and current tab of its own that must follow. No-op outside a game.
+                RefreshOpenResearchWindow();
             }
             catch (Exception ex) { Log.Error($"[Research: Organized] Master Organizer Error: {ex}"); }
+        }
+
+        private static readonly FieldInfo tabInfoVisibilityField = AccessTools.Field(typeof(ResearchManager), "tabInfoVisibility");
+        private static readonly FieldInfo defMapValuesField = AccessTools.Field(typeof(DefMap<ResearchTabDef, bool>), "values");
+
+        /// <summary>
+        /// The running game's per-tab "info visible" flags, keyed by tab rather than by index.
+        ///
+        /// ResearchManager keeps them in a DefMap: a list read by ResearchTabDef.index and sized
+        /// to the tab count when the game was created or loaded. Hiding, restoring and
+        /// re-indexing tabs mid-game changes both, so without this a setting that brings tabs
+        /// back (turning "Combine All Tabs" off) reads past the end of that list and the
+        /// research window throws on every frame. Null when no game is running or the map has
+        /// not been created yet.
+        /// </summary>
+        private static Dictionary<ResearchTabDef, bool> SnapshotTabInfoVisibility()
+        {
+            if (!(GetTabInfoValues() is List<bool> values)) return null;
+            var snapshot = new Dictionary<ResearchTabDef, bool>();
+            foreach (var tab in DefDatabase<ResearchTabDef>.AllDefsListForReading)
+            {
+                if (tab.index < values.Count) snapshot[tab] = values[tab.index];
+            }
+            return snapshot;
+        }
+
+        /// <summary>Resizes the running game's per-tab flags to the tabs now in the database
+        /// and puts each tab's flag at its new index. A tab not seen before gets its default.</summary>
+        private static void RebuildTabInfoVisibility(Dictionary<ResearchTabDef, bool> snapshot)
+        {
+            if (snapshot == null || !(GetTabInfoValues() is List<bool> values)) return;
+            var tabs = DefDatabase<ResearchTabDef>.AllDefsListForReading;
+            values.Clear();
+            for (int i = 0; i < tabs.Count; i++) values.Add(false);
+            foreach (var tab in tabs)
+            {
+                if (tab.index >= values.Count) continue;
+                values[tab.index] = snapshot.TryGetValue(tab, out bool visible) ? visible : tab.visibleByDefault;
+            }
+        }
+
+        private static List<bool> GetTabInfoValues()
+        {
+            var manager = Current.Game?.researchManager;
+            if (manager == null || tabInfoVisibilityField == null || defMapValuesField == null) return null;
+            // Created lazily by TabInfoVisible, already at the right size when it is.
+            var map = tabInfoVisibilityField.GetValue(manager);
+            return map == null ? null : defMapValuesField.GetValue(map) as List<bool>;
         }
 
         private static void ResetCaches()
