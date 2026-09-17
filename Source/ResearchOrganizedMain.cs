@@ -24,11 +24,16 @@ namespace ResearchOrganized
         private const float NormalBrightness = 0.5f;
         private const float UnavailableBrightness = 0.2f;
 
-        /// <summary>Marks Node Research's foundation technologies. Nothing else in this UI is gold.
-        /// Muted and semi-transparent so it reads as a hint, not an alert like the red cyclic border.</summary>
-        private static readonly Color FoundationGold = new Color(0.75f, 0.62f, 0.32f, 0.65f);
-        private const float FoundationBorderSize = 1.5f;
+        /// <summary>Marks Node Research's foundation technologies with a small triangle in the
+        /// card's top-right corner. A border colour was tried first, but vanilla already borders
+        /// the selected project and colours the active one in similar gold, so a shape is used
+        /// instead and the border is left to vanilla. Top-right because Anomaly cards put their
+        /// knowledge icon on the left.</summary>
+        private static readonly Color FoundationGold = new Color(0.75f, 0.62f, 0.32f, 0.9f);
+        private const float FoundationNotchSize = 12f;
+        private const int FoundationNotchTextureSize = 32;
         private const string FoundationTechTooltip = "Foundation technology";
+        private static readonly Texture2D FoundationNotchTex = BuildCornerNotchTexture(FoundationNotchTextureSize);
 
         private static readonly Dictionary<TechLevel, ColorSet> TabColors = new Dictionary<TechLevel, ColorSet>();
         private static readonly Dictionary<string, ColorSet> TabColorOverrides = new Dictionary<string, ColorSet>();
@@ -49,6 +54,9 @@ namespace ResearchOrganized
         /// <summary>The tech level each project had when this mod first saw it. Kept across passes.</summary>
         private static readonly Dictionary<ResearchProjectDef, TechLevel> authoredTechLevels = new Dictionary<ResearchProjectDef, TechLevel>();
         private static string lastTechLevelReport;
+
+        /// <summary>The combined tab the last layout pass built, read every frame by the line filter.</summary>
+        private static ResearchTabDef activeCombinedTab;
 
         private static FieldInfo researchTabRecordDefField;
         private static ConstructorInfo researchTabRecordCtor;
@@ -83,6 +91,7 @@ namespace ResearchOrganized
             if (listProjectsMethod != null)
             {
                 harmony.Patch(listProjectsMethod, transpiler: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(ColorTranspiler)));
+                harmony.Patch(listProjectsMethod, transpiler: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(CrossEraLineTranspiler)));
             }
 
             // A DrawConnections patch used to be registered here to suppress connection lines
@@ -357,6 +366,7 @@ namespace ResearchOrganized
                 SortAndIndexTabs();
 
                 var combinedTab = CombinedTab;
+                activeCombinedTab = combinedTab;
                 Dictionary<ResearchProjectDef, int> anchorOrder;
                 var anchors = FindAnchors(combinedTab, out anchorOrder);
 
@@ -778,11 +788,95 @@ namespace ResearchOrganized
                 bgColor = set.finished;
             }
             bool isFoundation = ResearchOrganizedLayout.IsFoundationTech(project);
-            if (isFoundation) { borderColor = FoundationGold; borderSize = Mathf.Max(borderSize, FoundationBorderSize); }
             if (ResearchOrganizedLayout.cyclicNodes.Contains(project)) { borderColor = Color.red; borderSize = 2f; }
             bool result = Widgets.CustomButtonText(ref rect, label, bgColor, textColor, borderColor, unfilledBgColor, cacheHeight, borderSize, doMouseOverSound, active, project.ProgressPercent);
-            if (isFoundation) TooltipHandler.TipRegion(rect, FoundationTechTooltip);
+            if (isFoundation)
+            {
+                var notch = new Rect(rect.xMax - FoundationNotchSize, rect.yMin, FoundationNotchSize, FoundationNotchSize);
+                Color previous = GUI.color;
+                GUI.color = FoundationGold;
+                GUI.DrawTexture(notch, FoundationNotchTex);
+                GUI.color = previous;
+                TooltipHandler.TipRegion(rect, FoundationTechTooltip);
+            }
             return result;
+        }
+
+        /// <summary>A white right-angled triangle filling the top-right half of the texture,
+        /// with a soft diagonal edge, tinted by GUI.color when drawn. Built in code so the mod
+        /// ships no texture. Unity texture rows run bottom-up, so screen row r is texture row
+        /// size - 1 - r.</summary>
+        private static Texture2D BuildCornerNotchTexture(int size)
+        {
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            for (int row = 0; row < size; row++)
+            {
+                for (int column = 0; column < size; column++)
+                {
+                    float alpha = Mathf.Clamp01(column - row + 0.5f);
+                    texture.SetPixel(column, size - 1 - row, new Color(1f, 1f, 1f, alpha));
+                }
+            }
+            texture.Apply();
+            return texture;
+        }
+
+        /// <summary>
+        /// Makes vanilla skip a prerequisite line between two eras on the combined tab.
+        /// ListProjects draws a line only when the prerequisite's tab equals CurTab; this sits
+        /// on the CurTab side of that comparison and answers null for a cross-era pair, which
+        /// never equals a real tab. On every other tab, or within one era, CurTab is returned
+        /// unchanged, so vanilla behaves exactly as before.
+        /// </summary>
+        public static ResearchTabDef PrerequisiteLineTab(ResearchTabDef curTab, ResearchProjectDef project, ResearchProjectDef prerequisite)
+        {
+            if (curTab == null || curTab != activeCombinedTab) return curTab;
+            return ResearchOrganizedLayout.EraBucket(project) == ResearchOrganizedLayout.EraBucket(prerequisite) ? curTab : null;
+        }
+
+        /// <summary>
+        /// Routes the prerequisite-tab comparison in ListProjects' line loop through
+        /// <see cref="PrerequisiteLineTab"/>. Matches
+        /// <c>ldloc item; ldfld prerequisites</c> to learn which local holds the project, then the first
+        /// <c>ldloc prereq; ldfld tab; ldarg.0; call get_CurTab</c> after it, and appends the
+        /// project and prerequisite plus the helper call. Leaves the method untouched, with a
+        /// warning, if the shape is not found.
+        /// </summary>
+        public static IEnumerable<CodeInstruction> CrossEraLineTranspiler(IEnumerable<CodeInstruction> instructions)
+        {
+            var list = instructions.ToList();
+            var prerequisitesField = AccessTools.Field(typeof(ResearchProjectDef), nameof(ResearchProjectDef.prerequisites));
+            var tabField = AccessTools.Field(typeof(ResearchProjectDef), nameof(ResearchProjectDef.tab));
+            var getCurTab = AccessTools.PropertyGetter(typeof(MainTabWindow_Research), nameof(MainTabWindow_Research.CurTab));
+            var helper = AccessTools.Method(typeof(ResearchOrganizedMain), nameof(PrerequisiteLineTab));
+
+            int prerequisitesIndex = list.FindIndex(i => i.LoadsField(prerequisitesField));
+            if (prerequisitesIndex > 0 && list[prerequisitesIndex - 1].IsLdloc())
+            {
+                var loadProject = list[prerequisitesIndex - 1];
+                for (int k = prerequisitesIndex; k + 3 < list.Count; k++)
+                {
+                    if (list[k].IsLdloc() && list[k + 1].LoadsField(tabField)
+                        && list[k + 2].opcode == OpCodes.Ldarg_0 && list[k + 3].Calls(getCurTab))
+                    {
+                        list.InsertRange(k + 4, new[]
+                        {
+                            new CodeInstruction(loadProject.opcode, loadProject.operand),
+                            new CodeInstruction(list[k].opcode, list[k].operand),
+                            new CodeInstruction(OpCodes.Call, helper)
+                        });
+                        return list;
+                    }
+                }
+            }
+
+            Log.Warning("[Research: Organized] Could not find the prerequisite line check in the research window; " +
+                        "lines between eras on the combined tab will still be drawn.");
+            return list;
         }
 
         private static ColorSet ResolveColorSet(ResearchProjectDef project)

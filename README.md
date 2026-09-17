@@ -3,7 +3,10 @@
 RimWorld 1.6 mod. Sorts research projects into **tech-level tabs** and lays each tab out as a readable tree.
 
 - Projects are mapped to Primitive, Neolithic, Medieval, Industrial, High/Late Industrial, Spacer, Ultra, Archotech, Anomaly, or Miscellaneous tabs. When VFE Tribals is active, its Basics tab replaces Primitive and receives every Animal-tier project.
-- **Combine All Tabs** (mod setting) puts every project except Anomaly and Gravship on the vanilla Main tab instead. Each tech level is laid out as its own block, exactly as its tab would be, and the blocks run left to right with a blank column between them, so no era starts before the previous one ends. Projects with no tech level form the last block. Turning the setting off returns every project to the tab it would normally use, including preserved tabs.
+- **Combine All Tabs** (mod setting) puts every project except Anomaly and Gravship on the vanilla Main tab instead. Each tech level is laid out as its own block, exactly as its tab would be, and the blocks run left to right with a blank column between them, so no era starts before the previous one ends. Projects with no tech level form the last block. Turning the setting off returns every project to the tab it would normally use, including preserved tabs. Connector lines between two eras are not drawn there, so only each block's own dependencies show.
+- A project is raised to the latest tech level among its prerequisites, so a follow-up never sits in an earlier era than what it depends on. This changes the project's real tech level, and with it the research cost.
+- Node Research's foundation technologies are marked with a small gold triangle in the card's top-right corner.
+- A gear in the research window's left panel opens these settings.
 - Each tab gets a generated, non-overlapping layout instead of the vanilla scatter, with columns capped by `maxNodesPerColumn`.
 - Layout is computed by an anchor-aware epoch pipeline followed by a bounded row optimizer that reduces connector crossings while preserving dependency columns and column limits.
 - Nodes are tinted by tech level, with finished/available/unavailable brightness levels. Colours are configurable, or can be turned off entirely.
@@ -41,9 +44,9 @@ dotnet run --project Tests\ResearchOrganized.Tests.csproj -c Release
 
 A plain console exe rather than a test framework, so it needs no test package and runs anywhere the mod builds. Exit code 0 means everything passed. It covers tab-routing precedence, the layering invariant (every child right of its parents), the column cap, complete and deterministic cycle handling, renderer-matched crossing measurement and reduction, authored-row preference, minimum spacing, and determinism. It also exercises the complete VFE Tribals Basics graph, Industrial and Spacer slices from a checked-in active-mod-list dump, and a 400-node scale benchmark with a ten-second budget.
 
-## Known gaps
+## Connection lines
 
-- Cross-tab connection lines are not suppressed. Vanilla still draws connectors to prerequisites that live on another tab. The old no-op Harmony patch for this has been removed rather than left in place pretending to work.
+RimWorld 1.6 already skips a connector when the prerequisite is on another tab. On the combined tab, a transpiler on the research window extends that same check so connectors between two eras are skipped too, leaving only the lines within each era block.
 
 ## Install
 
