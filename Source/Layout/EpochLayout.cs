@@ -219,31 +219,26 @@ namespace ResearchOrganized.Layout
 
                 if (capstones.Count > 0)
                 {
-                    if (options.compactLinkedCapstones)
+                    // Each capstone gets a column entirely to itself at the end of the era,
+                    // centered on the vertical middle of everything else the era placed - it
+                    // reads as the era's own standalone finale, not sharing a column with
+                    // (and so competing for row space with) anything else.
+                    int minRow = int.MaxValue, maxRow = int.MinValue;
+                    foreach (int node in members)
                     {
-                        var linked = new List<int>();
-                        var unlinked = new List<int>();
-                        foreach (int capstone in capstones)
-                        {
-                            if (graph.ParentsOf(capstone).Count > 0) linked.Add(capstone);
-                            else unlinked.Add(capstone);
-                        }
-
-                        if (linked.Count > 0)
-                        {
-                            // A zero base lets each linked capstone derive its position from
-                            // its actual parents. Preserve currentColumn so later epochs still
-                            // begin after the complete current epoch, including unrelated arms.
-                            int compactColumn = 0;
-                            PlaceNodesDAG(linked, ref compactColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
-                            currentColumn = Math.Max(currentColumn, compactColumn);
-                        }
-                        if (unlinked.Count > 0)
-                            PlaceNodesDAG(unlinked, ref currentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
+                        if (!placed[node]) continue;
+                        if (row[node] < minRow) minRow = row[node];
+                        if (row[node] > maxRow) maxRow = row[node];
                     }
-                    else
+                    int centerRow = minRow == int.MaxValue ? 0 : (minRow + maxRow) / 2;
+
+                    foreach (int capstone in capstones)
                     {
-                        PlaceNodesDAG(capstones, ref currentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
+                        column[capstone] = currentColumn;
+                        row[capstone] = centerRow;
+                        occupied.Add(Key(currentColumn, centerRow));
+                        placed[capstone] = true;
+                        currentColumn++;
                     }
                 }
             }
