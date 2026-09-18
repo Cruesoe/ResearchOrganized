@@ -962,7 +962,8 @@ namespace ResearchOrganized
         /// Skipped:
         /// - on the combined tab, any line between two eras;
         /// - on any tab, a line into or out of a Node Research emergence node, unless one of
-        ///   its two ends is selected, so its highlighted requirements still show on click.
+        ///   its two ends is selected, so its highlighted requirements still show on click - only
+        ///   when the "Suppress Emergence Lines" setting is on.
         /// Everything else gets CurTab back unchanged, so vanilla behaves exactly as before.
         /// </summary>
         public static ResearchTabDef PrerequisiteLineTab(ResearchTabDef curTab, MainTabWindow_Research window,
@@ -971,7 +972,8 @@ namespace ResearchOrganized
             if (curTab == null) return curTab;
             if (curTab == activeCombinedTab
                 && ResearchOrganizedLayout.EraBucket(project) != ResearchOrganizedLayout.EraBucket(prerequisite)) return null;
-            if (ResearchOrganizedLayout.IsEraCapstone(project) || ResearchOrganizedLayout.IsEraCapstone(prerequisite))
+            if (ResearchOrganizedMod.settings.suppressEmergenceLines
+                && (ResearchOrganizedLayout.IsEraCapstone(project) || ResearchOrganizedLayout.IsEraCapstone(prerequisite)))
             {
                 var selected = researchWindowSelectedProjectField?.GetValue(window);
                 if (selected != project && selected != prerequisite) return null;

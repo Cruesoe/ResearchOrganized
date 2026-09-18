@@ -26,8 +26,17 @@ namespace ResearchOrganized
         /// it is installed.
         /// </summary>
         private const string EraCapstonePrefix = "BRM_Emergence_";
-        private const string NodeResearchPackageId = "ferny.noderesearch";
-        private const string VfeTribalsBasicsTab = "VFET_Basics";
+
+        /// <summary>
+        /// Genesis Research (cruesoe.genesisresearch) marks its own era-advancement projects
+        /// with a "GenesisResearch.EmergenceExtension" mod extension rather than a defName
+        /// prefix. Matched by type name, the same way <see cref="IsFoundationTech"/> matches
+        /// Node Research's foundation extension, so this works whether or not it is installed.
+        /// </summary>
+        private const string EmergenceExtensionName = "EmergenceExtension";
+
+        private static readonly Dictionary<ResearchProjectDef, bool> capstoneCache =
+            new Dictionary<ResearchProjectDef, bool>();
 
         /// <summary>Blank columns between two era blocks on the combined tab.</summary>
         private const int EraGapColumns = 1;
@@ -61,7 +70,27 @@ namespace ResearchOrganized
 
         public static bool IsEraCapstone(ResearchProjectDef def)
         {
-            return def.defName != null && def.defName.StartsWith(EraCapstonePrefix, System.StringComparison.Ordinal);
+            if (def == null) return false;
+            if (capstoneCache.TryGetValue(def, out bool cached)) return cached;
+
+            bool isCapstone = def.defName != null && def.defName.StartsWith(EraCapstonePrefix, System.StringComparison.Ordinal);
+            if (!isCapstone)
+            {
+                List<DefModExtension> extensions = def.modExtensions;
+                if (extensions != null)
+                {
+                    for (int i = 0; i < extensions.Count; i++)
+                    {
+                        if (extensions[i]?.GetType().Name == EmergenceExtensionName)
+                        {
+                            isCapstone = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            return capstoneCache[def] = isCapstone;
         }
 
         /// <summary>
@@ -121,6 +150,7 @@ namespace ResearchOrganized
             cachedPrereqs.Clear();
             cyclicNodes.Clear();
             foundationCache.Clear();
+            capstoneCache.Clear();
         }
 
         /// <summary>
@@ -143,8 +173,6 @@ namespace ResearchOrganized
             var graph = BuildGraph(tabNodes);
 
             var options = BuildOptions(tabName);
-            options.compactLinkedCapstones = tabName == VfeTribalsBasicsTab
-                && ModsConfig.IsActive(NodeResearchPackageId);
             options.epoch = new int[tabNodes.Count];
             options.isAnchor = new bool[tabNodes.Count];
             options.anchorOrder = new int[tabNodes.Count];

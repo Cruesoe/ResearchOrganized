@@ -38,14 +38,6 @@ namespace ResearchOrganized.Layout
         /// the next tech level" node, from mods like Node Research.
         /// </summary>
         public bool[] isCapstone;
-
-        /// <summary>
-        /// Allows linked capstones to sit immediately after their furthest prerequisite
-        /// instead of after every unrelated project in the epoch. Unlinked capstones still
-        /// go last. Used for compact compatibility layouts such as Node Research's VFE
-        /// Tribals emergence node.
-        /// </summary>
-        public bool compactLinkedCapstones;
     }
 
     public sealed class LayoutResult
@@ -158,7 +150,6 @@ namespace ResearchOrganized.Layout
                     xStep = options.xStep,
                     yStep = options.yStep,
                     maxNodesPerColumn = options.maxNodesPerColumn,
-                    compactLinkedCapstones = options.compactLinkedCapstones,
                     epoch = Subset(options.epoch, members),
                     isAnchor = Subset(options.isAnchor, members),
                     anchorOrder = Subset(options.anchorOrder, members),
