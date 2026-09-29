@@ -1,0 +1,31 @@
+Sorts research projects into tech-level tabs and lays each tab out as a tidy, readable tree.
+
+[h1]Tabs[/h1]
+[list]
+[*]Projects are grouped into Primitive, Neolithic, Medieval, Industrial, High and Late Industrial, Spacer, Ultra, Archotech, Anomaly and Miscellaneous tabs.
+[*][b]Combine All Tabs[/b] puts every project except Anomaly and Gravship on the Main tab, with each tech level in its own block from left to right.
+[*][b]Combine Industrial[/b] merges High and Late Industrial back into one Industrial tab.
+[*]Tab tooltips show completed projects and research points, and the counts can be shown on the tabs too.
+[*]Empty tabs are hidden.
+[/list]
+
+[h1]Layout[/h1]
+[list]
+[*]Every tab gets a clean, non-overlapping layout with fewer crossing lines.
+[*]Follow-ups sit to the right of what they depend on, and branches fill the free space beside their prerequisites instead of trailing off the end of the tab.
+[*]A project is raised to the tech level of its prerequisites, so a follow-up never sits in an earlier era than what it needs. Its research cost changes to match.
+[*]Projects caught in a circular dependency are outlined in red and named in the log.
+[/list]
+
+[h1]Look[/h1]
+[list]
+[*]Cards are tinted by tech level, with configurable colours that can also be turned off.
+[*]A gear in the research window opens the mod settings.
+[/list]
+
+[h1]Compatibility[/h1]
+[list]
+[*][b]Node Research:[/b] foundation technologies get a gold corner mark, emergence nodes stay beside their branch without cluttering lines, and you can switch freely between its node view and these tabs.
+[*][b]ProgressionLESS:[/b] loads after every mod in the suite, so their research lands in the right tabs.
+[*][b]VFE Tribals:[/b] its Basics tab takes the Primitive projects.
+[/list]
