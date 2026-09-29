@@ -27,14 +27,6 @@ namespace ResearchOrganized
         /// </summary>
         private const string EraCapstonePrefix = "BRM_Emergence_";
 
-        /// <summary>
-        /// Genesis Research (cruesoe.genesisresearch) marks its own era-advancement projects
-        /// with a "GenesisResearch.EmergenceExtension" mod extension rather than a defName
-        /// prefix. Matched by type name, the same way <see cref="IsFoundationTech"/> matches
-        /// Node Research's foundation extension, so this works whether or not it is installed.
-        /// </summary>
-        private const string EmergenceExtensionName = "EmergenceExtension";
-
         private static readonly Dictionary<ResearchProjectDef, bool> capstoneCache =
             new Dictionary<ResearchProjectDef, bool>();
 
@@ -86,22 +78,6 @@ namespace ResearchOrganized
             if (capstoneCache.TryGetValue(def, out bool cached)) return cached;
 
             bool isCapstone = def.defName != null && def.defName.StartsWith(EraCapstonePrefix, System.StringComparison.Ordinal);
-            if (!isCapstone)
-            {
-                List<DefModExtension> extensions = def.modExtensions;
-                if (extensions != null)
-                {
-                    for (int i = 0; i < extensions.Count; i++)
-                    {
-                        if (extensions[i]?.GetType().Name == EmergenceExtensionName)
-                        {
-                            isCapstone = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
             return capstoneCache[def] = isCapstone;
         }
 

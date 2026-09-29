@@ -183,9 +183,8 @@ namespace ResearchOrganized
             listing.Gap();
 
             listing.CheckboxLabeled("Suppress Emergence Lines", ref settings.suppressEmergenceLines,
-                "Hides prerequisite lines into or out of era-advancement nodes (Node Research's "
-              + "emergence nodes, Genesis Research's own) unless one end is selected. Turn off to "
-              + "always show those lines.");
+                "Hides prerequisite lines into or out of Node Research's emergence nodes unless "
+              + "one end is selected. Turn off to always show those lines.");
 
             listing.Gap();
 
