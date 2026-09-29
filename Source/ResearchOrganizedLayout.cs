@@ -26,8 +26,9 @@ namespace ResearchOrganized
         /// it is installed.
         /// </summary>
         private const string EraCapstonePrefix = "BRM_Emergence_";
-        private const string NodeResearchPackageId = "ferny.noderesearch";
-        private const string VfeTribalsBasicsTab = "VFET_Basics";
+
+        private static readonly Dictionary<ResearchProjectDef, bool> capstoneCache =
+            new Dictionary<ResearchProjectDef, bool>();
 
         /// <summary>Blank columns between two era blocks on the combined tab.</summary>
         private const int EraGapColumns = 1;
@@ -53,15 +54,31 @@ namespace ResearchOrganized
             {
                 foreach (var prereq in GetDirectPrereqs(tabNodes[i]))
                 {
-                    if (indexOf.TryGetValue(prereq, out int parentIndex)) graph.AddEdge(parentIndex, i);
+                    if (indexOf.TryGetValue(prereq, out int parentIndex))
+                        graph.AddEdge(parentIndex, i, HasDrawnConnector(tabNodes[i], prereq));
                 }
             }
             return graph;
         }
 
+        /// <summary>
+        /// Whether the research window draws a line for this link. ListProjects walks
+        /// <see cref="ResearchProjectDef.prerequisites"/> and nothing else, so a hidden
+        /// prerequisite - or a virtual link, which is not on the def at all - orders the two
+        /// cards with nothing drawn between them.
+        /// </summary>
+        private static bool HasDrawnConnector(ResearchProjectDef def, ResearchProjectDef prereq)
+        {
+            return def.prerequisites != null && def.prerequisites.Contains(prereq);
+        }
+
         public static bool IsEraCapstone(ResearchProjectDef def)
         {
-            return def.defName != null && def.defName.StartsWith(EraCapstonePrefix, System.StringComparison.Ordinal);
+            if (def == null) return false;
+            if (capstoneCache.TryGetValue(def, out bool cached)) return cached;
+
+            bool isCapstone = def.defName != null && def.defName.StartsWith(EraCapstonePrefix, System.StringComparison.Ordinal);
+            return capstoneCache[def] = isCapstone;
         }
 
         /// <summary>
@@ -100,19 +117,6 @@ namespace ResearchOrganized
         private static readonly Dictionary<ResearchProjectDef, List<ResearchProjectDef>> cachedPrereqs =
             new Dictionary<ResearchProjectDef, List<ResearchProjectDef>>();
 
-        private struct AuthoredPosition
-        {
-            public float X;
-            public float Y;
-        }
-
-        // Layout is reapplied after late mod initialization and settings changes. Keep the
-        // coordinates first seen for each def so reruns do not treat a generated position as
-        // the authored one.
-        private static readonly Dictionary<ResearchProjectDef, AuthoredPosition> authoredPositions =
-            new Dictionary<ResearchProjectDef, AuthoredPosition>();
-
-
         /// <summary>Projects sitting on a dependency cycle. Drawn with a red border.</summary>
         public static HashSet<ResearchProjectDef> cyclicNodes = new HashSet<ResearchProjectDef>();
 
@@ -121,16 +125,16 @@ namespace ResearchOrganized
             cachedPrereqs.Clear();
             cyclicNodes.Clear();
             foundationCache.Clear();
+            capstoneCache.Clear();
         }
 
         /// <summary>
         /// Lays out one tab. Only prerequisites between two projects on this same tab become
         /// edges; a prerequisite living on another tab cannot constrain a position here.
         ///
-        /// <paramref name="anchors"/> and <paramref name="anchorOrder"/> come from
-        /// <see cref="ResearchOrganizedMain.OrganizeTabsAndLayout"/>, which finds them once
-        /// across every project so a hub is recognised the same way regardless of which tab
-        /// it ends up on.
+        /// <paramref name="anchors"/> and <paramref name="anchorOrder"/> are found per tab, over
+        /// that tab's own links only, so a hub is recognised from what follows it here and
+        /// nothing on another tab can shift where it is placed.
         /// </summary>
         /// <param name="eraBuckets">Lays each tech level out as a block of its own, left to
         /// right, with a blank column between blocks - the single tab "Combine All Tabs" produces.</param>
@@ -143,13 +147,10 @@ namespace ResearchOrganized
             var graph = BuildGraph(tabNodes);
 
             var options = BuildOptions(tabName);
-            options.compactLinkedCapstones = tabName == VfeTribalsBasicsTab
-                && ModsConfig.IsActive(NodeResearchPackageId);
             options.epoch = new int[tabNodes.Count];
             options.isAnchor = new bool[tabNodes.Count];
             options.anchorOrder = new int[tabNodes.Count];
             options.isCapstone = new bool[tabNodes.Count];
-            options.preferredRow = new int[tabNodes.Count];
 
             for (int i = 0; i < tabNodes.Count; i++)
             {
@@ -157,12 +158,6 @@ namespace ResearchOrganized
                 options.isAnchor[i] = anchors.Contains(tabNodes[i]);
                 anchorOrder.TryGetValue(tabNodes[i], out options.anchorOrder[i]);
                 options.isCapstone[i] = IsEraCapstone(tabNodes[i]);
-                AuthoredPosition authored = GetAuthoredPosition(tabNodes[i]);
-                int preferredRow = options.yStep > 0f ? (int)Math.Round(authored.Y / options.yStep) : 0;
-                if (preferredRow < 0) preferredRow = 0;
-                if (options.maxNodesPerColumn > 0 && preferredRow >= options.maxNodesPerColumn)
-                    preferredRow = options.maxNodesPerColumn - 1;
-                options.preferredRow[i] = preferredRow;
             }
             options.tieRank = BuildTieRank(tabNodes);
 
@@ -190,7 +185,8 @@ namespace ResearchOrganized
         /// <summary>
         /// Tie-break for otherwise-equal placement choices, lowest first: cheapest project
         /// first, since that is roughly the order a colony researches in and keeps the early
-        /// projects to the left where the eye starts.
+        /// projects to the left where the eye starts. Ties settle on defName so a run does not
+        /// depend on def load order.
         /// </summary>
         private static int[] BuildTieRank(List<ResearchProjectDef> tabNodes)
         {
@@ -201,28 +197,12 @@ namespace ResearchOrganized
             {
                 int costCompare = tabNodes[a].baseCost.CompareTo(tabNodes[b].baseCost);
                 if (costCompare != 0) return costCompare;
-                AuthoredPosition authoredA = GetAuthoredPosition(tabNodes[a]);
-                AuthoredPosition authoredB = GetAuthoredPosition(tabNodes[b]);
-                int xCompare = authoredA.X.CompareTo(authoredB.X);
-                if (xCompare != 0) return xCompare;
-                int yCompare = authoredA.Y.CompareTo(authoredB.Y);
-                if (yCompare != 0) return yCompare;
                 return string.Compare(tabNodes[a].defName, tabNodes[b].defName, System.StringComparison.Ordinal);
             });
 
             var rank = new int[tabNodes.Count];
             for (int position = 0; position < order.Count; position++) rank[order[position]] = position;
             return rank;
-        }
-
-        private static AuthoredPosition GetAuthoredPosition(ResearchProjectDef def)
-        {
-            if (!authoredPositions.TryGetValue(def, out AuthoredPosition position))
-            {
-                position = new AuthoredPosition { X = def.researchViewX, Y = def.researchViewY };
-                authoredPositions[def] = position;
-            }
-            return position;
         }
 
         private static LayoutOptions BuildOptions(string tabName)
@@ -260,24 +240,6 @@ namespace ResearchOrganized
             Log.Warning($"[Research: Organized] Circular research dependencies on tab '{tabName}'. " +
                         $"Reversed for layout purposes: [{string.Join(", ", described)}]. " +
                         $"Affected projects are outlined in red. This usually means a mod conflict or malformed XML.");
-        }
-
-        /// <summary>Every project this one depends on, directly or transitively, for layout purposes.</summary>
-        public static HashSet<ResearchProjectDef> GetAllAncestors(ResearchProjectDef node)
-        {
-            var ancestors = new HashSet<ResearchProjectDef>();
-            var stack = new Stack<ResearchProjectDef>();
-            stack.Push(node);
-
-            while (stack.Count > 0)
-            {
-                var current = stack.Pop();
-                foreach (var pre in GetDirectPrereqs(current))
-                {
-                    if (ancestors.Add(pre)) stack.Push(pre);
-                }
-            }
-            return ancestors;
         }
 
         /// <summary>

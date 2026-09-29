@@ -9,6 +9,9 @@ namespace ResearchOrganized.Layout
     /// left edge. Its research view uses 190 pixels per X unit, 100 pixels per Y unit, and a
     /// 140-pixel card width; using those values here makes the optimizer measure the geometry
     /// players actually see.
+    ///
+    /// Every edge handed here is taken to be a line on screen. Links drawn with nothing between
+    /// them are the caller's to filter out, with <see cref="LayoutGraph.DrawnOnly"/>.
     /// </summary>
     public static class CrossingCounter
     {

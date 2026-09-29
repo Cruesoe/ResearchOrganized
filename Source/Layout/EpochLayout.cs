@@ -77,6 +77,9 @@ namespace ResearchOrganized.Layout
                     PlaceNodesDAG(starters, ref currentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
                 }
 
+                // Leftmost column an anchor with a placed prerequisite may take: just past the starters.
+                int anchorFloor = currentColumn;
+
                 var remainingAnchors = new List<int>();
                 foreach (int a in epochAnchors) if (!placed[a]) remainingAnchors.Add(a);
 
@@ -137,32 +140,46 @@ namespace ResearchOrganized.Layout
 
                     foreach (int a in batch) remainingAnchors.Remove(a);
 
-                    int batchColumn = currentColumn;
+                    // An anchor that follows something already placed sits right after it, in the
+                    // first column with room for the batch whose next column has room for its
+                    // followers; otherwise, or with nothing placed before it, it goes after
+                    // everything so far, in a column of its own.
+                    bool followsPlaced = true;
+                    int batchColumn = anchorFloor;
                     foreach (int anchor in batch)
                     {
+                        bool hasPlacedParent = false;
                         var parents = graph.ParentsOf(anchor);
                         for (int i = 0; i < parents.Count; i++)
                         {
-                            if (placed[parents[i]]) batchColumn = Math.Max(batchColumn, column[parents[i]] + 1);
+                            if (!placed[parents[i]]) continue;
+                            hasPlacedParent = true;
+                            batchColumn = Math.Max(batchColumn, column[parents[i]] + 1);
                         }
+                        if (!hasPlacedParent) followsPlaced = false;
                     }
-                    currentColumn = batchColumn;
+                    if (!followsPlaced) batchColumn = Math.Max(batchColumn, currentColumn);
+                    while (batchColumn < currentColumn
+                        && (CountInColumn(occupied, batchColumn) + batch.Count > maxNodes
+                            || CountInColumn(occupied, batchColumn + 1) + batchCapacity > maxNodes))
+                        batchColumn++;
 
                     int cursor = 0;
                     foreach (int anchor in batch)
                     {
+                        int anchorRow = NearestFreeRow(occupied, batchColumn, cursor, maxNodes);
                         column[anchor] = batchColumn;
-                        row[anchor] = cursor;
-                        occupied.Add(Key(batchColumn, cursor));
+                        row[anchor] = anchorRow;
+                        occupied.Add(Key(batchColumn, anchorRow));
                         placed[anchor] = true;
 
                         var children = graph.ChildrenOf(anchor);
                         int directChildren = 0;
                         for (int i = 0; i < children.Count; i++) if (claimedBy.TryGetValue(children[i], out int owner) && owner == anchor) directChildren++;
-                        cursor += Math.Max(directChildren, 1);
+                        cursor = anchorRow + Math.Max(directChildren, 1);
                     }
 
-                    currentColumn = batchColumn + 1;
+                    currentColumn = Math.Max(currentColumn, batchColumn + 1);
 
                     var allDependents = new List<int>();
                     var seenDependent = new HashSet<int>();
@@ -173,8 +190,16 @@ namespace ResearchOrganized.Layout
 
                     if (allDependents.Count > 0)
                     {
-                        PlaceNodesDAG(allDependents, ref currentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
+                        int dependentColumn = batchColumn + 1;
+                        PlaceNodesDAG(allDependents, ref dependentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
+                        currentColumn = Math.Max(currentColumn, dependentColumn);
+                    }
 
+                    // Anchors are lifted out, centred, then set back down clear of each other below.
+                    foreach (int anchor in batch) occupied.Remove(Key(column[anchor], row[anchor]));
+
+                    if (allDependents.Count > 0)
+                    {
                         foreach (int anchor in batch)
                         {
                             int minRow = int.MaxValue, maxRow = int.MinValue;
@@ -187,26 +212,20 @@ namespace ResearchOrganized.Layout
                                 if (row[node] < minRow) minRow = row[node];
                                 if (row[node] > maxRow) maxRow = row[node];
                             }
-                            if (minRow != int.MaxValue)
-                            {
-                                occupied.Remove(Key(column[anchor], row[anchor]));
-                                row[anchor] = (minRow + maxRow) / 2;
-                                occupied.Add(Key(column[anchor], row[anchor]));
-                            }
+                            if (minRow != int.MaxValue) row[anchor] = (minRow + maxRow) / 2;
                         }
                     }
 
-                    // Centering can pull two anchors in the same batch to the same row -
-                    // keep them at least one row apart in the order they now fall.
+                    // Centering can pull two anchors in the same batch to the same row, or onto a
+                    // card already in a shared column - keep them apart in the order they now fall.
                     batch.Sort(delegate (int a, int b) { return row[a].CompareTo(row[b]); });
-                    for (int i = 1; i < batch.Count; i++)
+                    for (int i = 0; i < batch.Count; i++)
                     {
-                        if (row[batch[i]] - row[batch[i - 1]] < 1)
-                        {
-                            occupied.Remove(Key(column[batch[i]], row[batch[i]]));
-                            row[batch[i]] = row[batch[i - 1]] + 1;
-                            occupied.Add(Key(column[batch[i]], row[batch[i]]));
-                        }
+                        int anchor = batch[i];
+                        if (i > 0 && row[anchor] <= row[batch[i - 1]]) row[anchor] = row[batch[i - 1]] + 1;
+                        if (row[anchor] >= maxNodes || occupied.Contains(Key(column[anchor], row[anchor])))
+                            row[anchor] = NearestFreeRow(occupied, column[anchor], row[anchor], maxNodes);
+                        occupied.Add(Key(column[anchor], row[anchor]));
                     }
                 }
 
@@ -219,31 +238,26 @@ namespace ResearchOrganized.Layout
 
                 if (capstones.Count > 0)
                 {
-                    if (options.compactLinkedCapstones)
+                    // Each capstone gets a column entirely to itself at the end of the era,
+                    // centered on the vertical middle of everything else the era placed - it
+                    // reads as the era's own standalone finale, not sharing a column with
+                    // (and so competing for row space with) anything else.
+                    int minRow = int.MaxValue, maxRow = int.MinValue;
+                    foreach (int node in members)
                     {
-                        var linked = new List<int>();
-                        var unlinked = new List<int>();
-                        foreach (int capstone in capstones)
-                        {
-                            if (graph.ParentsOf(capstone).Count > 0) linked.Add(capstone);
-                            else unlinked.Add(capstone);
-                        }
-
-                        if (linked.Count > 0)
-                        {
-                            // A zero base lets each linked capstone derive its position from
-                            // its actual parents. Preserve currentColumn so later epochs still
-                            // begin after the complete current epoch, including unrelated arms.
-                            int compactColumn = 0;
-                            PlaceNodesDAG(linked, ref compactColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
-                            currentColumn = Math.Max(currentColumn, compactColumn);
-                        }
-                        if (unlinked.Count > 0)
-                            PlaceNodesDAG(unlinked, ref currentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
+                        if (!placed[node]) continue;
+                        if (row[node] < minRow) minRow = row[node];
+                        if (row[node] > maxRow) maxRow = row[node];
                     }
-                    else
+                    int centerRow = minRow == int.MaxValue ? 0 : (minRow + maxRow) / 2;
+
+                    foreach (int capstone in capstones)
                     {
-                        PlaceNodesDAG(capstones, ref currentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
+                        column[capstone] = currentColumn;
+                        row[capstone] = centerRow;
+                        occupied.Add(Key(currentColumn, centerRow));
+                        placed[capstone] = true;
+                        currentColumn++;
                     }
                 }
             }
@@ -452,6 +466,27 @@ namespace ResearchOrganized.Layout
             var list = new List<int>(seen);
             list.Sort();
             return list;
+        }
+
+        private static int CountInColumn(HashSet<long> occupied, int col)
+        {
+            int count = 0;
+            foreach (long key in occupied) if (ColumnOf(key) == col) count++;
+            return count;
+        }
+
+        /// <summary>The free row in <paramref name="col"/> closest to <paramref name="desired"/>, trying below before above.</summary>
+        private static int NearestFreeRow(HashSet<long> occupied, int col, int desired, int maxNodes)
+        {
+            if (desired >= maxNodes) desired = maxNodes - 1;
+            for (int offset = 0; offset < maxNodes; offset++)
+            {
+                int testRow = desired + offset;
+                if (testRow < maxNodes && !occupied.Contains(Key(col, testRow))) return testRow;
+                testRow = desired - offset;
+                if (offset > 0 && testRow >= 0 && !occupied.Contains(Key(col, testRow))) return testRow;
+            }
+            return desired;
         }
 
         private static long Key(int col, int row) { return ((long)col << 32) ^ (uint)row; }
