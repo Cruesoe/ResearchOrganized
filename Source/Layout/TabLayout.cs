@@ -27,12 +27,6 @@ namespace ResearchOrganized.Layout
         public int[] tieRank;
 
         /// <summary>
-        /// Preferred row for each node, normally derived from its authored Y coordinate.
-        /// Used only as a tie-break after connector crossings, never as a hard constraint.
-        /// </summary>
-        public int[] preferredRow;
-
-        /// <summary>
         /// A node that always goes last in its epoch, after everything else is placed,
         /// regardless of what prerequisites it does or does not have - an era's "advance to
         /// the next tech level" node, from mods like Node Research.
@@ -89,8 +83,13 @@ namespace ResearchOrganized.Layout
             var isCapstone = options.isCapstone ?? new bool[graph.NodeCount];
 
             EpochLayout.Compute(broken.Acyclic, options, epoch, isAnchor, anchorOrder, tieRank, isCapstone, column, row);
-            result.InitialCrossings = CrossingCounter.Count(broken.Acyclic, column, row, options.xStep, options.yStep);
-            RowOptimizer.Improve(broken.Acyclic, options, isAnchor, column, row);
+
+            // Columns come from every link; rows are tidied against the ones with a connector on
+            // screen. A hidden prerequisite still puts a card to the right of what it needs, but
+            // never drags one up or down to untangle a line nobody can see.
+            var drawn = broken.Acyclic.DrawnOnly();
+            result.InitialCrossings = CrossingCounter.Count(drawn, column, row, options.xStep, options.yStep);
+            RowOptimizer.Improve(drawn, options, isAnchor, column, row);
 
             for (int node = 0; node < graph.NodeCount; node++)
             {
@@ -99,16 +98,17 @@ namespace ResearchOrganized.Layout
                 result.Y[node] = row[node] * options.yStep;
             }
 
-            result.Crossings = CrossingCounter.Count(broken.Acyclic, column, row, options.xStep, options.yStep);
+            result.Crossings = CrossingCounter.Count(drawn, column, row, options.xStep, options.yStep);
             return result;
         }
 
         /// <summary>
         /// Lays out each bucket as if it were a tab of its own, then sets the buckets side by
         /// side in ascending bucket order with <paramref name="gapColumns"/> blank columns
-        /// between them, so a later bucket never starts before an earlier one ends. Edges
-        /// between buckets are still drawn but never steer placement, the same as edges
-        /// between tabs. Crossing counts are summed per bucket.
+        /// between them, so a later bucket never starts before an earlier one ends. An edge
+        /// between two buckets never steers placement, the same as an edge between two tabs -
+        /// and the window draws no line for it either, since the combined tab suppresses
+        /// connectors that cross eras. Crossing counts are summed per bucket.
         /// </summary>
         public static LayoutResult ComputeBuckets(LayoutGraph graph, LayoutOptions options, int[] bucket, int gapColumns)
         {
@@ -141,7 +141,8 @@ namespace ResearchOrganized.Layout
                     var children = graph.ChildrenOf(members[i]);
                     for (int c = 0; c < children.Count; c++)
                     {
-                        if (localIndex.TryGetValue(children[c], out int child)) sub.AddEdge(i, child);
+                        if (localIndex.TryGetValue(children[c], out int child))
+                            sub.AddEdge(i, child, graph.IsDrawn(members[i], children[c]));
                     }
                 }
 
@@ -154,7 +155,6 @@ namespace ResearchOrganized.Layout
                     isAnchor = Subset(options.isAnchor, members),
                     anchorOrder = Subset(options.anchorOrder, members),
                     tieRank = Subset(options.tieRank, members),
-                    preferredRow = Subset(options.preferredRow, members),
                     isCapstone = Subset(options.isCapstone, members)
                 };
 

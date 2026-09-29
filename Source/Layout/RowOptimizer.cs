@@ -7,6 +7,15 @@ namespace ResearchOrganized.Layout
     /// Improves rows without changing columns, anchors, epochs, or capacity. Barycentric sweeps
     /// make broad moves toward connected neighbours; adjacent swaps then refine the result.
     /// Swap scoring is local to incident edges, avoiding a full graph recount per candidate.
+    ///
+    /// Judged on the drawn tree alone - fewest crossing connectors, then shortest connectors.
+    /// Where a project sat in its own mod's XML is not considered: this layout moves nearly
+    /// every card anyway, and preferring the authored row used to outrank connector length,
+    /// which pulled a parent off the row its follower had already been aligned to.
+    ///
+    /// The caller passes the drawn view of the graph, so a link with no connector - a hidden
+    /// prerequisite, a virtual one - leaves no pull here at all: it has already had its say in
+    /// which column the card sits in, and there is no line to be seen crossing or wandering.
     /// </summary>
     public static class RowOptimizer
     {
@@ -15,21 +24,19 @@ namespace ResearchOrganized.Layout
         private struct Score
         {
             public int Crossings;
-            public long AuthoredMovement;
             public long VerticalSpan;
         }
 
         private struct LocalScore
         {
             public int Crossings;
-            public long AuthoredMovement;
             public long VerticalSpan;
         }
 
         public static void Improve(LayoutGraph graph, LayoutOptions options, bool[] isAnchor, int[] column, int[] row)
         {
             if (graph.NodeCount < 2) return;
-            if (graph.EdgeCount == 0 && (options.preferredRow == null || options.preferredRow.Length != graph.NodeCount)) return;
+            if (graph.EdgeCount == 0) return; // nothing to uncross or shorten
 
             List<LayoutGraph.Edge> edges = graph.AllEdges();
             Score current = Evaluate(graph, edges, options, column, row);
@@ -96,8 +103,6 @@ namespace ResearchOrganized.Layout
                 double secondCenter = Barycenter(graph, second, row, reverse);
                 int comparison = firstCenter.CompareTo(secondCenter);
                 if (comparison != 0) return comparison;
-                comparison = PreferredRow(options, first, row).CompareTo(PreferredRow(options, second, row));
-                if (comparison != 0) return comparison;
                 return first.CompareTo(second);
             });
 
@@ -106,11 +111,10 @@ namespace ResearchOrganized.Layout
                 if (candidateNodes[i] != originalNodes[i]) { changed = true; break; }
             if (!changed) return false;
 
-            var affectedNodes = new HashSet<int>(originalNodes);
-            HashSet<int> affectedEdges = IncidentEdges(edges, affectedNodes);
-            LocalScore before = EvaluateLocal(edges, options, column, row, affectedNodes, affectedEdges, graph);
+            HashSet<int> affectedEdges = IncidentEdges(edges, new HashSet<int>(originalNodes));
+            LocalScore before = EvaluateLocal(edges, options, column, row, affectedEdges, graph);
             for (int i = 0; i < candidateNodes.Count; i++) row[candidateNodes[i]] = slots[i];
-            LocalScore after = EvaluateLocal(edges, options, column, row, affectedNodes, affectedEdges, graph);
+            LocalScore after = EvaluateLocal(edges, options, column, row, affectedEdges, graph);
             Score candidate = ApplyDelta(current, before, after);
 
             if (IsBetter(candidate, current))
@@ -145,11 +149,10 @@ namespace ResearchOrganized.Layout
                     int second = nodes[i + 1];
                     if (isAnchor[first] || isAnchor[second]) continue;
 
-                    var affectedNodes = new HashSet<int> { first, second };
-                    HashSet<int> affectedEdges = IncidentEdges(edges, affectedNodes);
-                    LocalScore before = EvaluateLocal(edges, options, column, row, affectedNodes, affectedEdges, graph);
+                    HashSet<int> affectedEdges = IncidentEdges(edges, new HashSet<int> { first, second });
+                    LocalScore before = EvaluateLocal(edges, options, column, row, affectedEdges, graph);
                     Swap(row, first, second);
-                    LocalScore after = EvaluateLocal(edges, options, column, row, affectedNodes, affectedEdges, graph);
+                    LocalScore after = EvaluateLocal(edges, options, column, row, affectedEdges, graph);
                     Score candidate = ApplyDelta(current, before, after);
 
                     if (IsBetter(candidate, current))
@@ -186,30 +189,21 @@ namespace ResearchOrganized.Layout
             return (double)total / neighbours.Count;
         }
 
-        private static int PreferredRow(LayoutOptions options, int node, int[] row)
-        {
-            return options.preferredRow != null && options.preferredRow.Length > node ? options.preferredRow[node] : row[node];
-        }
-
         private static Score Evaluate(LayoutGraph graph, List<LayoutGraph.Edge> edges, LayoutOptions options, int[] column, int[] row)
         {
             var score = new Score { Crossings = CrossingCounter.Count(graph, column, row, options.xStep, options.yStep) };
-            for (int node = 0; node < graph.NodeCount; node++)
-                score.AuthoredMovement += Math.Abs((long)row[node] - PreferredRow(options, node, row));
             for (int i = 0; i < edges.Count; i++)
                 score.VerticalSpan += Math.Abs((long)row[edges[i].Parent] - row[edges[i].Child]);
             return score;
         }
 
         private static LocalScore EvaluateLocal(List<LayoutGraph.Edge> edges, LayoutOptions options, int[] column, int[] row,
-            HashSet<int> affectedNodes, HashSet<int> affectedEdges, LayoutGraph graph)
+            HashSet<int> affectedEdges, LayoutGraph graph)
         {
             var score = new LocalScore
             {
                 Crossings = CrossingCounter.CountAffected(graph, edges, column, row, options.xStep, options.yStep, affectedEdges)
             };
-            foreach (int node in affectedNodes)
-                score.AuthoredMovement += Math.Abs((long)row[node] - PreferredRow(options, node, row));
             foreach (int edgeIndex in affectedEdges)
             {
                 LayoutGraph.Edge edge = edges[edgeIndex];
@@ -231,7 +225,6 @@ namespace ResearchOrganized.Layout
             return new Score
             {
                 Crossings = current.Crossings - before.Crossings + after.Crossings,
-                AuthoredMovement = current.AuthoredMovement - before.AuthoredMovement + after.AuthoredMovement,
                 VerticalSpan = current.VerticalSpan - before.VerticalSpan + after.VerticalSpan
             };
         }
@@ -239,7 +232,6 @@ namespace ResearchOrganized.Layout
         private static bool IsBetter(Score candidate, Score current)
         {
             if (candidate.Crossings != current.Crossings) return candidate.Crossings < current.Crossings;
-            if (candidate.AuthoredMovement != current.AuthoredMovement) return candidate.AuthoredMovement < current.AuthoredMovement;
             return candidate.VerticalSpan < current.VerticalSpan;
         }
 
