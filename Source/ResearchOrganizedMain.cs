@@ -671,6 +671,9 @@ namespace ResearchOrganized
             return groups;
         }
 
+        /// <summary>Projects that are always major anchors when they have follow-ups in their group, whatever the thresholds.</summary>
+        private static readonly HashSet<string> ForcedMajorAnchors = new HashSet<string> { "ShipBasics" };
+
         /// <summary>
         /// Picks one group's hubs and their placement order, counting only links whose both ends
         /// are in the group. Order is numbered from zero per group; <see cref="EpochLayout"/> only
@@ -715,6 +718,7 @@ namespace ResearchOrganized
             {
                 if (ResearchOrganizedLayout.IsEraCapstone(proj)) continue; // never itself a hub - it always goes last, not off to the side with a fan of its own
                 if (!childrenMap.TryGetValue(proj, out var children)) continue;
+                if (ForcedMajorAnchors.Contains(proj.defName)) { majorAnchors.Add(proj); continue; }
 
                 int nonMajorChildren = children.Count(c => !majorAnchors.Contains(c));
                 if (majorThreshold > 0 && nonMajorChildren >= majorThreshold) { majorAnchors.Add(proj); continue; }
