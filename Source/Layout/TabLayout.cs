@@ -13,8 +13,14 @@ namespace ResearchOrganized.Layout
         /// <summary>Which tech level (or other grouping) each node belongs to. Processed in ascending order.</summary>
         public int[] epoch;
 
-        /// <summary>Whether each node is a hub that should hold a column of its own.</summary>
+        /// <summary>Whether each node is a hub, placed ahead of the followers it claims.</summary>
         public bool[] isAnchor;
+
+        /// <summary>Whether each anchor is a major hub: placed alone, in a new column after everything placed before it.</summary>
+        public bool[] isMajorAnchor;
+
+        /// <summary>Whether each node is its era's finale: the last anchor placed in its epoch, followed only by its own descendants.</summary>
+        public bool[] isFinale;
 
         /// <summary>
         /// Global placement order for anchors, lower first - normally shallowest in the
@@ -32,6 +38,10 @@ namespace ResearchOrganized.Layout
         /// the next tech level" node, from mods like Node Research.
         /// </summary>
         public bool[] isCapstone;
+
+        /// <summary>When set, placement decisions are appended here as text, naming nodes from <see cref="nodeNames"/>.</summary>
+        public List<string> trace;
+        public string[] nodeNames;
     }
 
     public sealed class LayoutResult
@@ -82,7 +92,9 @@ namespace ResearchOrganized.Layout
             var anchorOrder = options.anchorOrder ?? new int[graph.NodeCount];
             var isCapstone = options.isCapstone ?? new bool[graph.NodeCount];
 
-            EpochLayout.Compute(broken.Acyclic, options, epoch, isAnchor, anchorOrder, tieRank, isCapstone, column, row);
+            var isMajorAnchor = options.isMajorAnchor ?? new bool[graph.NodeCount];
+            var isFinale = options.isFinale ?? new bool[graph.NodeCount];
+            EpochLayout.Compute(broken.Acyclic, options, epoch, isAnchor, isMajorAnchor, isFinale, anchorOrder, tieRank, isCapstone, column, row);
 
             // Columns come from every link; rows are tidied against the ones with a connector on
             // screen. A hidden prerequisite still puts a card to the right of what it needs, but
@@ -104,13 +116,14 @@ namespace ResearchOrganized.Layout
 
         /// <summary>
         /// Lays out each bucket as if it were a tab of its own, then sets the buckets side by
-        /// side in ascending bucket order with <paramref name="gapColumns"/> blank columns
-        /// between them, so a later bucket never starts before an earlier one ends. An edge
+        /// side in ascending bucket order with a <paramref name="gapColumns"/>-column gap (fractions allowed)
+        /// between them, so a later bucket never starts before an earlier one ends. The gap is in X only:
+        /// <see cref="LayoutResult.Layer"/> numbers columns across buckets without it. An edge
         /// between two buckets never steers placement, the same as an edge between two tabs -
         /// and the window draws no line for it either, since the combined tab suppresses
         /// connectors that cross eras. Crossing counts are summed per bucket.
         /// </summary>
-        public static LayoutResult ComputeBuckets(LayoutGraph graph, LayoutOptions options, int[] bucket, int gapColumns)
+        public static LayoutResult ComputeBuckets(LayoutGraph graph, LayoutOptions options, int[] bucket, float gapColumns)
         {
             if (options == null) options = new LayoutOptions();
 
@@ -127,6 +140,7 @@ namespace ResearchOrganized.Layout
             bucketValues.Sort();
 
             int columnOffset = 0;
+            float gapOffset = 0f;
             foreach (int value in bucketValues)
             {
                 var members = new List<int>();
@@ -153,10 +167,16 @@ namespace ResearchOrganized.Layout
                     maxNodesPerColumn = options.maxNodesPerColumn,
                     epoch = Subset(options.epoch, members),
                     isAnchor = Subset(options.isAnchor, members),
+                    isMajorAnchor = Subset(options.isMajorAnchor, members),
+                    isFinale = Subset(options.isFinale, members),
                     anchorOrder = Subset(options.anchorOrder, members),
                     tieRank = Subset(options.tieRank, members),
-                    isCapstone = Subset(options.isCapstone, members)
+                    isCapstone = Subset(options.isCapstone, members),
+                    trace = options.trace,
+                    nodeNames = Subset(options.nodeNames, members)
                 };
+                if (options.trace != null)
+                    options.trace.Add(string.Format("== bucket {0}: {1} projects, starts at column {2} (columns below are local to the bucket)", value, members.Count, columnOffset));
 
                 var part = Compute(sub, subOptions);
 
@@ -165,7 +185,7 @@ namespace ResearchOrganized.Layout
                 {
                     int column = part.Layer[i] + columnOffset;
                     result.Layer[members[i]] = column;
-                    result.X[members[i]] = column * options.xStep;
+                    result.X[members[i]] = (column + gapOffset) * options.xStep;
                     result.Y[members[i]] = part.Y[i];
                     if (part.Layer[i] + 1 > width) width = part.Layer[i] + 1;
                 }
@@ -176,7 +196,8 @@ namespace ResearchOrganized.Layout
                 result.InitialCrossings += part.InitialCrossings;
                 result.Crossings += part.Crossings;
 
-                columnOffset += width + gapColumns;
+                columnOffset += width;
+                gapOffset += gapColumns;
             }
 
             return result;

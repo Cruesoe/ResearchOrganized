@@ -31,7 +31,7 @@ namespace ResearchOrganized
             new Dictionary<ResearchProjectDef, bool>();
 
         /// <summary>Blank columns between two era blocks on the combined tab.</summary>
-        private const int EraGapColumns = 1;
+        private const float EraGapColumns = 0.5f;
 
         /// <summary>
         /// A project's era block on the combined tab, lowest drawn first. Projects with no tech
@@ -70,6 +70,14 @@ namespace ResearchOrganized
         private static bool HasDrawnConnector(ResearchProjectDef def, ResearchProjectDef prereq)
         {
             return def.prerequisites != null && def.prerequisites.Contains(prereq);
+        }
+
+        /// <summary>Projects placed last in their era, after every other hub, with only their own follow-ups behind them.</summary>
+        private static readonly HashSet<string> EraFinales = new HashSet<string> { "ShipBasics" };
+
+        public static bool IsEraFinale(ResearchProjectDef def)
+        {
+            return def?.defName != null && EraFinales.Contains(def.defName);
         }
 
         public static bool IsEraCapstone(ResearchProjectDef def)
@@ -140,7 +148,7 @@ namespace ResearchOrganized
         /// right, with a blank column between blocks - the single tab "Combine All Tabs" produces.</param>
         public static void ApplyLayout(List<ResearchProjectDef> tabNodes, string tabName,
             HashSet<ResearchProjectDef> anchors, Dictionary<ResearchProjectDef, int> anchorOrder,
-            bool eraBuckets = false)
+            HashSet<ResearchProjectDef> majorAnchors, bool eraBuckets = false)
         {
             if (tabNodes == null || tabNodes.Count == 0) return;
 
@@ -149,6 +157,8 @@ namespace ResearchOrganized
             var options = BuildOptions(tabName);
             options.epoch = new int[tabNodes.Count];
             options.isAnchor = new bool[tabNodes.Count];
+            options.isMajorAnchor = new bool[tabNodes.Count];
+            options.isFinale = new bool[tabNodes.Count];
             options.anchorOrder = new int[tabNodes.Count];
             options.isCapstone = new bool[tabNodes.Count];
 
@@ -156,10 +166,21 @@ namespace ResearchOrganized
             {
                 options.epoch[i] = (int)tabNodes[i].techLevel;
                 options.isAnchor[i] = anchors.Contains(tabNodes[i]);
+                options.isMajorAnchor[i] = majorAnchors.Contains(tabNodes[i]);
                 anchorOrder.TryGetValue(tabNodes[i], out options.anchorOrder[i]);
-                options.isCapstone[i] = IsEraCapstone(tabNodes[i]);
+                options.isFinale[i] = IsEraFinale(tabNodes[i]);
+                // A finale with no followers of its own simply goes last in its era.
+                options.isCapstone[i] = IsEraCapstone(tabNodes[i]) || (options.isFinale[i] && !options.isAnchor[i]);
             }
             options.tieRank = BuildTieRank(tabNodes);
+
+            bool writeLog = ResearchOrganizedMod.settings != null && ResearchOrganizedMod.settings.writeLayoutLog;
+            if (writeLog)
+            {
+                options.trace = new List<string>();
+                options.nodeNames = new string[tabNodes.Count];
+                for (int i = 0; i < tabNodes.Count; i++) options.nodeNames[i] = tabNodes[i].defName;
+            }
 
             LayoutResult result;
             if (eraBuckets)
@@ -180,6 +201,33 @@ namespace ResearchOrganized
             }
 
             ReportCycles(tabNodes, tabName, result);
+            if (writeLog) WriteLayoutLog(tabNodes, tabName, options, result);
+        }
+
+        /// <summary>Writes the placement trace and every project's final column, row and hub type to the log.</summary>
+        private static void WriteLayoutLog(List<ResearchProjectDef> tabNodes, string tabName, LayoutOptions options, LayoutResult result)
+        {
+            var settings = ResearchOrganizedMod.settings;
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine(string.Format("[Research: Organized] Layout log for tab '{0}' ({1} projects; minor {2}, major {3}, max {4} per column, combine all {5}, combine industrial {6})",
+                tabName, tabNodes.Count, settings.minorAnchorChildThreshold, settings.majorAnchorChildThreshold, options.maxNodesPerColumn,
+                settings.combineAllTabs, settings.combineIndustrial));
+            foreach (string line in options.trace) sb.AppendLine(line);
+
+            sb.AppendLine("-- final positions (column row | defName | label | tech level | hub | prerequisites)");
+            var order = new List<int>(tabNodes.Count);
+            for (int i = 0; i < tabNodes.Count; i++) order.Add(i);
+            order.Sort((a, b) => result.Layer[a] != result.Layer[b] ? result.Layer[a].CompareTo(result.Layer[b]) : result.Y[a].CompareTo(result.Y[b]));
+            foreach (int i in order)
+            {
+                var def = tabNodes[i];
+                string hub = options.isFinale[i] && options.isAnchor[i] ? "finale" : options.isMajorAnchor[i] ? "major" : options.isAnchor[i] ? "minor" : options.isCapstone[i] ? "capstone" : "-";
+                var prereqs = new List<string>();
+                foreach (var pre in GetDirectPrereqs(def)) prereqs.Add(pre.defName + "(" + pre.techLevel + ")");
+                sb.AppendLine(string.Format("{0,3} {1,2} | {2} | {3} | {4} | {5} | {6}",
+                    result.Layer[i], (int)System.Math.Round(result.Y[i] / options.yStep), def.defName, def.label, def.techLevel, hub, string.Join(", ", prereqs.ToArray())));
+            }
+            Log.Message(sb.ToString());
         }
 
         /// <summary>

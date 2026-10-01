@@ -13,6 +13,7 @@ namespace ResearchOrganized
         public bool disableCustomColors = false;
         public bool showTabProjectCounts = false;
         public bool suppressEmergenceLines = true;
+        public bool writeLayoutLog = false;
 
         public Color colorUndefined = new Color(0.60f, 0.60f, 0.60f);
         public Color colorAnimal = new Color(0.45f, 0.33f, 0.24f);
@@ -34,6 +35,7 @@ namespace ResearchOrganized
             Scribe_Values.Look(ref disableCustomColors, "disableCustomColors", false);
             Scribe_Values.Look(ref showTabProjectCounts, "showTabProjectCounts", false);
             Scribe_Values.Look(ref suppressEmergenceLines, "suppressEmergenceLines", true);
+            Scribe_Values.Look(ref writeLayoutLog, "writeLayoutLog", false);
             Scribe_Values.Look(ref colorUndefined, "colorUndefined", new Color(0.60f, 0.60f, 0.60f));
             Scribe_Values.Look(ref colorAnimal, "colorAnimal", new Color(0.45f, 0.33f, 0.24f));
             Scribe_Values.Look(ref colorNeolithic, "colorNeolithic", new Color(0.40f, 0.00f, 0.00f));
@@ -54,6 +56,7 @@ namespace ResearchOrganized
             disableCustomColors = defaults.disableCustomColors;
             showTabProjectCounts = defaults.showTabProjectCounts;
             suppressEmergenceLines = defaults.suppressEmergenceLines;
+            writeLayoutLog = defaults.writeLayoutLog;
             colorUndefined = defaults.colorUndefined;
             colorAnimal = defaults.colorAnimal;
             colorNeolithic = defaults.colorNeolithic;
@@ -84,6 +87,7 @@ namespace ResearchOrganized
         private bool appliedCombineIndustrial;
         private int appliedMinorAnchorThreshold;
         private int appliedMajorAnchorThreshold;
+        private bool appliedWriteLayoutLog;
 
         private string minorThresholdBuffer;
         private string majorThresholdBuffer;
@@ -95,6 +99,7 @@ namespace ResearchOrganized
             appliedCombineIndustrial = settings.combineIndustrial;
             appliedMinorAnchorThreshold = settings.minorAnchorChildThreshold;
             appliedMajorAnchorThreshold = settings.majorAnchorChildThreshold;
+            appliedWriteLayoutLog = settings.writeLayoutLog;
             minorThresholdBuffer = settings.minorAnchorChildThreshold.ToString();
             majorThresholdBuffer = settings.majorAnchorChildThreshold.ToString();
         }
@@ -113,7 +118,8 @@ namespace ResearchOrganized
             bool structureChanged = settings.combineAllTabs != appliedCombineAllTabs
                                  || settings.combineIndustrial != appliedCombineIndustrial
                                  || settings.minorAnchorChildThreshold != appliedMinorAnchorThreshold
-                                 || settings.majorAnchorChildThreshold != appliedMajorAnchorThreshold;
+                                 || settings.majorAnchorChildThreshold != appliedMajorAnchorThreshold
+                                 || (settings.writeLayoutLog && !appliedWriteLayoutLog);
 
             base.WriteSettings();
             ResearchOrganizedMain.RefreshColors();
@@ -126,6 +132,7 @@ namespace ResearchOrganized
                 appliedMajorAnchorThreshold = settings.majorAnchorChildThreshold;
                 ResearchOrganizedMain.OrganizeTabsAndLayout();
             }
+            appliedWriteLayoutLog = settings.writeLayoutLog;
         }
 
         public override void DoSettingsWindowContents(Rect inRect)
@@ -166,6 +173,12 @@ namespace ResearchOrganized
             Widgets.Label(new Rect(majorRect.x, majorRect.y, majorRect.width - 60f, majorRect.height), "Follow-ups for a major anchor:");
             Widgets.TextFieldNumeric(new Rect(majorRect.xMax - 50f, majorRect.y, 50f, majorRect.height),
                 ref settings.majorAnchorChildThreshold, ref majorThresholdBuffer, 2f, 99f);
+            TooltipHandler.TipRegion(majorRect, "A major anchor starts a new column after everything before it and stands alone in it.");
+
+            listing.Gap();
+
+            listing.CheckboxLabeled("Write Layout Log", ref settings.writeLayoutLog,
+                "Writes every project's column, row and hub type, and each hub's placement decisions, to Player.log whenever the layout is built.");
 
             listing.Gap();
 

@@ -64,6 +64,8 @@ namespace ResearchOrganized
         private static readonly FieldInfo researchWindowSelectedProjectField = AccessTools.Field(typeof(MainTabWindow_Research), "selectedProject");
         private static readonly MethodInfo researchWindowUpdateSelectedMethod = AccessTools.Method(typeof(MainTabWindow_Research), "UpdateSelectedProject");
         private static FieldInfo researchWindowTabsField;
+        private static readonly FieldInfo researchWindowScrollPositionerField = AccessTools.Field(typeof(MainTabWindow_Research), "scrollPositioner");
+        private static Game lastResearchWindowGame;
 
         private static readonly Dictionary<ResearchProjectDef, bool> reqMultiCache = new Dictionary<ResearchProjectDef, bool>();
         private static readonly Dictionary<ResearchProjectDef, bool> reqHiTechCache = new Dictionary<ResearchProjectDef, bool>();
@@ -152,6 +154,13 @@ namespace ResearchOrganized
             }
             semiRandomResearchActive = AccessTools.TypeByName(SemiRandomResearchPatchType) != null;
 
+            // Vanilla PreOpen arms a scroll to the current project on every open; keep the view where it was left instead.
+            var preOpenMethod = AccessTools.Method(typeof(MainTabWindow_Research), nameof(MainTabWindow_Research.PreOpen));
+            if (preOpenMethod != null && researchWindowScrollPositionerField != null)
+            {
+                harmony.Patch(preOpenMethod, postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(KeepScrollOnReopen)));
+            }
+
             OrganizeTabsAndLayout();
         }
 
@@ -209,6 +218,14 @@ namespace ResearchOrganized
             return texture;
         }
         private static bool semiRandomResearchActive;
+
+        /// <summary>Disarms vanilla's scroll to the current project on every open but the first in each game.</summary>
+        public static void KeepScrollOnReopen(MainTabWindow_Research __instance)
+        {
+            if (lastResearchWindowGame == Current.Game)
+                (researchWindowScrollPositionerField.GetValue(__instance) as ScrollPositioner)?.Arm(false);
+            lastResearchWindowGame = Current.Game;
+        }
 
         public static void DrawSettingsButton(MainTabWindow_Research __instance, Rect leftOutRect)
         {
@@ -446,7 +463,7 @@ namespace ResearchOrganized
                 var combinedTab = CombinedTab;
                 activeCombinedTab = combinedTab;
                 Dictionary<ResearchProjectDef, int> anchorOrder;
-                var anchors = FindAnchors(combinedTab, out anchorOrder);
+                var anchors = FindAnchors(combinedTab, out anchorOrder, out var majorAnchors);
 
                 foreach (var tab in activeTabs)
                 {
@@ -458,7 +475,7 @@ namespace ResearchOrganized
                     // abort this loop, leaving every remaining tab at its authored layout.
                     try
                     {
-                        ResearchOrganizedLayout.ApplyLayout(projects, tab.defName, anchors, anchorOrder,
+                        ResearchOrganizedLayout.ApplyLayout(projects, tab.defName, anchors, anchorOrder, majorAnchors,
                             eraBuckets: tab == combinedTab);
                     }
                     catch (Exception ex)
@@ -635,14 +652,17 @@ namespace ResearchOrganized
         /// </summary>
         /// <param name="combinedTab">The "Combine All Tabs" tab, if any. Its era blocks are laid
         /// out as separate tabs would be, so each is its own group.</param>
-        private static HashSet<ResearchProjectDef> FindAnchors(ResearchTabDef combinedTab, out Dictionary<ResearchProjectDef, int> anchorOrder)
+        /// <param name="majorAnchors">The anchors that are major hubs, each placed alone in a new column.</param>
+        private static HashSet<ResearchProjectDef> FindAnchors(ResearchTabDef combinedTab, out Dictionary<ResearchProjectDef, int> anchorOrder,
+            out HashSet<ResearchProjectDef> majorAnchors)
         {
             var anchors = new HashSet<ResearchProjectDef>();
             anchorOrder = new Dictionary<ResearchProjectDef, int>();
+            majorAnchors = new HashSet<ResearchProjectDef>();
 
             foreach (var group in GroupProjectsForLayout(combinedTab))
             {
-                FindAnchorsInGroup(group, anchors, anchorOrder);
+                FindAnchorsInGroup(group, anchors, anchorOrder, majorAnchors);
             }
 
             return anchors;
@@ -681,7 +701,7 @@ namespace ResearchOrganized
         /// anything across groups.
         /// </summary>
         private static void FindAnchorsInGroup(List<ResearchProjectDef> group,
-            HashSet<ResearchProjectDef> anchors, Dictionary<ResearchProjectDef, int> anchorOrder)
+            HashSet<ResearchProjectDef> anchors, Dictionary<ResearchProjectDef, int> anchorOrder, HashSet<ResearchProjectDef> majors)
         {
             var inGroup = new HashSet<ResearchProjectDef>(group);
 
@@ -743,6 +763,7 @@ namespace ResearchOrganized
                 anchors.Add(anchorList[i]);
                 anchorOrder[anchorList[i]] = i;
             }
+            majors.UnionWith(majorAnchors);
         }
 
         /// <summary>Everything <paramref name="node"/> depends on without leaving its group.</summary>

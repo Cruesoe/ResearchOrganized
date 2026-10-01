@@ -27,6 +27,8 @@ namespace ResearchOrganized.Layout
             LayoutOptions options,
             int[] epoch,
             bool[] isAnchor,
+            bool[] isMajorAnchor,
+            bool[] isFinale,
             int[] anchorOrder,
             int[] tieRank,
             bool[] isCapstone,
@@ -38,9 +40,14 @@ namespace ResearchOrganized.Layout
 
             var placed = new bool[n];
             var occupied = new HashSet<long>();
+            var reserved = new HashSet<int>(); // columns held alone by a major anchor
             int currentColumn = 0;
 
             var ancestorCache = new HashSet<int>[n];
+
+            // An era finale is placed after every other anchor in its epoch and claims all of its own descendants.
+            anchorOrder = (int[])anchorOrder.Clone();
+            for (int node = 0; node < n; node++) if (isFinale[node] && isAnchor[node]) anchorOrder[node] = int.MaxValue;
 
             foreach (int epochValue in DistinctSorted(epoch))
             {
@@ -60,11 +67,20 @@ namespace ResearchOrganized.Layout
                 var epochAnchors = new List<int>();
                 foreach (int node in members) if (isAnchor[node]) epochAnchors.Add(node);
                 epochAnchors.Sort(delegate (int a, int b) { return anchorOrder[a].CompareTo(anchorOrder[b]); });
+                if (options.trace != null)
+                {
+                    var kinds = new List<string>();
+                    foreach (int a in epochAnchors) kinds.Add(Name(options, a) + (isFinale[a] ? " (finale)" : isMajorAnchor[a] ? " (major)" : " (minor)"));
+                    Trace(options, "-- epoch {0}: {1} projects; anchors in order: {2}", epochValue, members.Count, kinds.Count > 0 ? string.Join(", ", kinds.ToArray()) : "none");
+                }
 
                 // Anything that is not an anchor and does not descend from one of this
                 // epoch's anchors goes first - the cheap, early projects a colony researches
                 // before it ever reaches for the big hub, shown before that hub rather than
                 // scattered behind it.
+                // Leftmost column an anchor with a placed prerequisite may take: the epoch's first column.
+                int anchorFloor = currentColumn;
+
                 var starters = new List<int>();
                 foreach (int node in members)
                 {
@@ -74,19 +90,22 @@ namespace ResearchOrganized.Layout
 
                 if (starters.Count > 0)
                 {
-                    PlaceNodesDAG(starters, ref currentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
+                    PlaceNodesDAG(starters, ref currentColumn, placed, column, row, occupied, reserved, graph, maxNodes, tieRank);
+                    Trace(options, "starters: {0} projects in columns {1}-{2}", starters.Count, anchorFloor, currentColumn - 1);
                 }
-
-                // Leftmost column an anchor with a placed prerequisite may take: just past the starters.
-                int anchorFloor = currentColumn;
 
                 var remainingAnchors = new List<int>();
                 foreach (int a in epochAnchors) if (!placed[a]) remainingAnchors.Add(a);
 
                 while (remainingAnchors.Count > 0)
                 {
+                    // A finale waits until it is the only anchor left.
+                    var candidates = new List<int>();
+                    foreach (int a in remainingAnchors) if (!isFinale[a]) candidates.Add(a);
+                    if (candidates.Count == 0) candidates.AddRange(remainingAnchors);
+
                     var ready = new List<int>();
-                    foreach (int a in remainingAnchors)
+                    foreach (int a in candidates)
                     {
                         if (AllResolved(graph.ParentsOf(a), epoch, epochValue, placed)) ready.Add(a);
                     }
@@ -95,12 +114,12 @@ namespace ResearchOrganized.Layout
                     {
                         // Every remaining anchor in this epoch depends on another one still
                         // waiting - place whichever is closest to ready first.
-                        int fallback = remainingAnchors[0];
+                        int fallback = candidates[0];
                         int fewest = CountUnplacedSameEpoch(graph.ParentsOf(fallback), epoch, epochValue, placed);
-                        for (int i = 1; i < remainingAnchors.Count; i++)
+                        for (int i = 1; i < candidates.Count; i++)
                         {
-                            int count = CountUnplacedSameEpoch(graph.ParentsOf(remainingAnchors[i]), epoch, epochValue, placed);
-                            if (count < fewest) { fewest = count; fallback = remainingAnchors[i]; }
+                            int count = CountUnplacedSameEpoch(graph.ParentsOf(candidates[i]), epoch, epochValue, placed);
+                            if (count < fewest) { fewest = count; fallback = candidates[i]; }
                         }
                         ready.Add(fallback);
                     }
@@ -130,6 +149,8 @@ namespace ResearchOrganized.Layout
                         for (int i = 0; i < children.Count; i++) if (claimedBy.TryGetValue(children[i], out int owner) && owner == anchor) directChildren++;
 
                         int required = Math.Max(directChildren, 1);
+                        // A major anchor is never batched with another anchor.
+                        if (batch.Count > 0 && (isMajorAnchor[anchor] || isMajorAnchor[batch[0]])) continue;
                         if (batch.Count == 0 || batchCapacity + required <= maxNodes)
                         {
                             batch.Add(anchor);
@@ -140,10 +161,10 @@ namespace ResearchOrganized.Layout
 
                     foreach (int a in batch) remainingAnchors.Remove(a);
 
-                    // An anchor that follows something already placed sits right after it, in the
-                    // first column with room for the batch whose next column has room for its
-                    // followers and where it can sit centred on them; otherwise, or with nothing
-                    // placed before it, it goes after everything so far, in a column of its own.
+                    // An anchor sits right after anything already placed before it (or from the epoch's
+                    // first column with nothing placed), even among the starters, in the first column with
+                    // room for the batch whose next column has room for its followers and where it can sit
+                    // centred on them. A major anchor always goes after everything so far, alone in its column.
                     bool followsPlaced = true;
                     int batchColumn = anchorFloor;
                     foreach (int anchor in batch)
@@ -158,7 +179,15 @@ namespace ResearchOrganized.Layout
                         }
                         if (!hasPlacedParent) followsPlaced = false;
                     }
-                    if (!followsPlaced) batchColumn = Math.Max(batchColumn, currentColumn);
+                    bool majorBatch = isMajorAnchor[batch[0]];
+                    if (majorBatch) batchColumn = Math.Max(batchColumn, currentColumn);
+                    if (options.trace != null)
+                    {
+                        var names = new List<string>();
+                        foreach (int a in batch) names.Add(Name(options, a));
+                        Trace(options, "batch [{0}]: {1} follower slot(s), follows placed prerequisite: {2}, major: {3}; first column tried {4}, next fresh column {5}",
+                            string.Join(", ", names.ToArray()), batchCapacity, followsPlaced, majorBatch, batchColumn, currentColumn);
+                    }
 
                     var allDependents = new List<int>();
                     var seenDependent = new HashSet<int>();
@@ -173,10 +202,16 @@ namespace ResearchOrganized.Layout
                     int dependentColumn;
                     while (true)
                     {
-                        while (batchColumn < currentColumn
-                            && (CountInColumn(occupied, batchColumn) + batch.Count > maxNodes
-                                || CountInColumn(occupied, batchColumn + 1) + batchCapacity > maxNodes))
+                        while (batchColumn < currentColumn)
+                        {
+                            string skip = reserved.Contains(batchColumn) ? "held by a major anchor"
+                                : CountInColumn(occupied, batchColumn) + batch.Count > maxNodes ? "no room for the batch"
+                                : CountInColumn(occupied, batchColumn + 1) + batchCapacity > maxNodes ? "no room for its followers in the next column"
+                                : null;
+                            if (skip == null) break;
+                            Trace(options, "  column {0} skipped: {1}", batchColumn, skip);
                             batchColumn++;
+                        }
                         bool sharedColumn = batchColumn < currentColumn;
 
                         int cursor = 0;
@@ -196,7 +231,7 @@ namespace ResearchOrganized.Layout
 
                         dependentColumn = batchColumn + 1;
                         if (allDependents.Count > 0)
-                            PlaceNodesDAG(allDependents, ref dependentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
+                            PlaceNodesDAG(allDependents, ref dependentColumn, placed, column, row, occupied, reserved, graph, maxNodes, tieRank);
 
                         // Anchors are lifted out, centred, then set back down clear of each other below.
                         foreach (int anchor in batch) occupied.Remove(Key(column[anchor], row[anchor]));
@@ -220,6 +255,12 @@ namespace ResearchOrganized.Layout
                         }
 
                         if (!sharedColumn || CentredRowsFree(batch, column, row, occupied, maxNodes)) break;
+                        if (options.trace != null)
+                        {
+                            var rows = new List<string>();
+                            foreach (int a in batch) rows.Add(Name(options, a) + " row " + row[a]);
+                            Trace(options, "  column {0} skipped: centred row taken or shared ({1})", batchColumn, string.Join(", ", rows.ToArray()));
+                        }
 
                         foreach (int anchor in batch) placed[anchor] = false;
                         foreach (int node in allDependents)
@@ -230,6 +271,8 @@ namespace ResearchOrganized.Layout
                         batchColumn++;
                     }
 
+                    if (majorBatch) reserved.Add(batchColumn);
+                    Trace(options, "  placed in column {0}; {1} follower(s) in columns {2}-{3}", batchColumn, allDependents.Count, batchColumn + 1, dependentColumn - 1);
                     currentColumn = Math.Max(currentColumn, batchColumn + 1);
                     if (allDependents.Count > 0) currentColumn = Math.Max(currentColumn, dependentColumn);
 
@@ -250,7 +293,8 @@ namespace ResearchOrganized.Layout
                 foreach (int node in members) if (!placed[node]) orphaned.Add(node);
                 if (orphaned.Count > 0)
                 {
-                    PlaceNodesDAG(orphaned, ref currentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
+                    Trace(options, "orphans: {0} project(s) placed from column {1}", orphaned.Count, currentColumn);
+                    PlaceNodesDAG(orphaned, ref currentColumn, placed, column, row, occupied, reserved, graph, maxNodes, tieRank);
                 }
 
                 if (capstones.Count > 0)
@@ -270,6 +314,7 @@ namespace ResearchOrganized.Layout
 
                     foreach (int capstone in capstones)
                     {
+                        Trace(options, "capstone {0} in column {1}", Name(options, capstone), currentColumn);
                         column[capstone] = currentColumn;
                         row[capstone] = centerRow;
                         occupied.Add(Key(currentColumn, centerRow));
@@ -287,7 +332,7 @@ namespace ResearchOrganized.Layout
         /// nearest free row once the cap on a column is reached.
         /// </summary>
         private static void PlaceNodesDAG(List<int> nodesToPlace, ref int currentColumn, bool[] placed,
-            int[] column, int[] row, HashSet<long> occupied, LayoutGraph graph, int maxNodes, int[] tieRank)
+            int[] column, int[] row, HashSet<long> occupied, HashSet<int> reserved, LayoutGraph graph, int maxNodes, int[] tieRank)
         {
             int baseColumn = currentColumn;
             var unplaced = new HashSet<int>(nodesToPlace);
@@ -329,7 +374,7 @@ namespace ResearchOrganized.Layout
                 {
                     int countInColumn = 0;
                     foreach (long key in occupied) if (ColumnOf(key) == chosenColumn) countInColumn++;
-                    if (countInColumn >= maxNodes) { chosenColumn++; chosenRow = desiredRow; continue; }
+                    if (countInColumn >= maxNodes || reserved.Contains(chosenColumn)) { chosenColumn++; chosenRow = desiredRow; continue; }
 
                     bool found = false;
                     for (int offset = 0; offset < maxNodes; offset++)
@@ -496,6 +541,16 @@ namespace ResearchOrganized.Layout
                 if (!taken.Add(row[anchor])) return false;
             }
             return true;
+        }
+
+        private static void Trace(LayoutOptions options, string format, params object[] args)
+        {
+            if (options.trace != null) options.trace.Add(string.Format(format, args));
+        }
+
+        private static string Name(LayoutOptions options, int node)
+        {
+            return options.nodeNames != null && node < options.nodeNames.Length ? options.nodeNames[node] : "#" + node;
         }
 
         private static int CountInColumn(HashSet<long> occupied, int col)
