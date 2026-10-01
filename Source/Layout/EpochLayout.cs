@@ -142,8 +142,8 @@ namespace ResearchOrganized.Layout
 
                     // An anchor that follows something already placed sits right after it, in the
                     // first column with room for the batch whose next column has room for its
-                    // followers; otherwise, or with nothing placed before it, it goes after
-                    // everything so far, in a column of its own.
+                    // followers and where it can sit centred on them; otherwise, or with nothing
+                    // placed before it, it goes after everything so far, in a column of its own.
                     bool followsPlaced = true;
                     int batchColumn = anchorFloor;
                     foreach (int anchor in batch)
@@ -159,27 +159,6 @@ namespace ResearchOrganized.Layout
                         if (!hasPlacedParent) followsPlaced = false;
                     }
                     if (!followsPlaced) batchColumn = Math.Max(batchColumn, currentColumn);
-                    while (batchColumn < currentColumn
-                        && (CountInColumn(occupied, batchColumn) + batch.Count > maxNodes
-                            || CountInColumn(occupied, batchColumn + 1) + batchCapacity > maxNodes))
-                        batchColumn++;
-
-                    int cursor = 0;
-                    foreach (int anchor in batch)
-                    {
-                        int anchorRow = NearestFreeRow(occupied, batchColumn, cursor, maxNodes);
-                        column[anchor] = batchColumn;
-                        row[anchor] = anchorRow;
-                        occupied.Add(Key(batchColumn, anchorRow));
-                        placed[anchor] = true;
-
-                        var children = graph.ChildrenOf(anchor);
-                        int directChildren = 0;
-                        for (int i = 0; i < children.Count; i++) if (claimedBy.TryGetValue(children[i], out int owner) && owner == anchor) directChildren++;
-                        cursor = anchorRow + Math.Max(directChildren, 1);
-                    }
-
-                    currentColumn = Math.Max(currentColumn, batchColumn + 1);
 
                     var allDependents = new List<int>();
                     var seenDependent = new HashSet<int>();
@@ -188,33 +167,71 @@ namespace ResearchOrganized.Layout
                         foreach (int node in dependentsByAnchor[anchor]) if (seenDependent.Add(node)) allDependents.Add(node);
                     }
 
-                    if (allDependents.Count > 0)
+                    // A column shared with earlier cards is kept only if every anchor can sit centred
+                    // on its followers there; otherwise the batch is undone and tried one column right.
+                    // A fresh column (at currentColumn) always holds the batch.
+                    int dependentColumn;
+                    while (true)
                     {
-                        int dependentColumn = batchColumn + 1;
-                        PlaceNodesDAG(allDependents, ref dependentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
-                        currentColumn = Math.Max(currentColumn, dependentColumn);
-                    }
+                        while (batchColumn < currentColumn
+                            && (CountInColumn(occupied, batchColumn) + batch.Count > maxNodes
+                                || CountInColumn(occupied, batchColumn + 1) + batchCapacity > maxNodes))
+                            batchColumn++;
+                        bool sharedColumn = batchColumn < currentColumn;
 
-                    // Anchors are lifted out, centred, then set back down clear of each other below.
-                    foreach (int anchor in batch) occupied.Remove(Key(column[anchor], row[anchor]));
-
-                    if (allDependents.Count > 0)
-                    {
+                        int cursor = 0;
                         foreach (int anchor in batch)
                         {
-                            int minRow = int.MaxValue, maxRow = int.MinValue;
-                            foreach (int node in dependentsByAnchor[anchor])
-                            {
-                                var children = graph.ChildrenOf(anchor);
-                                bool isDirectChild = false;
-                                for (int i = 0; i < children.Count; i++) if (children[i] == node) { isDirectChild = true; break; }
-                                if (!isDirectChild) continue;
-                                if (row[node] < minRow) minRow = row[node];
-                                if (row[node] > maxRow) maxRow = row[node];
-                            }
-                            if (minRow != int.MaxValue) row[anchor] = (minRow + maxRow) / 2;
+                            int anchorRow = NearestFreeRow(occupied, batchColumn, cursor, maxNodes);
+                            column[anchor] = batchColumn;
+                            row[anchor] = anchorRow;
+                            occupied.Add(Key(batchColumn, anchorRow));
+                            placed[anchor] = true;
+
+                            var children = graph.ChildrenOf(anchor);
+                            int directChildren = 0;
+                            for (int i = 0; i < children.Count; i++) if (claimedBy.TryGetValue(children[i], out int owner) && owner == anchor) directChildren++;
+                            cursor = anchorRow + Math.Max(directChildren, 1);
                         }
+
+                        dependentColumn = batchColumn + 1;
+                        if (allDependents.Count > 0)
+                            PlaceNodesDAG(allDependents, ref dependentColumn, placed, column, row, occupied, graph, maxNodes, tieRank);
+
+                        // Anchors are lifted out, centred, then set back down clear of each other below.
+                        foreach (int anchor in batch) occupied.Remove(Key(column[anchor], row[anchor]));
+
+                        if (allDependents.Count > 0)
+                        {
+                            foreach (int anchor in batch)
+                            {
+                                int minRow = int.MaxValue, maxRow = int.MinValue;
+                                foreach (int node in dependentsByAnchor[anchor])
+                                {
+                                    var children = graph.ChildrenOf(anchor);
+                                    bool isDirectChild = false;
+                                    for (int i = 0; i < children.Count; i++) if (children[i] == node) { isDirectChild = true; break; }
+                                    if (!isDirectChild) continue;
+                                    if (row[node] < minRow) minRow = row[node];
+                                    if (row[node] > maxRow) maxRow = row[node];
+                                }
+                                if (minRow != int.MaxValue) row[anchor] = (minRow + maxRow) / 2;
+                            }
+                        }
+
+                        if (!sharedColumn || CentredRowsFree(batch, column, row, occupied, maxNodes)) break;
+
+                        foreach (int anchor in batch) placed[anchor] = false;
+                        foreach (int node in allDependents)
+                        {
+                            occupied.Remove(Key(column[node], row[node]));
+                            placed[node] = false;
+                        }
+                        batchColumn++;
                     }
+
+                    currentColumn = Math.Max(currentColumn, batchColumn + 1);
+                    if (allDependents.Count > 0) currentColumn = Math.Max(currentColumn, dependentColumn);
 
                     // Centering can pull two anchors in the same batch to the same row, or onto a
                     // card already in a shared column - keep them apart in the order they now fall.
@@ -466,6 +483,19 @@ namespace ResearchOrganized.Layout
             var list = new List<int>(seen);
             list.Sort();
             return list;
+        }
+
+        /// <summary>Whether every anchor in <paramref name="batch"/> has its centred row free, in range and unshared within the batch.</summary>
+        private static bool CentredRowsFree(List<int> batch, int[] column, int[] row, HashSet<long> occupied, int maxNodes)
+        {
+            var taken = new HashSet<int>();
+            foreach (int anchor in batch)
+            {
+                if (row[anchor] < 0 || row[anchor] >= maxNodes) return false;
+                if (occupied.Contains(Key(column[anchor], row[anchor]))) return false;
+                if (!taken.Add(row[anchor])) return false;
+            }
+            return true;
         }
 
         private static int CountInColumn(HashSet<long> occupied, int col)
