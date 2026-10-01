@@ -733,7 +733,7 @@ namespace ResearchOrganized
             {
                 int byDepth = ancestorCounts[a].CompareTo(ancestorCounts[b]);
                 if (byDepth != 0) return byDepth;
-                int byTier = (majorAnchors.Contains(a) ? 0 : 1).CompareTo(majorAnchors.Contains(b) ? 0 : 1);
+                int byTier = (majorAnchors.Contains(a) ? 1 : 0).CompareTo(majorAnchors.Contains(b) ? 1 : 0); // minor hubs before major ones at equal depth
                 if (byTier != 0) return byTier;
                 return string.CompareOrdinal(a.defName, b.defName);
             });
