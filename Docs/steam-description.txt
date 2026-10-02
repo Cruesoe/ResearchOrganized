@@ -1,31 +1,36 @@
-Sorts research projects into tech-level tabs and lays each tab out as a tidy, readable tree.
+This mod sorts research into the right tech level tabs and organizes the tree.
+In some cases the result is not strictly linear, but I believe it makes the tree much more readable in highly modded games.
 
-[h1]Tabs[/h1]
+[h2]Key Features[/h2]
 [list]
-[*]Projects are grouped into Primitive, Neolithic, Medieval, Industrial, High and Late Industrial, Spacer, Ultra, Archotech, Anomaly and Miscellaneous tabs.
-[*][b]Combine All Tabs[/b] puts every project except Anomaly and Gravship on the Main tab, with each tech level in its own block from left to right.
-[*][b]Combine Industrial[/b] merges High and Late Industrial back into one Industrial tab.
-[*]Tab tooltips show completed projects and research points, and the counts can be shown on the tabs too.
-[*]Empty tabs are hidden.
+[*][b]Era-Specific Tabs:[/b] Technologies are automatically routed to their tech level tabs: Primitive, Neolithic, Medieval, Industrial, Spacer, Ultra and Archotech. Empty tabs are hidden.
+[*][b]Single Tab View:[/b] Prefer one tree? Combine All Tabs puts everything except Anomaly and Gravship on the Main tab, with each era in its own block from left to right. (Optional!)
+[*][b]The Industrial Split:[/b] The Industrial era is divided into three tabs: Industrial, High Industrial (requires the Hi-Tech Research Bench) and Late Industrial (requires the Multi-Analyzer). Combine Industrial merges them back into one. (Optional!)
+[*][b]Anomaly Integration:[/b] Entity knowledge technologies are moved to the Anomaly tab.
+[*][b]Clean Layout Engine:[/b] No overlapping nodes and fewer crossing lines. Follow-ups sit to the right of what they need, big hubs stand out on their own, and branches fill the space beside their prerequisites instead of trailing off the end of the tab.
+[*][b]Era Consistency:[/b] A technology is raised to the era of its prerequisites, so a follow-up never sits in an earlier era than what it needs. Its research cost changes to match.
+[*][b]Dynamic Tech Coloring:[/b] Nodes are colored by era and shaded by status (Unavailable, Available, Researched).
+[*][b]Choose Your Colors:[/b] Don't like the colors I chose? Change them for each tab, or turn them off.
+[*][b]Handy Extras:[/b] Tab tooltips show completed projects and research points, the research window remembers where you scrolled, and a gear button opens the settings.
 [/list]
 
-[h1]Layout[/h1]
+[h2]Works With[/h2]
 [list]
-[*]Every tab gets a clean, non-overlapping layout with fewer crossing lines.
-[*]Follow-ups sit to the right of what they depend on, and branches fill the free space beside their prerequisites instead of trailing off the end of the tab.
-[*]A project is raised to the tech level of its prerequisites, so a follow-up never sits in an earlier era than what it needs. Its research cost changes to match.
-[*]Projects caught in a circular dependency are outlined in red and named in the log.
+[*][b]Node Research:[/b] foundation technologies get a gold corner mark, and you can switch freely between its node view and these tabs.
+[*][b]Semi Random Research Pfork Continued:[/b] its button and the settings gear sit side by side.
+[*][b]Research Icons[/b]
+[*][b]ProgressionLESS[/b] and [b]VFE Tribals[/b]: their research lands in the right tabs.
 [/list]
 
-[h1]Look[/h1]
 [list]
-[*]Cards are tinted by tech level, with configurable colours that can also be turned off.
-[*]A gear in the research window opens the mod settings.
+[*]Safe to add to or remove from existing save files.
+[*]Built to organize heavily modded loadouts automatically.
+[*][b]Tested and confirmed working with:[/b] Ferny's Progression mod pack and Path of the Muffalo (as long as you remove the conflicts!).
 [/list]
 
-[h1]Compatibility[/h1]
+[h2]Special Thanks & Inspiration[/h2]
 [list]
-[*][b]Node Research:[/b] foundation technologies get a gold corner mark, emergence nodes stay beside their branch without cluttering lines, and you can switch freely between its node view and these tabs.
-[*][b]ProgressionLESS:[/b] loads after every mod in the suite, so their research lands in the right tabs.
-[*][b]VFE Tribals:[/b] its Basics tab takes the Primitive projects.
+[*]This project was heavily inspired by the fantastic work of other creators. A massive thank you to [b]Leo39994[/b] (Clean Research Sort), [b]Aelanna[/b] (Research Tab Colours), [b]Mlie[/b] (Organized Research Tab [Continued]) and [b]Laz[/b] (Organized Research Tab).
+[*]A huge thank you to [b]Ferny[/b] (Progression mod pack) and [b]LordBeef[/b] (Path of the Muffalo) for their mod packs, which were invaluable during testing.
+[*]Thank you to the broader RimWorld modding community for constantly expanding the game and making organizational tools like this necessary!
 [/list]
