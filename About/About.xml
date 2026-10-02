@@ -4,7 +4,7 @@
 	<name>Research: Organized</name>
 	<author>Cruesoe</author>
 	<packageId>cruesoe.research.organized</packageId>
-	<modVersion>260930</modVersion>
+	<modVersion>261002</modVersion>
 	<description>Sorts research projects into tech-level tabs and lays each tab out as a tidy, readable tree.
 
 Tabs
