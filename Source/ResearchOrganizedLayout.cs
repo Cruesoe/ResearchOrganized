@@ -31,7 +31,7 @@ namespace ResearchOrganized
             new Dictionary<ResearchProjectDef, bool>();
 
         /// <summary>Blank columns between two era blocks on the combined tab.</summary>
-        private const float EraGapColumns = 0.5f;
+        private const float EraGapColumns = 0.25f;
 
         /// <summary>
         /// A project's era block on the combined tab, lowest drawn first. Projects with no tech
