@@ -139,10 +139,34 @@ namespace ResearchOrganized
             appliedWriteLayoutLog = settings.writeLayoutLog;
         }
 
+        private Vector2 settingsScroll;
+        private float settingsHeight = 1000f;
+
         public override void DoSettingsWindowContents(Rect inRect)
         {
+            const float ResetButtonHeight = 32f;
+            Rect outRect = new Rect(inRect.x, inRect.y, inRect.width, inRect.height - ResetButtonHeight - 10f);
+            Rect viewRect = new Rect(0f, 0f, outRect.width - 16f, settingsHeight);
+
+            Widgets.BeginScrollView(outRect, ref settingsScroll, viewRect);
             Listing_Standard listing = new Listing_Standard();
-            listing.Begin(inRect);
+            listing.Begin(viewRect);
+
+            SectionHeader(listing, "Research Window");
+
+            listing.CheckboxLabeled("Hide Unavailable Projects", ref settings.hideUnavailableProjects,
+                "Shows only finished projects and projects that can be started now. Projects missing a "
+              + "prerequisite, techprint, research bench or other requirement are hidden until they become available.");
+
+            listing.CheckboxLabeled("Show Tab Project Counts", ref settings.showTabProjectCounts,
+                "Shows completed/total project counts next to each tab's name. Every tab's tooltip "
+              + "always shows project and research point totals, regardless of this setting.");
+
+            listing.CheckboxLabeled("Suppress Emergence Lines", ref settings.suppressEmergenceLines,
+                "Hides prerequisite lines into or out of Node Research's emergence nodes unless "
+              + "one end is selected. Turn off to always show those lines.");
+
+            SectionHeader(listing, "Tabs");
 
             listing.CheckboxLabeled("Combine All Tabs", ref settings.combineAllTabs,
                 "Puts every technology except Anomaly and Gravship on the Main tab, laid out in one "
@@ -150,9 +174,13 @@ namespace ResearchOrganized
 
             if (settings.combineAllTabs)
             {
+                Rect industrialRect = listing.GetRect(24f);
                 GUI.color = Color.gray;
-                listing.Label("Combine Industrial (included in Combine All Tabs)");
+                Widgets.Label(industrialRect, "Combine Industrial");
                 GUI.color = Color.white;
+                Widgets.CheckboxDraw(industrialRect.xMax - 24f, industrialRect.y, true, true);
+                TooltipHandler.TipRegion(industrialRect, "Included in Combine All Tabs. Turn that off to choose this separately.");
+                listing.Gap(listing.verticalSpacing);
             }
             else
             {
@@ -160,11 +188,26 @@ namespace ResearchOrganized
                     "Merges High and Late Industrial technologies back into the main Industrial tab.");
             }
 
-            listing.Gap();
+            SectionHeader(listing, "Colors");
 
-            Text.Font = GameFont.Medium;
-            listing.Label("Anchor Projects");
-            Text.Font = GameFont.Small;
+            bool useColors = !settings.disableCustomColors;
+            listing.CheckboxLabeled("Color Cards by Tech Level", ref useColors,
+                "Tints each finished project card with its tech level's color. Turn off for vanilla colors.");
+            settings.disableCustomColors = !useColors;
+
+            listing.Gap(6f);
+            DrawColorPalette(listing, "Undefined / Misc", ref settings.colorUndefined, useColors);
+            DrawColorPalette(listing, "Animal / Primitive", ref settings.colorAnimal, useColors);
+            DrawColorPalette(listing, "Neolithic", ref settings.colorNeolithic, useColors);
+            DrawColorPalette(listing, "Medieval", ref settings.colorMedieval, useColors);
+            DrawColorPalette(listing, "Industrial", ref settings.colorIndustrial, useColors);
+            DrawColorPalette(listing, "Spacer", ref settings.colorSpacer, useColors);
+            DrawColorPalette(listing, "Ultra", ref settings.colorUltra, useColors);
+            DrawColorPalette(listing, "Archotech", ref settings.colorArchotech, useColors);
+            DrawColorPalette(listing, "Anomaly", ref settings.colorAnomaly, useColors);
+
+            SectionHeader(listing, "Layout");
+
             listing.Label("A project with this many direct follow-ups on its own tab is treated as a hub: it keeps its "
                         + "place in the tree when a column is full, and the lesser projects move aside instead.");
 
@@ -172,95 +215,69 @@ namespace ResearchOrganized
             Widgets.Label(new Rect(minorRect.x, minorRect.y, minorRect.width - 60f, minorRect.height), "Follow-ups for a minor anchor:");
             Widgets.TextFieldNumeric(new Rect(minorRect.xMax - 50f, minorRect.y, 50f, minorRect.height),
                 ref settings.minorAnchorChildThreshold, ref minorThresholdBuffer, 1f, 99f);
+            listing.Gap(listing.verticalSpacing);
 
             Rect majorRect = listing.GetRect(24f);
             Widgets.Label(new Rect(majorRect.x, majorRect.y, majorRect.width - 60f, majorRect.height), "Follow-ups for a major anchor:");
             Widgets.TextFieldNumeric(new Rect(majorRect.xMax - 50f, majorRect.y, 50f, majorRect.height),
                 ref settings.majorAnchorChildThreshold, ref majorThresholdBuffer, 2f, 99f);
             TooltipHandler.TipRegion(majorRect, "A major anchor starts a new column after everything before it and stands alone in it.");
-
-            listing.Gap();
+            listing.Gap(listing.verticalSpacing);
 
             listing.CheckboxLabeled("Write Layout Log", ref settings.writeLayoutLog,
                 "Writes every project's column, row and hub type, and each hub's placement decisions, to Player.log whenever the layout is built.");
 
-            listing.Gap();
+            settingsHeight = listing.CurHeight + 10f;
+            listing.End();
+            Widgets.EndScrollView();
 
-            listing.GapLine();
-
-            listing.CheckboxLabeled("Disable Custom Colors", ref settings.disableCustomColors,
-                "Reverts research nodes to their default vanilla colors.");
-
-            listing.Gap();
-
-            listing.CheckboxLabeled("Show Tab Project Counts", ref settings.showTabProjectCounts,
-                "Shows completed/total project counts next to each tab's name. Every tab's tooltip "
-              + "always shows project and research point totals, regardless of this setting.");
-
-            listing.Gap();
-
-            listing.CheckboxLabeled("Suppress Emergence Lines", ref settings.suppressEmergenceLines,
-                "Hides prerequisite lines into or out of Node Research's emergence nodes unless "
-              + "one end is selected. Turn off to always show those lines.");
-
-            listing.Gap();
-
-            listing.CheckboxLabeled("Hide Unavailable Projects", ref settings.hideUnavailableProjects,
-                "Shows only finished projects and projects that can be started now. Projects missing a "
-              + "prerequisite, techprint, research bench or other requirement are hidden until they become available.");
-
-            listing.Gap();
-
-            if (!settings.disableCustomColors)
-            {
-                Text.Font = GameFont.Medium;
-                listing.Label("Tab Theme Colors (Finished State)");
-                Text.Font = GameFont.Small;
-                listing.Gap();
-
-                DrawColorPalette(listing, "Undefined / Misc", ref settings.colorUndefined);
-                DrawColorPalette(listing, "Animal / Primitive", ref settings.colorAnimal);
-                DrawColorPalette(listing, "Neolithic", ref settings.colorNeolithic);
-                DrawColorPalette(listing, "Medieval", ref settings.colorMedieval);
-                DrawColorPalette(listing, "Industrial", ref settings.colorIndustrial);
-                DrawColorPalette(listing, "Spacer", ref settings.colorSpacer);
-                DrawColorPalette(listing, "Ultra", ref settings.colorUltra);
-                DrawColorPalette(listing, "Archotech", ref settings.colorArchotech);
-                DrawColorPalette(listing, "Anomaly", ref settings.colorAnomaly);
-            }
-
-            listing.GapLine();
-
-            if (listing.ButtonText("Reset to Defaults"))
+            Listing_Standard footer = new Listing_Standard();
+            footer.Begin(new Rect(inRect.x, inRect.yMax - ResetButtonHeight, 200f, ResetButtonHeight));
+            if (footer.ButtonText("Reset to Defaults"))
             {
                 settings.CopyFrom(new ResearchOrganizedSettings());
                 minorThresholdBuffer = settings.minorAnchorChildThreshold.ToString();
                 majorThresholdBuffer = settings.majorAnchorChildThreshold.ToString();
             }
+            footer.End();
 
-            listing.End();
             base.DoSettingsWindowContents(inRect);
 
             ResearchOrganizedMain.RefreshColors();
         }
 
-        private void DrawColorPalette(Listing_Standard listing, string label, ref Color selectedColor)
+        private static void SectionHeader(Listing_Standard listing, string title)
+        {
+            if (listing.CurHeight > 0f) listing.GapLine();
+            Text.Font = GameFont.Medium;
+            listing.Label(title);
+            Text.Font = GameFont.Small;
+            listing.Gap(4f);
+        }
+
+        private void DrawColorPalette(Listing_Standard listing, string label, ref Color selectedColor, bool enabled)
         {
             Rect rect = listing.GetRect(28f);
+            if (!enabled)
+            {
+                GUI.color = Color.gray;
+                TooltipHandler.TipRegion(rect, "Requires Color Cards by Tech Level.");
+            }
             Widgets.Label(new Rect(rect.x, rect.y + 4f, 150f, rect.height), label);
 
             float curX = rect.x + 160f;
             foreach (Color color in Palette)
             {
                 Rect swatchRect = new Rect(curX, rect.y + 2f, 24f, 24f);
-                Widgets.DrawBoxSolid(swatchRect, color);
+                Widgets.DrawBoxSolid(swatchRect, enabled ? color : Color.Lerp(color, Color.gray, 0.6f));
 
                 if (ColorsMatch(color, selectedColor)) Widgets.DrawBox(swatchRect, 2);
 
-                if (Widgets.ButtonInvisible(swatchRect)) selectedColor = color;
+                if (enabled && Widgets.ButtonInvisible(swatchRect)) selectedColor = color;
 
                 curX += 28f;
             }
+            GUI.color = Color.white;
         }
 
         private bool ColorsMatch(Color a, Color b)
