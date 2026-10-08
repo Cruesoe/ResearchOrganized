@@ -141,6 +141,10 @@ namespace ResearchOrganized
             var doWindowContentsMethod = AccessTools.Method(typeof(MainTabWindow_Research), "DoWindowContents");
             if (doWindowContentsMethod != null && researchWindowTabsField != null && researchTabRecordDefField != null)
             {
+                // Vanilla PostOpen refills the tab strip with every tab; empty ones are dropped again on the next draw.
+                harmony.Patch(AccessTools.Method(typeof(MainTabWindow_Research), nameof(MainTabWindow_Research.PostOpen)),
+                    postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(MarkTabStripDirty)));
+                harmony.Patch(doWindowContentsMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(RefreshTabStripIfDirty)));
                 harmony.Patch(doWindowContentsMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(UpdateTabLabelsWithCounts)));
             }
 
@@ -270,18 +274,8 @@ namespace ResearchOrganized
                 if (window == null || researchWindowTabsField == null || researchTabRecordCtor == null || researchWindowCurTabField == null) return;
                 if (!(researchWindowTabsField.GetValue(window) is System.Collections.IList tabs)) return;
 
-                tabs.Clear();
-                foreach (var tabDef in DefDatabase<ResearchTabDef>.AllDefs)
-                {
-                    var def = tabDef;
-                    Action clicked = () =>
-                    {
-                        window.CurTab = def;
-                        researchWindowUpdateSelectedMethod?.Invoke(window, new object[] { Find.ResearchManager });
-                    };
-                    Func<bool> selected = () => window.CurTab == def;
-                    tabs.Add(researchTabRecordCtor.Invoke(new object[] { def, (string)def.LabelCap, clicked, selected }));
-                }
+                BuildTabStrip(window, tabs, null);
+                tabStripDirty = true;
 
                 var target = window.CurTab;
                 if (target == null || !DefDatabase<ResearchTabDef>.AllDefsListForReading.Contains(target))
@@ -304,6 +298,55 @@ namespace ResearchOrganized
         }
 
         private static bool researchWindowWidthStale;
+
+        /// <summary>Set when the window's visible projects may have changed; the next draw rebuilds the tab strip.</summary>
+        public static bool tabStripDirty = true;
+
+        /// <summary>Fills the window's tab strip the way vanilla PostOpen does, keeping only <paramref name="shown"/> tabs when given.</summary>
+        private static void BuildTabStrip(MainTabWindow_Research window, System.Collections.IList tabs, HashSet<ResearchTabDef> shown)
+        {
+            tabs.Clear();
+            foreach (var tabDef in DefDatabase<ResearchTabDef>.AllDefs)
+            {
+                if (shown != null && !shown.Contains(tabDef)) continue;
+                var def = tabDef;
+                Action clicked = () =>
+                {
+                    window.CurTab = def;
+                    researchWindowUpdateSelectedMethod?.Invoke(window, new object[] { Find.ResearchManager });
+                };
+                Func<bool> selected = () => window.CurTab == def;
+                tabs.Add(researchTabRecordCtor.Invoke(new object[] { def, (string)def.LabelCap, clicked, selected }));
+            }
+        }
+
+        /// <summary>While a visibility filter is on, drops tabs with no visible project from the strip and moves off a dropped current tab.</summary>
+        public static void RefreshTabStripIfDirty(MainTabWindow_Research __instance)
+        {
+            if (!tabStripDirty || researchTabRecordCtor == null) return;
+            if (!(researchWindowTabsField.GetValue(__instance) is System.Collections.IList tabs)) return;
+            // Reading the list may rebuild it, which marks the strip dirty again; clear the flag afterwards.
+            var visible = __instance.VisibleResearchProjects;
+            tabStripDirty = false;
+
+            var settings = ResearchOrganizedMod.settings;
+            HashSet<ResearchTabDef> shown = null;
+            if (settings.hideUnavailableProjects || settings.hideFutureTechLevels)
+            {
+                shown = new HashSet<ResearchTabDef>(visible.Select(p => p.tab).Where(t => t != null));
+                if (shown.Count == 0) shown = null;
+            }
+            BuildTabStrip(__instance, tabs, shown);
+
+            if (shown == null || shown.Contains(__instance.CurTab)) return;
+            var selectedTab = (researchWindowSelectedProjectField?.GetValue(__instance) as ResearchProjectDef)?.tab;
+            var target = selectedTab != null && shown.Contains(selectedTab)
+                ? selectedTab
+                : DefDatabase<ResearchTabDef>.AllDefsListForReading.First(shown.Contains);
+            ApplyCurTab(__instance, target);
+        }
+
+        public static void MarkTabStripDirty() => tabStripDirty = true;
 
         /// <summary>Sets the tab through the setter; clearing the backing field first makes it recompute the view width.</summary>
         private static void ApplyCurTab(MainTabWindow_Research window, ResearchTabDef tab)

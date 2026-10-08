@@ -43,6 +43,7 @@ namespace ResearchOrganized
         /// <summary>Filters the freshly built cache in place, so the check runs once per rebuild rather than every frame.</summary>
         public static void FilterOnRebuild(List<ResearchProjectDef> __result, bool __state)
         {
+            if (__state) ResearchOrganizedMain.MarkTabStripDirty();
             var settings = ResearchOrganizedMod.settings;
             if (!__state || __result == null || !(settings.hideUnavailableProjects || settings.hideFutureTechLevels)) return;
             if (Current.ProgramState != ProgramState.Playing || Find.ResearchManager == null) return;
