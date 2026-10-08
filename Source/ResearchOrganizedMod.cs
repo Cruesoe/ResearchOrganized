@@ -15,6 +15,7 @@ namespace ResearchOrganized
         public bool suppressEmergenceLines = true;
         public bool writeLayoutLog = false;
         public bool hideUnavailableProjects = false;
+        public bool hideFutureTechLevels = false;
 
         public Color colorUndefined = new Color(0.60f, 0.60f, 0.60f);
         public Color colorAnimal = new Color(0.45f, 0.33f, 0.24f);
@@ -38,6 +39,7 @@ namespace ResearchOrganized
             Scribe_Values.Look(ref suppressEmergenceLines, "suppressEmergenceLines", true);
             Scribe_Values.Look(ref writeLayoutLog, "writeLayoutLog", false);
             Scribe_Values.Look(ref hideUnavailableProjects, "hideUnavailableProjects", false);
+            Scribe_Values.Look(ref hideFutureTechLevels, "hideFutureTechLevels", false);
             Scribe_Values.Look(ref colorUndefined, "colorUndefined", new Color(0.60f, 0.60f, 0.60f));
             Scribe_Values.Look(ref colorAnimal, "colorAnimal", new Color(0.45f, 0.33f, 0.24f));
             Scribe_Values.Look(ref colorNeolithic, "colorNeolithic", new Color(0.40f, 0.00f, 0.00f));
@@ -60,6 +62,7 @@ namespace ResearchOrganized
             suppressEmergenceLines = defaults.suppressEmergenceLines;
             writeLayoutLog = defaults.writeLayoutLog;
             hideUnavailableProjects = defaults.hideUnavailableProjects;
+            hideFutureTechLevels = defaults.hideFutureTechLevels;
             colorUndefined = defaults.colorUndefined;
             colorAnimal = defaults.colorAnimal;
             colorNeolithic = defaults.colorNeolithic;
@@ -157,6 +160,10 @@ namespace ResearchOrganized
             listing.CheckboxLabeled("Hide Unavailable Projects", ref settings.hideUnavailableProjects,
                 "Shows only finished projects and projects that can be started now. Projects missing a "
               + "prerequisite, techprint, research bench or other requirement are hidden until they become available.");
+
+            listing.CheckboxLabeled("Hide Future Tech Levels", ref settings.hideFutureTechLevels,
+                "Hides unfinished projects above your colony's tech level. Your tech level comes from your starting "
+              + "faction, and rises as Node Research's emergence projects are completed.");
 
             listing.CheckboxLabeled("Show Tab Project Counts", ref settings.showTabProjectCounts,
                 "Shows completed/total project counts next to each tab's name. Every tab's tooltip "
