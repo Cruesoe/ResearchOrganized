@@ -161,6 +161,8 @@ namespace ResearchOrganized
                 harmony.Patch(preOpenMethod, postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(KeepScrollOnReopen)));
             }
 
+            UnavailableProjectFilter.Patch(harmony);
+
             OrganizeTabsAndLayout();
         }
 

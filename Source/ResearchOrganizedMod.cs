@@ -14,6 +14,7 @@ namespace ResearchOrganized
         public bool showTabProjectCounts = false;
         public bool suppressEmergenceLines = true;
         public bool writeLayoutLog = false;
+        public bool hideUnavailableProjects = false;
 
         public Color colorUndefined = new Color(0.60f, 0.60f, 0.60f);
         public Color colorAnimal = new Color(0.45f, 0.33f, 0.24f);
@@ -36,6 +37,7 @@ namespace ResearchOrganized
             Scribe_Values.Look(ref showTabProjectCounts, "showTabProjectCounts", false);
             Scribe_Values.Look(ref suppressEmergenceLines, "suppressEmergenceLines", true);
             Scribe_Values.Look(ref writeLayoutLog, "writeLayoutLog", false);
+            Scribe_Values.Look(ref hideUnavailableProjects, "hideUnavailableProjects", false);
             Scribe_Values.Look(ref colorUndefined, "colorUndefined", new Color(0.60f, 0.60f, 0.60f));
             Scribe_Values.Look(ref colorAnimal, "colorAnimal", new Color(0.45f, 0.33f, 0.24f));
             Scribe_Values.Look(ref colorNeolithic, "colorNeolithic", new Color(0.40f, 0.00f, 0.00f));
@@ -57,6 +59,7 @@ namespace ResearchOrganized
             showTabProjectCounts = defaults.showTabProjectCounts;
             suppressEmergenceLines = defaults.suppressEmergenceLines;
             writeLayoutLog = defaults.writeLayoutLog;
+            hideUnavailableProjects = defaults.hideUnavailableProjects;
             colorUndefined = defaults.colorUndefined;
             colorAnimal = defaults.colorAnimal;
             colorNeolithic = defaults.colorNeolithic;
@@ -123,6 +126,7 @@ namespace ResearchOrganized
 
             base.WriteSettings();
             ResearchOrganizedMain.RefreshColors();
+            UnavailableProjectFilter.Invalidate();
 
             if (structureChanged)
             {
@@ -198,6 +202,12 @@ namespace ResearchOrganized
             listing.CheckboxLabeled("Suppress Emergence Lines", ref settings.suppressEmergenceLines,
                 "Hides prerequisite lines into or out of Node Research's emergence nodes unless "
               + "one end is selected. Turn off to always show those lines.");
+
+            listing.Gap();
+
+            listing.CheckboxLabeled("Hide Unavailable Projects", ref settings.hideUnavailableProjects,
+                "Shows only finished projects and projects that can be started now. Projects missing a "
+              + "prerequisite, techprint, research bench or other requirement are hidden until they become available.");
 
             listing.Gap();
 
