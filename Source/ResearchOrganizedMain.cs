@@ -338,13 +338,22 @@ namespace ResearchOrganized
             }
             BuildTabStrip(__instance, tabs, shown);
 
-            if (shown == null || shown.Contains(__instance.CurTab)) return;
+            if (shown == null || shown.Contains(__instance.CurTab))
+            {
+                // Vanilla sizes the scroll view only when the tab changes, so projects revealed since would sit past its edge.
+                if (__instance.CurTab != null && researchWindowViewSizeMethod != null && researchWindowViewWidthField != null)
+                    researchWindowViewWidthField.SetValue(__instance, ((Vector2)researchWindowViewSizeMethod.Invoke(__instance, new object[] { __instance.CurTab })).x);
+                return;
+            }
             var selectedTab = (researchWindowSelectedProjectField?.GetValue(__instance) as ResearchProjectDef)?.tab;
             var target = selectedTab != null && shown.Contains(selectedTab)
                 ? selectedTab
                 : DefDatabase<ResearchTabDef>.AllDefsListForReading.First(shown.Contains);
             ApplyCurTab(__instance, target);
         }
+
+        private static readonly MethodInfo researchWindowViewSizeMethod = AccessTools.Method(typeof(MainTabWindow_Research), "ViewSize");
+        private static readonly FieldInfo researchWindowViewWidthField = AccessTools.Field(typeof(MainTabWindow_Research), "rightViewWidth");
 
         public static void MarkTabStripDirty() => tabStripDirty = true;
 
