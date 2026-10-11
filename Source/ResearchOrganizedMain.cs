@@ -156,7 +156,7 @@ namespace ResearchOrganized
             {
                 harmony.Patch(drawLeftRectMethod, postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(DrawSettingsButton)));
             }
-            semiRandomResearchActive = AccessTools.TypeByName(SemiRandomResearchPatchType) != null;
+            semiRandomResearchActive = SemiRandomResearchPatchTypes.Any(name => AccessTools.TypeByName(name) != null);
 
             // Vanilla PreOpen arms a scroll to the current project on every open; keep the view where it was left instead.
             var preOpenMethod = AccessTools.Method(typeof(MainTabWindow_Research), nameof(MainTabWindow_Research.PreOpen));
@@ -170,7 +170,12 @@ namespace ResearchOrganized
             OrganizeTabsAndLayout();
         }
 
-        private const string SemiRandomResearchPatchType = "CM_Semi_Random_Research.MainTabWindow_Research_Patches";
+        // Semi Random Research's DrawLeftRect patch class: P-Fork Continued, then older versions.
+        private static readonly string[] SemiRandomResearchPatchTypes =
+        {
+            "CM_Semi_Random_Research.Patch_MainTabWindow_Research_DrawLeftRect",
+            "CM_Semi_Random_Research.MainTabWindow_Research_Patches"
+        };
         private const float SemiRandomResearchButtonSize = 32f;
         private const float SettingsButtonSize = 24f;
         private const float SettingsButtonGap = 4f;
