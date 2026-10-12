@@ -34,6 +34,7 @@ Compatibility
 - Research Icons works alongside.</description>
   <supportedVersions>
     <li>1.6</li>
+    <li>1.7</li>
   </supportedVersions>
   <modDependencies>
     <li>

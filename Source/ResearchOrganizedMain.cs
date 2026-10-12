@@ -11,6 +11,7 @@ using Verse;
 
 namespace ResearchOrganized
 {
+    [StaticConstructorOnStartup]
     public static partial class ResearchOrganizedMain
     {
         public const string HarmonyId = "cruesoe.research.organized";
@@ -113,11 +114,12 @@ namespace ResearchOrganized
 
             // Cached tab counts are dropped whenever research progress can complete or reset a project.
             var invalidateStats = new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(InvalidateTabStats));
-            foreach (var name in new[] { nameof(ResearchManager.FinishProject), nameof(ResearchManager.AddProgress), nameof(ResearchManager.ApplyKnowledge),
-                         nameof(ResearchManager.ResetAllProgress), nameof(ResearchManager.DebugSetAllProjectsFinished) })
+            var statNames = new HashSet<string> { nameof(ResearchManager.FinishProject), nameof(ResearchManager.AddProgress), nameof(ResearchManager.ApplyKnowledge),
+                nameof(ResearchManager.ResetAllProgress), nameof(ResearchManager.DebugSetAllProjectsFinished) };
+            // Every overload: ApplyKnowledge has one per knowledge category and one per project.
+            foreach (var method in AccessTools.GetDeclaredMethods(typeof(ResearchManager)).Where(m => statNames.Contains(m.Name)))
             {
-                var method = AccessTools.Method(typeof(ResearchManager), name);
-                if (method != null) harmony.Patch(method, postfix: invalidateStats);
+                harmony.Patch(method, postfix: invalidateStats);
             }
 
             UnavailableProjectFilter.Patch(harmony);
