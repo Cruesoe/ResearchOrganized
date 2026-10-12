@@ -31,7 +31,7 @@ namespace ResearchOrganized
             new Dictionary<ResearchProjectDef, bool>();
 
         /// <summary>Blank columns between two era blocks on the combined tab.</summary>
-        private const float EraGapColumns = 0.5f;
+        private const float EraGapColumns = 0.25f;
 
         /// <summary>
         /// A project's era block on the combined tab, lowest drawn first. Projects with no tech
@@ -141,7 +141,7 @@ namespace ResearchOrganized
         /// edges; a prerequisite living on another tab cannot constrain a position here.
         ///
         /// <paramref name="anchors"/> and <paramref name="anchorOrder"/> are found per tab, over
-        /// that tab's own links only, so a hub is recognised from what follows it here and
+        /// that tab's own links only, so a hub is recognized from what follows it here and
         /// nothing on another tab can shift where it is placed.
         /// </summary>
         /// <param name="eraBuckets">Lays each tech level out as a block of its own, left to

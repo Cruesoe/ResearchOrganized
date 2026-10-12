@@ -1,36 +1,35 @@
-This mod sorts research into the right tech level tabs and organizes the tree.
+[b]Sorts research into tech-level tabs and lays each tab out as a tidy, readable tree.[/b]
+
 In some cases the result is not strictly linear, but I believe it makes the tree much more readable in highly modded games.
 
-[h2]Key Features[/h2]
+[h2]Features[/h2]
 [list]
-[*][b]Era-Specific Tabs:[/b] Technologies are automatically routed to their tech level tabs: Primitive, Neolithic, Medieval, Industrial, Spacer, Ultra and Archotech. Empty tabs are hidden.
-[*][b]Single Tab View:[/b] Prefer one tree? Combine All Tabs puts everything except Anomaly and Gravship on the Main tab, with each era in its own block from left to right. (Optional!)
-[*][b]The Industrial Split:[/b] The Industrial era is divided into three tabs: Industrial, High Industrial (requires the Hi-Tech Research Bench) and Late Industrial (requires the Multi-Analyzer). Combine Industrial merges them back into one. (Optional!)
-[*][b]Anomaly Integration:[/b] Entity knowledge technologies are moved to the Anomaly tab.
-[*][b]Clean Layout Engine:[/b] No overlapping nodes and fewer crossing lines. Follow-ups sit to the right of what they need, big hubs stand out on their own, and branches fill the space beside their prerequisites instead of trailing off the end of the tab.
-[*][b]Era Consistency:[/b] A technology is raised to the era of its prerequisites, so a follow-up never sits in an earlier era than what it needs. Its research cost changes to match.
-[*][b]Dynamic Tech Coloring:[/b] Nodes are colored by era and shaded by status (Unavailable, Available, Researched).
-[*][b]Choose Your Colors:[/b] Don't like the colors I chose? Change them for each tab, or turn them off.
-[*][b]Handy Extras:[/b] Tab tooltips show completed projects and research points, the research window remembers where you scrolled, and a gear button opens the settings.
+[*]Technologies are routed to their tech level's tab: Primitive, Neolithic, Medieval, Industrial, High Industrial, Late Industrial, Spacer, Ultra and Archotech. Empty tabs are hidden.
+[*]Industrial is split three ways: Industrial, High Industrial (needs the Hi-Tech Research Bench) and Late Industrial (needs the Multi-Analyzer).
+[*]Entity knowledge technologies are moved to the Anomaly tab.
+[*]No overlapping nodes and fewer crossing lines. Follow-ups sit to the right of what they need, big hubs stand out on their own, and branches fill the space beside their prerequisites instead of trailing off the end of the tab.
+[*]A technology is raised to the era of its prerequisites, so a follow-up never sits in an earlier era than what it needs. Its research cost changes to match.
+[*]Nodes are colored by era and shaded by status (unavailable, available, researched).
+[*]Tab tooltips show completed projects and research points, the research window remembers where you scrolled, and a gear button opens the settings.
+[*]Schematics can teach technologies from every era tab.
 [/list]
 
-[h2]Works With[/h2]
+[h2]Settings[/h2]
 [list]
-[*][b]Node Research:[/b] foundation technologies get a gold corner mark, and you can switch freely between its node view and these tabs.
-[*][b]Semi Random Research Pfork Continued:[/b] its button and the settings gear sit side by side.
-[*][b]Research Icons[/b]
-[*][b]ProgressionLESS[/b] and [b]VFE Tribals[/b]: their research lands in the right tabs.
+[*][b]Hide Unavailable Projects[/b]: shows only finished projects and those you can start now. Off by default.
+[*][b]Hide Future Tech Levels[/b]: hides unfinished projects above your colony's tech level. Off by default.
+[*][b]Show Tab Project Counts[/b]: shows completed/total counts on each tab.
+[*][b]Combine All Tabs[/b]: puts everything except Anomaly, Gravship and Save Our Ship 2 on the Main tab, with each era in its own block from left to right. Off by default.
+[*][b]Combine Industrial[/b]: merges High and Late Industrial back into one Industrial tab. Off by default.
+[*][b]Color Cards by Tech Level[/b]: pick each era's color, or turn the colors off.
+[*][b]Suppress Emergence Lines[/b]: hides lines to Node Research's emergence nodes unless one end is selected. On by default.
 [/list]
 
-[list]
-[*]Safe to add to or remove from existing save files.
-[*]Built to organize heavily modded loadouts automatically.
-[*][b]Tested and confirmed working with:[/b] Ferny's Progression mod pack and Path of the Muffalo (as long as you remove the conflicts!).
-[/list]
+[h2]Compatibility[/h2]
+Works with [b]Node Research[/b] (foundation technologies get a gold corner mark, and you can switch freely between its node view and these tabs), [b]Semi Random Research Pfork Continued[/b] (its button and the settings gear sit side by side), [b]Research Icons[/b], [b]Save Our Ship 2[/b] (its Ship and Archotech tabs keep their projects), and [b]ProgressionLESS[/b] and [b]VFE Tribals[/b] (their research lands in the right tabs).
+Tested with Ferny's Progression mod pack and Path of the Muffalo (as long as you remove the conflicts!).
+Not compatible with other research tab organizers, because they control the same system.
+Safe to add to or remove from an existing save.
 
-[h2]Special Thanks & Inspiration[/h2]
-[list]
-[*]This project was heavily inspired by the fantastic work of other creators. A massive thank you to [b]Leo39994[/b] (Clean Research Sort), [b]Aelanna[/b] (Research Tab Colours), [b]Mlie[/b] (Organized Research Tab [Continued]) and [b]Laz[/b] (Organized Research Tab).
-[*]A huge thank you to [b]Ferny[/b] (Progression mod pack) and [b]LordBeef[/b] (Path of the Muffalo) for their mod packs, which were invaluable during testing.
-[*]Thank you to the broader RimWorld modding community for constantly expanding the game and making organizational tools like this necessary!
-[/list]
+[h2]Credits[/h2]
+Inspired by [b]Leo39994[/b] (Clean Research Sort), [b]Aelanna[/b] (Research Tab Colours), [b]Mlie[/b] (Organized Research Tab [Continued]) and [b]Laz[/b] (Organized Research Tab). Thanks to [b]Ferny[/b] (Progression mod pack) and [b]LordBeef[/b] (Path of the Muffalo) for their mod packs, which were invaluable during testing, and to the wider RimWorld modding community.

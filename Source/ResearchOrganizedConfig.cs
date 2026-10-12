@@ -1,37 +1,15 @@
-﻿using RimWorld;
 using System.Collections.Generic;
 using Verse;
 
 namespace ResearchOrganized
 {
-    public abstract class ResearchLinkBase
-    {
-        public string child = "";
-        public List<string> children = new List<string>();
-        public string parent = "";
-    }
-
-    public class VirtualLink : ResearchLinkBase { }
-
-    public class VisibleLink : ResearchLinkBase { }
-
-    public class TabThemeEntry
-    {
-        public string tabName = "";
-        public TechLevel techLevel = TechLevel.Undefined;
-    }
-
-    public class TechLevelTabEntry
-    {
-        public TechLevel techLevel = TechLevel.Undefined;
-        public string tabName = "";
-    }
-
     public class ResearchOrganizedConfig : Def
     {
         public List<string> targetTabs = new List<string>();
         public List<string> ignoredTabs = new List<string>();
         public List<string> preservedTabs = new List<string>();
+        /// <summary>Tabs that keep their projects under "Combine All Tabs", alongside Gravship's.</summary>
+        public List<string> uncombinedTabs = new List<string>();
         public List<string> tabOrder = new List<string>();
         public List<VirtualLink> virtualLinks = new List<VirtualLink>();
         public List<VisibleLink> visibleLinks = new List<VisibleLink>();
@@ -42,12 +20,5 @@ namespace ResearchOrganized
 
         public List<TabThemeEntry> tabThemes = new List<TabThemeEntry>();
         public List<TechLevelTabEntry> techLevelTabs = new List<TechLevelTabEntry>();
-    }
-
-    public class LayoutConfig
-    {
-        public float xStep = 1f;
-        public float yStep = 0.63f;
-        public int maxNodesPerColumn = 12;
     }
 }
