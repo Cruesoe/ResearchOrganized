@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-
 <ModMetaData>
-	<name>Research: Organized</name>
-	<author>Cruesoe</author>
-	<packageId>cruesoe.research.organized</packageId>
-	<modVersion>261002</modVersion>
-	<description>Sorts research projects into tech-level tabs and lays each tab out as a tidy, readable tree.
+  <name>Research: Organized</name>
+  <author>Cruesoe</author>
+  <packageId>cruesoe.research.organized</packageId>
+  <modVersion>261002</modVersion>
+  <description>Sorts research projects into tech-level tabs and lays each tab out as a tidy, readable tree.
 
 Tabs
 - Projects are grouped into Primitive, Neolithic, Medieval, Industrial, High and Late Industrial, Spacer, Ultra, Archotech, Anomaly and Miscellaneous tabs.
@@ -20,62 +19,69 @@ Layout
 - A project is raised to the tech level of its prerequisites, so a follow-up never sits in an earlier era than what it needs. Its research cost changes to match.
 - Projects caught in a circular dependency are outlined in red and named in the log.
 
-Look
-- Cards are tinted by tech level, with configurable colours that can also be turned off.
-- A gear in the research window opens the mod settings.
+Research window
+- Hide Unavailable Projects shows only finished projects and those you can start now.
+- Hide Future Tech Levels hides unfinished projects above your colony's tech level.
+- The window remembers where you scrolled, and a gear in it opens the mod settings.
+- Cards are tinted by tech level, with configurable colors that can also be turned off.
 
 Compatibility
 - Node Research: foundation technologies get a gold corner mark, emergence nodes stay beside their branch without cluttering lines, and you can switch freely between its node view and these tabs.
 - ProgressionLESS: loads after every mod in the suite, so their research lands in the right tabs.
-- VFE Tribals: its Basics tab takes the Primitive projects.</description>
-	<supportedVersions>
-		<li>1.6</li>
-	</supportedVersions>
-	<modDependencies>
-		<li>
-			<packageId>brrainz.harmony</packageId>
-			<displayName>Harmony</displayName>
-			<steamWorkshopUrl>steam://url/CommunityFilePage/2009463077</steamWorkshopUrl>
-			<downloadUrl>https://github.com/pardeike/HarmonyRimWorld/releases/latest</downloadUrl>
-		</li>
-	</modDependencies>
-	<incompatibleWith>
-		<li>GonDragon.TechTree</li>
-		<li>Aelanna.ResearchTabColors</li>
-		<li>zenlor.OrganizedResearchTech</li>
-		<li>Mlie.OrganizedResearchTab</li>
-		<li>Leo.CleanResearchSort</li>
-		<li>GonDragon.TTPF</li>
-		<li>cruesoe.eotrtechtree</li>
-	</incompatibleWith>
-	<loadAfter>
-		<li>OskarPotocki.VFE.Tribals</li>
-		<li>OskarPotocki.VFE.Medieval2</li>
-		<li>vanillaexpanded.gravship</li>
-		<li>ferny.noderesearch</li>
-		<li>cruesoe.noderesearch.branches</li>
-		<li>cruesoe.progressionless</li>
-		<li>cruesoe.progressionlessarsenal</li>
-		<li>cruesoe.progressionlessattire</li>
-		<li>cruesoe.progressionlessdrugs</li>
-		<li>cruesoe.progressionlesseducation</li>
-		<li>cruesoe.progressionlessfactories</li>
-		<li>cruesoe.progressionlessfurniture</li>
-		<li>cruesoe.progressionlessgravship</li>
-		<li>cruesoe.progressionlesskitchen</li>
-		<li>cruesoe.progressionlessproduction</li>
-		<li>cruesoe.progressionlessrobotics</li>
-		<li>cruesoe.progressionlessstorage</li>
-		<li>ferny.progressionarsenal</li>
-		<li>ferny.progressionattire</li>
-		<li>ferny.progressioncore</li>
-		<li>ferny.progressiondrugs</li>
-		<li>ferny.ProgressionEducation</li>
-		<li>ferny.progressionfurniture</li>
-		<li>ferny.ProgressionGravship</li>
-		<li>ferny.progressionkitchen</li>
-		<li>ferny.progressionproduction</li>
-		<li>ferny.progressionrobotics2</li>
-		<li>ferny.progressionstorage</li>
-	</loadAfter>
+- VFE Tribals: its Basics tab takes the Primitive projects.
+- Save Our Ship 2: its Ship and Archotech tabs keep their own projects, even with Combine All Tabs on.
+- Semi Random Research: its button and the settings gear sit side by side.
+- Research Icons works alongside.</description>
+  <supportedVersions>
+    <li>1.6</li>
+  </supportedVersions>
+  <modDependencies>
+    <li>
+      <packageId>brrainz.harmony</packageId>
+      <displayName>Harmony</displayName>
+      <steamWorkshopUrl>steam://url/CommunityFilePage/2009463077</steamWorkshopUrl>
+      <downloadUrl>https://github.com/pardeike/HarmonyRimWorld/releases/latest</downloadUrl>
+    </li>
+  </modDependencies>
+  <incompatibleWith>
+    <li>GonDragon.TechTree</li>
+    <li>Aelanna.ResearchTabColors</li>
+    <li>zenlor.OrganizedResearchTech</li>
+    <li>Mlie.OrganizedResearchTab</li>
+    <li>Leo.CleanResearchSort</li>
+    <li>GonDragon.TTPF</li>
+    <li>cruesoe.eotrtechtree</li>
+  </incompatibleWith>
+  <loadAfter>
+    <li>OskarPotocki.VFE.Tribals</li>
+    <li>OskarPotocki.VFE.Medieval2</li>
+    <li>vanillaexpanded.gravship</li>
+    <li>kentington.saveourship2</li>
+    <li>ferny.noderesearch</li>
+    <li>cruesoe.noderesearch.branches</li>
+    <li>cruesoe.flint</li>
+    <li>cruesoe.progressionless</li>
+    <li>cruesoe.progressionlessarsenal</li>
+    <li>cruesoe.progressionlessattire</li>
+    <li>cruesoe.progressionlessdrugs</li>
+    <li>cruesoe.progressionlesseducation</li>
+    <li>cruesoe.progressionlessfactories</li>
+    <li>cruesoe.progressionlessfurniture</li>
+    <li>cruesoe.progressionlessgravship</li>
+    <li>cruesoe.progressionlesskitchen</li>
+    <li>cruesoe.progressionlessproduction</li>
+    <li>cruesoe.progressionlessrobotics</li>
+    <li>cruesoe.progressionlessstorage</li>
+    <li>ferny.progressionarsenal</li>
+    <li>ferny.progressionattire</li>
+    <li>ferny.progressioncore</li>
+    <li>ferny.progressiondrugs</li>
+    <li>ferny.ProgressionEducation</li>
+    <li>ferny.progressionfurniture</li>
+    <li>ferny.ProgressionGravship</li>
+    <li>ferny.progressionkitchen</li>
+    <li>ferny.progressionproduction</li>
+    <li>ferny.progressionrobotics2</li>
+    <li>ferny.progressionstorage</li>
+  </loadAfter>
 </ModMetaData>

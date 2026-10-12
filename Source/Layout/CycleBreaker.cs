@@ -105,10 +105,10 @@ namespace ResearchOrganized.Layout
             return selected;
         }
 
-        private static int DegreeWithin(IReadOnlyList<int> neighbours, HashSet<int> remaining)
+        private static int DegreeWithin(IReadOnlyList<int> neighbors, HashSet<int> remaining)
         {
             int count = 0;
-            for (int i = 0; i < neighbours.Count; i++) if (remaining.Contains(neighbours[i])) count++;
+            for (int i = 0; i < neighbors.Count; i++) if (remaining.Contains(neighbors[i])) count++;
             return count;
         }
 

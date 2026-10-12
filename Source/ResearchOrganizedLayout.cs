@@ -141,7 +141,7 @@ namespace ResearchOrganized
         /// edges; a prerequisite living on another tab cannot constrain a position here.
         ///
         /// <paramref name="anchors"/> and <paramref name="anchorOrder"/> are found per tab, over
-        /// that tab's own links only, so a hub is recognised from what follows it here and
+        /// that tab's own links only, so a hub is recognized from what follows it here and
         /// nothing on another tab can shift where it is placed.
         /// </summary>
         /// <param name="eraBuckets">Lays each tech level out as a block of its own, left to

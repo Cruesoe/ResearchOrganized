@@ -20,9 +20,7 @@ Desktop.ini
 Directory.Build.props
 Directory.Build.targets
 
-## Local tooling and notes, not part of the mod
+## Agent files and local notes
 AGENTS.md
 CLAUDE.md
 BRANDING.md
-Tests/
-Tools/

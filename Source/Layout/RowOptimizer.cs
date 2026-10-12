@@ -5,7 +5,7 @@ namespace ResearchOrganized.Layout
 {
     /// <summary>
     /// Improves rows without changing columns, anchors, epochs, or capacity. Barycentric sweeps
-    /// make broad moves toward connected neighbours; adjacent swaps then refine the result.
+    /// make broad moves toward connected neighbors; adjacent swaps then refine the result.
     /// Swap scoring is local to incident edges, avoiding a full graph recount per candidate.
     ///
     /// Judged on the drawn tree alone - fewest crossing connectors, then shortest connectors.
@@ -181,12 +181,12 @@ namespace ResearchOrganized.Layout
 
         private static double Barycenter(LayoutGraph graph, int node, int[] row, bool useChildren)
         {
-            IReadOnlyList<int> neighbours = useChildren ? graph.ChildrenOf(node) : graph.ParentsOf(node);
-            if (neighbours.Count == 0) neighbours = useChildren ? graph.ParentsOf(node) : graph.ChildrenOf(node);
-            if (neighbours.Count == 0) return row[node];
+            IReadOnlyList<int> neighbors = useChildren ? graph.ChildrenOf(node) : graph.ParentsOf(node);
+            if (neighbors.Count == 0) neighbors = useChildren ? graph.ParentsOf(node) : graph.ChildrenOf(node);
+            if (neighbors.Count == 0) return row[node];
             long total = 0;
-            for (int i = 0; i < neighbours.Count; i++) total += row[neighbours[i]];
-            return (double)total / neighbours.Count;
+            for (int i = 0; i < neighbors.Count; i++) total += row[neighbors[i]];
+            return (double)total / neighbors.Count;
         }
 
         private static Score Evaluate(LayoutGraph graph, List<LayoutGraph.Edge> edges, LayoutOptions options, int[] column, int[] row)
