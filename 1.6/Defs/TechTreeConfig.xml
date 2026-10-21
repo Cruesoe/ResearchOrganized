@@ -15,6 +15,8 @@
 
 		<preservedTabs>
 			<li MayRequire="OskarPotocki.VFE.Tribals">VFET_Basics</li>
+			<!-- SOS2 looks this tab up by name and hides it until the archotech uplink. -->
+			<li MayRequire="kentington.saveourship2">ResearchTabArchotech</li>
 		</preservedTabs>
 
 		<techLevelTabs>
@@ -36,6 +38,7 @@
 			<li>TabSpacer</li>
 			<li>TabUltra</li>
 			<li>TabArchotech</li>
+			<li MayRequire="kentington.saveourship2">ResearchTabArchotech</li>
 			<li>VGE_Gravtech</li>
 			<li>Anomaly</li>
 			<li>TabMisc</li>

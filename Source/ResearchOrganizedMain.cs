@@ -20,6 +20,7 @@ namespace ResearchOrganized
         private const string MainTabDef = "Main";
         private const string TabGravtechDef = "VGE_Gravtech";
         private const string GravtechExtensionName = "GravtechResearchExtension";
+        private const string SOS2ArchotechTabDef = "ResearchTabArchotech";
 
         private const float NormalBrightness = 0.5f;
         private const float UnavailableBrightness = 0.2f;
@@ -436,6 +437,13 @@ namespace ResearchOrganized
             if (tab.defName == TabGravtechDef) return true;
             return tab.modExtensions != null && tab.modExtensions.Any(e => e.GetType().Name == GravtechExtensionName);
         }
+
+        /// <summary>Tabs that keep their own projects even under "Combine All Tabs": Gravship's,
+        /// and Save Our Ship 2's Archotech tab, which SOS2 looks up by name at startup and hides
+        /// until the archotech uplink is unlocked. Removing that one logs "Failed to find
+        /// ResearchTabDef named ResearchTabArchotech" and leaves its projects unhidden.</summary>
+        private static bool StaysSeparateUnderCombine(ResearchTabDef tab) =>
+            IsGravtechTab(tab) || tab?.defName == SOS2ArchotechTabDef;
 
         /// <summary>The single tab every project lands on under "Combine All Tabs", or null when
         /// the option is off.</summary>
@@ -878,7 +886,7 @@ namespace ResearchOrganized
                     IsAnomaly = project.knowledgeCategory != null || authoredTab == anomalyTab,
                     CurrentTabIgnored = ignoreCurrent,
                     CurrentTabPreserved = preserveCurrent,
-                    CurrentTabExcludedFromCombine = IsGravtechTab(authoredTab),
+                    CurrentTabExcludedFromCombine = StaysSeparateUnderCombine(authoredTab),
                     CombineAll = combinedTab != null,
                     IsIndustrial = isIndustrial,
                     CombineIndustrial = combineIndustrial,
@@ -921,10 +929,11 @@ namespace ResearchOrganized
                 // its own DefsOf field and a fixed tab strip, never through this database, so
                 // the removal costs it nothing and keeps an empty tab out of the vanilla window.
                 // An ignored tab is normally kept even when empty. Under "Combine All Tabs" every
-                // tab but Gravship's has been emptied on purpose, so only that one is kept.
+                // tab but Gravship's and SOS2's Archotech has been emptied on purpose, so only
+                // those are kept.
                 bool combineAll = ResearchOrganizedMod.settings.combineAllTabs;
                 var toRemove = defsList.Where(t => !activeTabs.Contains(t)
-                    && (combineAll ? !IsGravtechTab(t) : !IgnoredTabs.Contains(t.defName))).ToList();
+                    && (combineAll ? !StaysSeparateUnderCombine(t) : !IgnoredTabs.Contains(t.defName))).ToList();
                 foreach (var tab in toRemove)
                 {
                     defsList.Remove(tab);
