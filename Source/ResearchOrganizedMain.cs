@@ -164,7 +164,7 @@ namespace ResearchOrganized
             OrganizeTabsAndLayout();
         }
 
-        private const string SemiRandomResearchPatchType = "CM_Semi_Random_Research.MainTabWindow_Research_Patches";
+        private const string SemiRandomResearchPatchType = "CM_Semi_Random_Research.Patch_MainTabWindow_Research_DrawLeftRect";
         private const float SemiRandomResearchButtonSize = 32f;
         private const float SettingsButtonSize = 24f;
         private const float SettingsButtonGap = 4f;
