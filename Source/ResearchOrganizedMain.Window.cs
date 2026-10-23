@@ -98,17 +98,121 @@ namespace ResearchOrganized
                 ApplyCurTab(__instance, __instance.CurTab);
             }
 
-            float right = leftOutRect.xMax;
-            if (semiRandomResearchActive) right -= SemiRandomResearchButtonSize + SettingsButtonGap;
-            float top = leftOutRect.yMin + (SemiRandomResearchButtonSize - SettingsButtonSize) / 2f;
-            var rect = new Rect(right - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
+            // Normal: a row left of Semi Random Research's button. Full screen: a column below it in the narrow strip.
+            bool fullScreen = ResearchOrganizedMod.settings.fullScreenResearch;
+            Rect gearRect, toggleRect;
+            if (fullScreen)
+            {
+                float x = leftOutRect.xMax - (FullScreenStripWidth + SettingsButtonSize) / 2f;
+                float y = leftOutRect.yMin + (semiRandomResearchActive ? SemiRandomResearchButtonSize + SettingsButtonGap : 0f);
+                gearRect = new Rect(x, y, SettingsButtonSize, SettingsButtonSize);
+                toggleRect = new Rect(x, gearRect.yMax + SettingsButtonGap, SettingsButtonSize, SettingsButtonSize);
+            }
+            else
+            {
+                float right = leftOutRect.xMax;
+                if (semiRandomResearchActive) right -= SemiRandomResearchButtonSize + SettingsButtonGap;
+                float top = leftOutRect.yMin + (SemiRandomResearchButtonSize - SettingsButtonSize) / 2f;
+                gearRect = new Rect(right - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
+                toggleRect = new Rect(gearRect.x - SettingsButtonGap - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
+            }
 
-            if (Widgets.ButtonImage(rect, SettingsGearTex, SettingsButtonColor, GenUI.MouseoverColor, true, "ResearchOrganized_SettingsButtonTip".Translate()))
+            if (Widgets.ButtonImage(gearRect, SettingsGearTex, SettingsButtonColor, GenUI.MouseoverColor, true, "ResearchOrganized_SettingsButtonTip".Translate()))
             {
                 var mod = LoadedModManager.GetMod<ResearchOrganizedMod>();
                 if (mod != null) Find.WindowStack.Add(new Dialog_ModSettings(mod));
                 Event.current.Use();
             }
+
+            string toggleTip = (fullScreen ? "ResearchOrganized_ExitFullScreenTip" : "ResearchOrganized_EnterFullScreenTip").Translate();
+            if (Widgets.ButtonImage(toggleRect, fullScreen ? ExitFullScreenTex : EnterFullScreenTex, SettingsButtonColor, GenUI.MouseoverColor, true, toggleTip))
+            {
+                ResearchOrganizedMod.settings.fullScreenResearch = !fullScreen;
+                ResearchOrganizedMod.settings.Write();
+                Event.current.Use();
+            }
+        }
+
+        private static readonly Texture2D EnterFullScreenTex = BuildFullScreenTexture(64, false);
+        private static readonly Texture2D ExitFullScreenTex = BuildFullScreenTexture(64, true);
+        private static readonly MethodInfo windowSetInitialSizeMethod = AccessTools.Method(typeof(Window), "SetInitialSizeAndPosition");
+        private static bool fullScreenApplied;
+
+        /// <summary>Width of the left panel in full screen: just wide enough for its buttons.</summary>
+        private static float FullScreenStripWidth => semiRandomResearchActive ? SemiRandomResearchButtonSize : SettingsButtonSize;
+
+        /// <summary>
+        /// A white full-screen icon, tinted when drawn: four corner brackets pointing outwards to enter,
+        /// or inwards to exit. Each pixel is 4x4 supersampled; coordinates are folded into the top-left quadrant.
+        /// </summary>
+        private static Texture2D BuildFullScreenTexture(int size, bool exit)
+        {
+            const int samples = 4;
+            const float margin = 0.1f, arm = 0.3f, thickness = 0.1f;
+
+            bool Inside(float x, float y)
+            {
+                float fx = Mathf.Min(x, 1f - x), fy = Mathf.Min(y, 1f - y);
+                if (fx < margin || fy < margin || fx > margin + arm || fy > margin + arm) return false;
+                // The bracket's corner sits at the outer edge to enter, and at the inner end of its arms to exit.
+                float edge = exit ? margin + arm - thickness : margin;
+                return (fy >= edge && fy <= edge + thickness) || (fx >= edge && fx <= edge + thickness);
+            }
+
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            for (int row = 0; row < size; row++)
+            {
+                for (int column = 0; column < size; column++)
+                {
+                    int hits = 0;
+                    for (int sy = 0; sy < samples; sy++)
+                        for (int sx = 0; sx < samples; sx++)
+                            if (Inside((column + (sx + 0.5f) / samples) / size, (row + (sy + 0.5f) / samples) / size)) hits++;
+                    texture.SetPixel(column, size - 1 - row, new Color(1f, 1f, 1f, hits / (float)(samples * samples)));
+                }
+            }
+            texture.Apply();
+            return texture;
+        }
+
+        /// <summary>DoWindowContents transpiler: routes the left panel's width through <see cref="LeftPanelWidth"/>.</summary>
+        public static IEnumerable<CodeInstruction> LeftPanelWidthTranspiler(IEnumerable<CodeInstruction> instructions)
+        {
+            var list = instructions.ToList();
+            var max = AccessTools.Method(typeof(Mathf), nameof(Mathf.Max), new[] { typeof(float), typeof(float) });
+            int idx = list.FindIndex(i => i.Calls(max));
+            if (idx < 0)
+            {
+                Log.Warning("[Research: Organized] Could not find the research window's left panel width; full screen keeps the panel.");
+                return list;
+            }
+            list[idx].operand = AccessTools.Method(typeof(ResearchOrganizedMain), nameof(LeftPanelWidth));
+            return list;
+        }
+
+        public static float LeftPanelWidth(float minimum, float share) =>
+            ResearchOrganizedMod.settings.fullScreenResearch ? FullScreenStripWidth : Mathf.Max(minimum, share);
+
+        /// <summary>DrawLeftRect prefix: skips the project panel in full screen; postfixes still draw their buttons.</summary>
+        public static bool SkipLeftPanelInFullScreen() => !ResearchOrganizedMod.settings.fullScreenResearch;
+
+        /// <summary>InitialSize postfix: full screen takes the whole height above the bottom bar.</summary>
+        public static void FullScreenInitialSize(ref Vector2 __result)
+        {
+            if (ResearchOrganizedMod.settings.fullScreenResearch) __result.y = UI.screenHeight - 35;
+        }
+
+        /// <summary>DoWindowContents prefix: resizes the open window when full screen was toggled from the button or settings.</summary>
+        public static void ApplyFullScreenSize(MainTabWindow_Research __instance)
+        {
+            bool fullScreen = ResearchOrganizedMod.settings.fullScreenResearch;
+            if (fullScreen == fullScreenApplied) return;
+            fullScreenApplied = fullScreen;
+            windowSetInitialSizeMethod?.Invoke(__instance, null);
         }
 
         /// <summary>
@@ -225,6 +329,7 @@ namespace ResearchOrganized
         /// <summary>PostOpen postfix: vanilla refills the tab strip with every tab, so it is rebuilt on the next draw, and counts are recomputed.</summary>
         public static void OnResearchWindowOpened()
         {
+            fullScreenApplied = ResearchOrganizedMod.settings.fullScreenResearch;
             MarkTabStripDirty();
             InvalidateTabStats();
         }

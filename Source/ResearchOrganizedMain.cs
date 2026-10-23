@@ -105,6 +105,16 @@ namespace ResearchOrganized
             }
             semiRandomResearchActive = SemiRandomResearchPatchTypes.Any(name => AccessTools.TypeByName(name) != null);
 
+            // Full screen: the left panel shrinks to a strip of buttons and the window grows to the screen's height.
+            if (doWindowContentsMethod != null && drawLeftRectMethod != null)
+            {
+                harmony.Patch(doWindowContentsMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(ApplyFullScreenSize)),
+                    transpiler: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(LeftPanelWidthTranspiler)));
+                harmony.Patch(drawLeftRectMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(SkipLeftPanelInFullScreen)));
+                harmony.Patch(AccessTools.PropertyGetter(typeof(MainTabWindow_Research), nameof(MainTabWindow_Research.InitialSize)),
+                    postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(FullScreenInitialSize)));
+            }
+
             // Vanilla PreOpen arms a scroll to the current project on every open; keep the view where it was left instead.
             var preOpenMethod = AccessTools.Method(typeof(MainTabWindow_Research), nameof(MainTabWindow_Research.PreOpen));
             if (preOpenMethod != null && researchWindowScrollPositionerField != null)
