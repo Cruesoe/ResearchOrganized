@@ -109,8 +109,12 @@ namespace ResearchOrganized
             if (doWindowContentsMethod != null && drawLeftRectMethod != null)
             {
                 harmony.Patch(doWindowContentsMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(ApplyFullScreenSize)),
+                    postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(DrawFullScreenPanel)),
                     transpiler: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(LeftPanelWidthTranspiler)));
                 harmony.Patch(drawLeftRectMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(SkipLeftPanelInFullScreen)));
+                var drawRightRectMethod = AccessTools.Method(typeof(MainTabWindow_Research), "DrawRightRect");
+                if (drawRightRectMethod != null)
+                    harmony.Patch(drawRightRectMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(MeasureTreeHeight)));
                 harmony.Patch(AccessTools.PropertyGetter(typeof(MainTabWindow_Research), nameof(MainTabWindow_Research.InitialSize)),
                     postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(FullScreenInitialSize)));
             }
@@ -153,6 +157,7 @@ namespace ResearchOrganized
             {
                 // Lets Node Research finish its own start-up before this pass routes anything.
                 _ = NodeResearchCompat.Active;
+                CaptureLayoutTreeHeight();
                 ResetCaches();
                 var tabInfoVisibility = SnapshotTabInfoVisibility();
                 RestoreHiddenTabs();

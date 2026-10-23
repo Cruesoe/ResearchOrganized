@@ -15,7 +15,7 @@ Sorts research projects into tech-level tabs and lays each tab out as a tidy, re
 - Empty tabs are hidden.
 - Projects caught in a circular dependency are outlined in red and named in the log.
 - The research window remembers where you scrolled, and a gear in it opens the mod settings.
-- **Full Screen Research Window** hides the project panel and makes the window as tall as the screen, so more of the tree fits; a button beside the gear toggles it.
+- **Full Screen Research Window** gives the tree the whole window and fits as many projects into each column as the screen allows. The project panel opens over the tree when you click a project. A button beside the gear toggles full screen.
 - Schematics can teach projects from every era tab.
 - Works with Node Research: foundation technologies get a gold corner mark, and emergence nodes stay beside their branch without cluttering lines.
 - Loads after the ProgressionLESS suite, so its research lands in the right tabs.

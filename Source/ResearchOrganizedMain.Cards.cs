@@ -115,6 +115,7 @@ namespace ResearchOrganized
             bool isFoundation = ResearchOrganizedLayout.IsFoundationTech(project);
             if (ResearchOrganizedLayout.cyclicNodes.Contains(project)) { borderColor = Color.red; borderSize = 2f; }
             bool result = Widgets.CustomButtonText(ref rect, label, bgColor, textColor, borderColor, unfilledBgColor, cacheHeight, borderSize, doMouseOverSound, active, project.ProgressPercent);
+            if (result) NotifyProjectCardClicked();
             if (isFoundation)
             {
                 var notch = new Rect(rect.xMax - FoundationNotchSize, rect.yMin, FoundationNotchSize, FoundationNotchSize);
