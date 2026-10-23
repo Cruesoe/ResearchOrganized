@@ -105,6 +105,17 @@ namespace ResearchOrganized
             }
             semiRandomResearchActive = SemiRandomResearchPatchTypes.Any(name => AccessTools.TypeByName(name) != null);
 
+            // Full screen: the window grows to the screen's height and the layout fits as many projects per column as that allows.
+            if (doWindowContentsMethod != null)
+            {
+                harmony.Patch(doWindowContentsMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(ApplyFullScreenSize)));
+                var drawRightRectMethod = AccessTools.Method(typeof(MainTabWindow_Research), "DrawRightRect");
+                if (drawRightRectMethod != null)
+                    harmony.Patch(drawRightRectMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(MeasureTreeHeight)));
+                harmony.Patch(AccessTools.PropertyGetter(typeof(MainTabWindow_Research), nameof(MainTabWindow_Research.InitialSize)),
+                    postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(FullScreenInitialSize)));
+            }
+
             // Vanilla PreOpen arms a scroll to the current project on every open; keep the view where it was left instead.
             var preOpenMethod = AccessTools.Method(typeof(MainTabWindow_Research), nameof(MainTabWindow_Research.PreOpen));
             if (preOpenMethod != null && researchWindowScrollPositionerField != null)
@@ -143,6 +154,7 @@ namespace ResearchOrganized
             {
                 // Lets Node Research finish its own start-up before this pass routes anything.
                 _ = NodeResearchCompat.Active;
+                CaptureLayoutTreeHeight();
                 ResetCaches();
                 var tabInfoVisibility = SnapshotTabInfoVisibility();
                 RestoreHiddenTabs();

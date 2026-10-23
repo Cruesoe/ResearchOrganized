@@ -4,6 +4,8 @@
   <!-- Research window -->
   <ResearchOrganized_FoundationTech>Foundation technology</ResearchOrganized_FoundationTech>
   <ResearchOrganized_SettingsButtonTip>Research: Organized settings</ResearchOrganized_SettingsButtonTip>
+  <ResearchOrganized_EnterFullScreenTip>Full screen: make the window as tall as the screen</ResearchOrganized_EnterFullScreenTip>
+  <ResearchOrganized_ExitFullScreenTip>Exit full screen</ResearchOrganized_ExitFullScreenTip>
   <ResearchOrganized_TabCounts>Projects: {0}/{1}\nResearch points: {2}/{3}</ResearchOrganized_TabCounts>
 
   <!-- Settings -->
@@ -12,6 +14,8 @@
   <ResearchOrganized_HideUnavailableTip>Shows only finished projects and projects that can be started now. Projects missing a prerequisite, techprint, research bench or other requirement are hidden until they become available.</ResearchOrganized_HideUnavailableTip>
   <ResearchOrganized_HideFutureTechLevels>Hide Future Tech Levels</ResearchOrganized_HideFutureTechLevels>
   <ResearchOrganized_HideFutureTechLevelsTip>Hides unfinished projects above your colony's tech level. Your tech level comes from your starting faction, and rises as Node Research's emergence projects are completed.</ResearchOrganized_HideFutureTechLevelsTip>
+  <ResearchOrganized_FullScreen>Full Screen Research Window</ResearchOrganized_FullScreen>
+  <ResearchOrganized_FullScreenTip>Makes the research window as tall as the screen allows and fits as many projects into each column as that height holds. The button beside the settings gear in the research window toggles this too.</ResearchOrganized_FullScreenTip>
   <ResearchOrganized_ShowTabCounts>Show Tab Project Counts</ResearchOrganized_ShowTabCounts>
   <ResearchOrganized_ShowTabCountsTip>Shows completed/total project counts next to each tab's name. Every tab's tooltip always shows project and research point totals, regardless of this setting.</ResearchOrganized_ShowTabCountsTip>
   <ResearchOrganized_SuppressEmergenceLines>Suppress Emergence Lines</ResearchOrganized_SuppressEmergenceLines>

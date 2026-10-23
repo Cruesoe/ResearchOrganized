@@ -270,6 +270,10 @@ namespace ResearchOrganized
                 options.maxNodesPerColumn = perTab.maxNodesPerColumn;
             }
 
+            // Full screen fits more projects into each column when its tree is taller.
+            int fullScreenRows = ResearchOrganizedMain.FullScreenRows(options.yStep);
+            if (options.maxNodesPerColumn > 0 && fullScreenRows > options.maxNodesPerColumn) options.maxNodesPerColumn = fullScreenRows;
+
             return options;
         }
 
