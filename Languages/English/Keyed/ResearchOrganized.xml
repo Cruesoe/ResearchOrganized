@@ -46,7 +46,7 @@
   <ResearchOrganized_AnchorIntro>A project with this many direct follow-ups on its own tab is treated as a hub: it keeps its place in the tree when a column is full, and the lesser projects move aside instead.</ResearchOrganized_AnchorIntro>
   <ResearchOrganized_MinorAnchor>Follow-ups for a minor anchor:</ResearchOrganized_MinorAnchor>
   <ResearchOrganized_MajorAnchor>Follow-ups for a major anchor:</ResearchOrganized_MajorAnchor>
-  <ResearchOrganized_MajorAnchorTip>A major anchor starts a new column after everything before it and stands alone in it.</ResearchOrganized_MajorAnchorTip>
+  <ResearchOrganized_MajorAnchorTip>A major anchor is never grouped with another hub. With no prerequisite on its tab it starts after everything before it; otherwise it sits as soon after its prerequisites as there is room.</ResearchOrganized_MajorAnchorTip>
   <ResearchOrganized_WriteLayoutLog>Write Layout Log</ResearchOrganized_WriteLayoutLog>
   <ResearchOrganized_WriteLayoutLogTip>Writes every project's column, row and hub type, and each hub's placement decisions, to Player.log whenever the layout is built.</ResearchOrganized_WriteLayoutLogTip>
   <ResearchOrganized_ResetDefaults>Reset to Defaults</ResearchOrganized_ResetDefaults>

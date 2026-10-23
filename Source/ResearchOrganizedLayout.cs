@@ -214,7 +214,7 @@ namespace ResearchOrganized
                 settings.combineAllTabs, settings.combineIndustrial));
             foreach (string line in options.trace) sb.AppendLine(line);
 
-            sb.AppendLine("-- final positions (column row | defName | label | tech level | hub | prerequisites)");
+            sb.AppendLine("-- final positions (column row | defName | label | tech level | hub | prerequisites | cost)");
             var order = new List<int>(tabNodes.Count);
             for (int i = 0; i < tabNodes.Count; i++) order.Add(i);
             order.Sort((a, b) => result.Layer[a] != result.Layer[b] ? result.Layer[a].CompareTo(result.Layer[b]) : result.Y[a].CompareTo(result.Y[b]));
@@ -224,8 +224,8 @@ namespace ResearchOrganized
                 string hub = options.isFinale[i] && options.isAnchor[i] ? "finale" : options.isMajorAnchor[i] ? "major" : options.isAnchor[i] ? "minor" : options.isCapstone[i] ? "capstone" : "-";
                 var prereqs = new List<string>();
                 foreach (var pre in GetDirectPrereqs(def)) prereqs.Add(pre.defName + "(" + pre.techLevel + ")");
-                sb.AppendLine(string.Format("{0,3} {1,2} | {2} | {3} | {4} | {5} | {6}",
-                    result.Layer[i], (int)System.Math.Round(result.Y[i] / options.yStep), def.defName, def.label, def.techLevel, hub, string.Join(", ", prereqs.ToArray())));
+                sb.AppendLine(string.Format("{0,3} {1,2} | {2} | {3} | {4} | {5} | {6} | {7}",
+                    result.Layer[i], (int)System.Math.Round(result.Y[i] / options.yStep), def.defName, def.label, def.techLevel, hub, string.Join(", ", prereqs.ToArray()), (int)def.baseCost));
             }
             Log.Message(sb.ToString());
         }
