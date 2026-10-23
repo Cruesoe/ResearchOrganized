@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+
+  <!-- Research window -->
+  <ResearchOrganized_FoundationTech>Foundation technology</ResearchOrganized_FoundationTech>
+  <ResearchOrganized_SettingsButtonTip>Research: Organized settings</ResearchOrganized_SettingsButtonTip>
+  <ResearchOrganized_TabCounts>Projects: {0}/{1}\nResearch points: {2}/{3}</ResearchOrganized_TabCounts>
+
+  <!-- Settings -->
+  <ResearchOrganized_SectionResearchWindow>Research Window</ResearchOrganized_SectionResearchWindow>
+  <ResearchOrganized_HideUnavailable>Hide Unavailable Projects</ResearchOrganized_HideUnavailable>
+  <ResearchOrganized_HideUnavailableTip>Shows only finished projects and projects that can be started now. Projects missing a prerequisite, techprint, research bench or other requirement are hidden until they become available.</ResearchOrganized_HideUnavailableTip>
+  <ResearchOrganized_HideFutureTechLevels>Hide Future Tech Levels</ResearchOrganized_HideFutureTechLevels>
+  <ResearchOrganized_HideFutureTechLevelsTip>Hides unfinished projects above your colony's tech level. Your tech level comes from your starting faction, and rises as Node Research's emergence projects are completed.</ResearchOrganized_HideFutureTechLevelsTip>
+  <ResearchOrganized_ShowTabCounts>Show Tab Project Counts</ResearchOrganized_ShowTabCounts>
+  <ResearchOrganized_ShowTabCountsTip>Shows completed/total project counts next to each tab's name. Every tab's tooltip always shows project and research point totals, regardless of this setting.</ResearchOrganized_ShowTabCountsTip>
+  <ResearchOrganized_SuppressEmergenceLines>Suppress Emergence Lines</ResearchOrganized_SuppressEmergenceLines>
+  <ResearchOrganized_SuppressEmergenceLinesTip>Hides prerequisite lines into or out of Node Research's emergence nodes unless one end is selected. Turn off to always show those lines.</ResearchOrganized_SuppressEmergenceLinesTip>
+
+  <ResearchOrganized_SectionTabs>Tabs</ResearchOrganized_SectionTabs>
+  <ResearchOrganized_CombineAllTabs>Combine All Tabs</ResearchOrganized_CombineAllTabs>
+  <ResearchOrganized_CombineAllTabsTip>Puts every technology except Anomaly, Gravship and Save Our Ship 2 on the Main tab, laid out in one block per tech level from left to right.</ResearchOrganized_CombineAllTabsTip>
+  <ResearchOrganized_CombineIndustrial>Combine Industrial</ResearchOrganized_CombineIndustrial>
+  <ResearchOrganized_CombineIndustrialTip>Merges High and Late Industrial technologies back into the main Industrial tab.</ResearchOrganized_CombineIndustrialTip>
+  <ResearchOrganized_CombineIndustrialIncludedTip>Included in Combine All Tabs. Turn that off to choose this separately.</ResearchOrganized_CombineIndustrialIncludedTip>
+
+  <ResearchOrganized_SectionColors>Colors</ResearchOrganized_SectionColors>
+  <ResearchOrganized_ColorCards>Color Cards by Tech Level</ResearchOrganized_ColorCards>
+  <ResearchOrganized_ColorCardsTip>Tints each finished project card with its tech level's color. Turn off for vanilla colors.</ResearchOrganized_ColorCardsTip>
+  <ResearchOrganized_RequiresColorCards>Requires Color Cards by Tech Level.</ResearchOrganized_RequiresColorCards>
+  <ResearchOrganized_ColorUndefined>Undefined / Misc</ResearchOrganized_ColorUndefined>
+  <ResearchOrganized_ColorAnimal>Animal / Primitive</ResearchOrganized_ColorAnimal>
+  <ResearchOrganized_ColorNeolithic>Neolithic</ResearchOrganized_ColorNeolithic>
+  <ResearchOrganized_ColorMedieval>Medieval</ResearchOrganized_ColorMedieval>
+  <ResearchOrganized_ColorIndustrial>Industrial</ResearchOrganized_ColorIndustrial>
+  <ResearchOrganized_ColorSpacer>Spacer</ResearchOrganized_ColorSpacer>
+  <ResearchOrganized_ColorUltra>Ultra</ResearchOrganized_ColorUltra>
+  <ResearchOrganized_ColorArchotech>Archotech</ResearchOrganized_ColorArchotech>
+  <ResearchOrganized_ColorAnomaly>Anomaly</ResearchOrganized_ColorAnomaly>
+
+  <ResearchOrganized_SectionLayout>Layout</ResearchOrganized_SectionLayout>
+  <ResearchOrganized_AnchorIntro>A project with this many direct follow-ups on its own tab is treated as a hub: it keeps its place in the tree when a column is full, and the lesser projects move aside instead.</ResearchOrganized_AnchorIntro>
+  <ResearchOrganized_MinorAnchor>Follow-ups for a minor anchor:</ResearchOrganized_MinorAnchor>
+  <ResearchOrganized_MajorAnchor>Follow-ups for a major anchor:</ResearchOrganized_MajorAnchor>
+  <ResearchOrganized_MajorAnchorTip>A major anchor starts a new column after everything before it and stands alone in it.</ResearchOrganized_MajorAnchorTip>
+  <ResearchOrganized_WriteLayoutLog>Write Layout Log</ResearchOrganized_WriteLayoutLog>
+  <ResearchOrganized_WriteLayoutLogTip>Writes every project's column, row and hub type, and each hub's placement decisions, to Player.log whenever the layout is built.</ResearchOrganized_WriteLayoutLogTip>
+  <ResearchOrganized_ResetDefaults>Reset to Defaults</ResearchOrganized_ResetDefaults>
+
+</LanguageData>

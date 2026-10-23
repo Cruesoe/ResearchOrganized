@@ -16,7 +16,7 @@ namespace ResearchOrganized.Layout
             public bool IsAnomaly;
             public bool CurrentTabIgnored;
             public bool CurrentTabPreserved;
-            /// <summary>The current tab stays separate even when every tab is combined - Gravship's.</summary>
+            /// <summary>The current tab stays separate even when every tab is combined: Gravship's, or one a config lists as uncombined.</summary>
             public bool CurrentTabExcludedFromCombine;
             public bool CombineAll;
             public bool IsIndustrial;

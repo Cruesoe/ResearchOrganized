@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+
+  <ResearchOrganized.ResearchOrganizedConfig>
+    <defName>MainTechTreeConfig</defName>
+
+    <xStep>1.0</xStep>
+    <yStep>0.63</yStep>
+    <maxNodesPerColumn>10</maxNodesPerColumn>
+
+    <ignoredTabs>
+      <li>VGE_Gravtech</li>
+      <li>TabAnimal</li>
+    </ignoredTabs>
+
+    <!-- Save Our Ship 2 looks its tabs up by name at startup, so they must keep their projects. -->
+    <preservedTabs>
+      <li MayRequire="OskarPotocki.VFE.Tribals">VFET_Basics</li>
+      <li MayRequire="kentington.saveourship2">ResearchTabShip</li>
+      <li MayRequire="kentington.saveourship2">ResearchTabArchotech</li>
+    </preservedTabs>
+
+    <uncombinedTabs>
+      <li MayRequire="kentington.saveourship2">ResearchTabShip</li>
+      <li MayRequire="kentington.saveourship2">ResearchTabArchotech</li>
+    </uncombinedTabs>
+
+    <techLevelTabs>
+      <li MayRequire="OskarPotocki.VFE.Tribals">
+        <techLevel>Animal</techLevel>
+        <tabName>VFET_Basics</tabName>
+      </li>
+    </techLevelTabs>
+
+    <tabOrder>
+      <li>Main</li>
+      <li MayRequire="OskarPotocki.VFE.Tribals">VFET_Basics</li>
+      <li>TabAnimal</li>
+      <li>TabNeolithic</li>
+      <li>TabMedieval</li>
+      <li>TabIndustrial</li>
+      <li>TabHighIndustrial</li>
+      <li>TabLateIndustrial</li>
+      <li>TabSpacer</li>
+      <li MayRequire="kentington.saveourship2">ResearchTabShip</li>
+      <li>TabUltra</li>
+      <li>TabArchotech</li>
+      <li MayRequire="kentington.saveourship2">ResearchTabArchotech</li>
+      <li>VGE_Gravtech</li>
+      <li>Anomaly</li>
+      <li>TabMisc</li>
+    </tabOrder>
+
+    <tabThemes>
+      <li>
+        <tabName>VGE_Gravtech</tabName>
+        <techLevel>Spacer</techLevel>
+      </li>
+      <li MayRequire="kentington.saveourship2">
+        <tabName>ResearchTabShip</tabName>
+        <techLevel>Spacer</techLevel>
+      </li>
+      <li MayRequire="kentington.saveourship2">
+        <tabName>ResearchTabArchotech</tabName>
+        <techLevel>Archotech</techLevel>
+      </li>
+    </tabThemes>
+
+    <!-- Virtual links steer layout only and are never added to a project's real prerequisites. -->
+    <virtualLinks>
+      <li MayRequire="OskarPotocki.VFE.Classical">
+        <parent>Smithing</parent>
+        <children>
+          <li>VFEC_Togas</li>
+          <li>VFEC_TemperatureControl</li>
+          <li>VFEC_MeatDrying</li>
+          <li>VFEC_Mosaics</li>
+          <li>VFEC_Thermaebath</li>
+          <li>VFEC_DramaAndComedy</li>
+          <li>VFEC_BronzeWorking</li>
+          <li>VFEC_CraftingBench</li>
+          <li>VFEC_CementMaking</li>
+          <li>VFEC_WoodfiredCrematorium</li>
+          <li>VFEC_TyrianProduction</li>
+          <li>VFEC_RoadBuilding</li>
+          <li>VFEC_HeavyShieldMaking</li>
+          <li>VFEC_LegionaryArmaments</li>
+          <li>VFEC_LegionnaireArmor</li>
+          <li>VFEC_CenturionArmor</li>
+          <li>VFEC_Scorpion</li>
+          <li>VFEC_Beacons</li>
+        </children>
+      </li>
+      <li MayRequire="OskarPotocki.VFE.Medieval2">
+        <parent>DankPyon_RusticFurniture</parent>
+        <children>
+          <li>VFEM2_MedievalArchitecture</li>
+        </children>
+      </li>
+    </virtualLinks>
+
+  </ResearchOrganized.ResearchOrganizedConfig>
+
+  <!-- Node Research adds a linked Neolithic emergence node to the Animal era. Keep the
+       resulting Basics graph within the vanilla research viewport without overlapping cards. -->
+  <ResearchOrganized.ResearchOrganizedConfig MayRequire="ferny.noderesearch">
+    <defName>NodeResearchVfeTribalsBasicsLayout</defName>
+    <targetTabs>
+      <li>VFET_Basics</li>
+    </targetTabs>
+    <xStep>0.85</xStep>
+  </ResearchOrganized.ResearchOrganizedConfig>
+
+</Defs>

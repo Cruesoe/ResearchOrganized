@@ -164,7 +164,7 @@ namespace ResearchOrganized.Layout
                     // An anchor sits right after anything already placed before it (or from the epoch's
                     // first column with nothing placed), even among the starters, in the first column with
                     // room for the batch whose next column has room for its followers and where it can sit
-                    // centred on them. A major anchor always goes after everything so far, alone in its column.
+                    // centered on them. A major anchor always goes after everything so far, alone in its column.
                     bool followsPlaced = true;
                     int batchColumn = anchorFloor;
                     foreach (int anchor in batch)
@@ -196,7 +196,7 @@ namespace ResearchOrganized.Layout
                         foreach (int node in dependentsByAnchor[anchor]) if (seenDependent.Add(node)) allDependents.Add(node);
                     }
 
-                    // A column shared with earlier cards is kept only if every anchor can sit centred
+                    // A column shared with earlier cards is kept only if every anchor can sit centered
                     // on its followers there; otherwise the batch is undone and tried one column right.
                     // A fresh column (at currentColumn) always holds the batch.
                     int dependentColumn;
@@ -233,7 +233,7 @@ namespace ResearchOrganized.Layout
                         if (allDependents.Count > 0)
                             PlaceNodesDAG(allDependents, ref dependentColumn, placed, column, row, occupied, reserved, graph, maxNodes, tieRank);
 
-                        // Anchors are lifted out, centred, then set back down clear of each other below.
+                        // Anchors are lifted out, centered, then set back down clear of each other below.
                         foreach (int anchor in batch) occupied.Remove(Key(column[anchor], row[anchor]));
 
                         if (allDependents.Count > 0)
@@ -254,12 +254,12 @@ namespace ResearchOrganized.Layout
                             }
                         }
 
-                        if (!sharedColumn || CentredRowsFree(batch, column, row, occupied, maxNodes)) break;
+                        if (!sharedColumn || CenteredRowsFree(batch, column, row, occupied, maxNodes)) break;
                         if (options.trace != null)
                         {
                             var rows = new List<string>();
                             foreach (int a in batch) rows.Add(Name(options, a) + " row " + row[a]);
-                            Trace(options, "  column {0} skipped: centred row taken or shared ({1})", batchColumn, string.Join(", ", rows.ToArray()));
+                            Trace(options, "  column {0} skipped: centered row taken or shared ({1})", batchColumn, string.Join(", ", rows.ToArray()));
                         }
 
                         foreach (int anchor in batch) placed[anchor] = false;
@@ -530,8 +530,8 @@ namespace ResearchOrganized.Layout
             return list;
         }
 
-        /// <summary>Whether every anchor in <paramref name="batch"/> has its centred row free, in range and unshared within the batch.</summary>
-        private static bool CentredRowsFree(List<int> batch, int[] column, int[] row, HashSet<long> occupied, int maxNodes)
+        /// <summary>Whether every anchor in <paramref name="batch"/> has its centered row free, in range and unshared within the batch.</summary>
+        private static bool CenteredRowsFree(List<int> batch, int[] column, int[] row, HashSet<long> occupied, int maxNodes)
         {
             var taken = new HashSet<int>();
             foreach (int anchor in batch)

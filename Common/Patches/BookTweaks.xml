@@ -1,15 +1,21 @@
-<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8"?>
 <Patch>
 
+  <!-- Vanilla schematics teach only Main-tab projects; this mod moves them to its era tabs. -->
   <Operation Class="PatchOperationAdd">
     <xpath>Defs/ThingDef[defName="Schematic"]/comps/li[@Class="CompProperties_Book"]/doers/li[@Class="BookOutcomeProperties_GainResearch"]/tabs</xpath>
     <value>
+      <TabAnimal />
+      <VFET_Basics MayRequire="OskarPotocki.VFE.Tribals" />
       <TabNeolithic />
       <TabMedieval />
       <TabIndustrial />
+      <TabHighIndustrial />
+      <TabLateIndustrial />
       <TabSpacer />
       <TabUltra />
       <TabArchotech />
+      <TabMisc />
     </value>
   </Operation>
 
