@@ -236,7 +236,8 @@ namespace ResearchOrganized
         /// <summary>PostOpen postfix: vanilla refills the tab strip with every tab, so it is rebuilt on the next draw, and counts are recomputed.</summary>
         public static void OnResearchWindowOpened()
         {
-            fullScreenApplied = ResearchOrganizedMod.settings.fullScreenResearch;
+            // A full screen layout left over from before full screen was turned off is undone, and the window resized, on the first draw.
+            fullScreenApplied = ResearchOrganizedMod.settings.fullScreenResearch || layoutTreeHeight > 0f;
             MarkTabStripDirty();
             InvalidateTabStats();
         }

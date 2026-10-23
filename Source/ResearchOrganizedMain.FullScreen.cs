@@ -89,14 +89,18 @@ namespace ResearchOrganized
         /// <summary>DoWindowContents prefix: resizes the window when full screen was toggled, and redoes the layout when the rows that fit have changed.</summary>
         public static void ApplyFullScreenSize(MainTabWindow_Research __instance)
         {
+            resizedThisFrame = false;
+            if (Event.current.type != EventType.Layout) return;
             bool fullScreen = ResearchOrganizedMod.settings.fullScreenResearch;
-            resizedThisFrame = fullScreen != fullScreenApplied;
-            if (resizedThisFrame)
+            if (fullScreen != fullScreenApplied)
             {
+                // Leaving full screen lays the tree out for normal view first, since the window's height comes from the tallest tree.
+                if (!fullScreen && EffectiveRows(0f) != EffectiveRows(layoutTreeHeight)) OrganizeTabsAndLayout();
                 fullScreenApplied = fullScreen;
+                resizedThisFrame = true;
                 windowSetInitialSizeMethod?.Invoke(__instance, null);
             }
-            else if (Event.current.type == EventType.Layout && EffectiveRows(WantedLayoutTreeHeight) != EffectiveRows(layoutTreeHeight))
+            else if (EffectiveRows(WantedLayoutTreeHeight) != EffectiveRows(layoutTreeHeight))
             {
                 OrganizeTabsAndLayout();
             }
