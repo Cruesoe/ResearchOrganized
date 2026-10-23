@@ -98,46 +98,26 @@ namespace ResearchOrganized
                 ApplyCurTab(__instance, __instance.CurTab);
             }
 
-            // Normal and panel overlay: a row left of Semi Random Research's button. Full screen strip: a column below it.
-            bool fullScreen = ResearchOrganizedMod.settings.fullScreenResearch;
-            bool strip = fullScreen && !drawingFullScreenPanel;
-            var rects = ButtonRects;
-            if (strip)
-            {
-                float x = leftOutRect.xMax - (FullScreenStripWidth + SettingsButtonSize) / 2f;
-                float y = leftOutRect.yMin + (semiRandomResearchActive ? SemiRandomResearchButtonSize + SettingsButtonGap : 0f);
-                for (int i = 0; i < 3; i++, y += SettingsButtonSize + SettingsButtonGap)
-                    rects[i] = new Rect(x, y, SettingsButtonSize, SettingsButtonSize);
-            }
-            else
-            {
-                float right = leftOutRect.xMax;
-                if (semiRandomResearchActive) right -= SemiRandomResearchButtonSize + SettingsButtonGap;
-                float top = leftOutRect.yMin + (SemiRandomResearchButtonSize - SettingsButtonSize) / 2f;
-                for (int i = 0; i < 3; i++, right -= SettingsButtonSize + SettingsButtonGap)
-                    rects[i] = new Rect(right - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
-            }
+            // A row left of Semi Random Research's button: the gear, then the full screen toggle.
+            float right = leftOutRect.xMax;
+            if (semiRandomResearchActive) right -= SemiRandomResearchButtonSize + SettingsButtonGap;
+            float top = leftOutRect.yMin + (SemiRandomResearchButtonSize - SettingsButtonSize) / 2f;
+            var gearRect = new Rect(right - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
+            var toggleRect = new Rect(gearRect.x - SettingsButtonGap - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
 
-            if (Widgets.ButtonImage(rects[0], SettingsGearTex, SettingsButtonColor, GenUI.MouseoverColor, true, "ResearchOrganized_SettingsButtonTip".Translate()))
+            if (Widgets.ButtonImage(gearRect, SettingsGearTex, SettingsButtonColor, GenUI.MouseoverColor, true, "ResearchOrganized_SettingsButtonTip".Translate()))
             {
                 var mod = LoadedModManager.GetMod<ResearchOrganizedMod>();
                 if (mod != null) Find.WindowStack.Add(new Dialog_ModSettings(mod));
                 Event.current.Use();
             }
 
+            bool fullScreen = ResearchOrganizedMod.settings.fullScreenResearch;
             string toggleTip = (fullScreen ? "ResearchOrganized_ExitFullScreenTip" : "ResearchOrganized_EnterFullScreenTip").Translate();
-            if (Widgets.ButtonImage(rects[1], fullScreen ? ExitFullScreenTex : EnterFullScreenTex, SettingsButtonColor, GenUI.MouseoverColor, true, toggleTip))
+            if (Widgets.ButtonImage(toggleRect, fullScreen ? ExitFullScreenTex : EnterFullScreenTex, SettingsButtonColor, GenUI.MouseoverColor, true, toggleTip))
             {
                 ResearchOrganizedMod.settings.fullScreenResearch = !fullScreen;
                 ResearchOrganizedMod.settings.Write();
-                Event.current.Use();
-            }
-
-            if (!fullScreen) return;
-            string panelTip = (fullScreenPanelOpen ? "ResearchOrganized_HidePanelTip" : "ResearchOrganized_ShowPanelTip").Translate();
-            if (Widgets.ButtonImage(rects[2], ProjectPanelTex, SettingsButtonColor, GenUI.MouseoverColor, true, panelTip))
-            {
-                fullScreenPanelOpen = !fullScreenPanelOpen;
                 Event.current.Use();
             }
         }
@@ -257,7 +237,6 @@ namespace ResearchOrganized
         public static void OnResearchWindowOpened()
         {
             fullScreenApplied = ResearchOrganizedMod.settings.fullScreenResearch;
-            fullScreenPanelOpen = false;
             MarkTabStripDirty();
             InvalidateTabStats();
         }

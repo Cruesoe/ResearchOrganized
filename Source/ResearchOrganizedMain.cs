@@ -105,13 +105,10 @@ namespace ResearchOrganized
             }
             semiRandomResearchActive = SemiRandomResearchPatchTypes.Any(name => AccessTools.TypeByName(name) != null);
 
-            // Full screen: the left panel shrinks to a strip of buttons and the window grows to the screen's height.
-            if (doWindowContentsMethod != null && drawLeftRectMethod != null)
+            // Full screen: the window grows to the screen's height and the layout fits as many projects per column as that allows.
+            if (doWindowContentsMethod != null)
             {
-                harmony.Patch(doWindowContentsMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(ApplyFullScreenSize)),
-                    postfix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(DrawFullScreenPanel)),
-                    transpiler: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(LeftPanelWidthTranspiler)));
-                harmony.Patch(drawLeftRectMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(SkipLeftPanelInFullScreen)));
+                harmony.Patch(doWindowContentsMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(ApplyFullScreenSize)));
                 var drawRightRectMethod = AccessTools.Method(typeof(MainTabWindow_Research), "DrawRightRect");
                 if (drawRightRectMethod != null)
                     harmony.Patch(drawRightRectMethod, prefix: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(MeasureTreeHeight)));
