@@ -15,6 +15,7 @@ namespace ResearchOrganized
         public bool writeLayoutLog = false;
         public bool hideUnavailableProjects = false;
         public bool hideFutureTechLevels = false;
+        public bool fullScreenResearch = false;
 
         public Color colorUndefined = new Color(0.60f, 0.60f, 0.60f);
         public Color colorAnimal = new Color(0.45f, 0.33f, 0.24f);
@@ -39,6 +40,7 @@ namespace ResearchOrganized
             Scribe_Values.Look(ref writeLayoutLog, "writeLayoutLog", false);
             Scribe_Values.Look(ref hideUnavailableProjects, "hideUnavailableProjects", false);
             Scribe_Values.Look(ref hideFutureTechLevels, "hideFutureTechLevels", false);
+            Scribe_Values.Look(ref fullScreenResearch, "fullScreenResearch", false);
             Scribe_Values.Look(ref colorUndefined, "colorUndefined", new Color(0.60f, 0.60f, 0.60f));
             Scribe_Values.Look(ref colorAnimal, "colorAnimal", new Color(0.45f, 0.33f, 0.24f));
             Scribe_Values.Look(ref colorNeolithic, "colorNeolithic", new Color(0.40f, 0.00f, 0.00f));
@@ -62,6 +64,7 @@ namespace ResearchOrganized
             writeLayoutLog = defaults.writeLayoutLog;
             hideUnavailableProjects = defaults.hideUnavailableProjects;
             hideFutureTechLevels = defaults.hideFutureTechLevels;
+            fullScreenResearch = defaults.fullScreenResearch;
             colorUndefined = defaults.colorUndefined;
             colorAnimal = defaults.colorAnimal;
             colorNeolithic = defaults.colorNeolithic;

@@ -18,6 +18,7 @@ namespace ResearchOrganized.Tests
         private static int Main(string[] args)
         {
             if (args.Length > 0 && args[0] == "dump") return Dump.Run(args);
+            if (args.Length > 0 && args[0] == "replay") return Replay.Run(args);
             return RunTests();
         }
 
@@ -60,9 +61,8 @@ namespace ResearchOrganized.Tests
             Run("a capstone lands after everything else in its era", CapstoneLandsLast);
             Run("a capstone with no prerequisites still lands last", CapstoneWithNoPrerequisitesStillLandsLast);
 
-            Run("a major anchor stands alone in a new column", MajorAnchorStandsAlone);
-            Run("a major anchor with a placed prerequisite still starts a new column", MajorAnchorWithPlacedPrerequisiteStartsNewColumn);
-            Run("a minor anchor is not batched into a major anchor's column", MinorAnchorKeepsOutOfMajorColumn);
+            Run("a major anchor with no prerequisite starts a new column", MajorAnchorStandsAlone);
+            Run("a major anchor with a placed prerequisite sits right after it", MajorAnchorFollowsItsPrerequisite);
             Run("an anchor in a shared column stays centered on its followers", SharedColumnAnchorStaysCentered);
             Run("an era finale lands after every other anchor in its era", FinaleLandsAfterOtherAnchors);
             Run("an anchor following a starter sits right after it", AnchorFollowsStarterPrerequisite);
@@ -892,7 +892,7 @@ namespace ResearchOrganized.Tests
 
         // ---- major and minor anchors ------------------------------------------------
 
-        /// <summary>Two ready root anchors with small fans: as minors they share a column, but a major one takes a new column alone.</summary>
+        /// <summary>Two ready root anchors with small fans: as minors they share a column, but a major one starts a new column after them.</summary>
         private static void MajorAnchorStandsAlone()
         {
             var graph = new LayoutGraph(8);
@@ -910,8 +910,8 @@ namespace ResearchOrganized.Tests
                 IsTrue(result.Layer[4] > result.Layer[i], string.Format("major anchor comes after project {0}, placed before it", i));
         }
 
-        /// <summary>A major anchor with a placed prerequisite still starts after everything placed before it, not beside that prerequisite.</summary>
-        private static void MajorAnchorWithPlacedPrerequisiteStartsNewColumn()
+        /// <summary>A major anchor with a placed prerequisite sits right after it, without waiting for an unrelated chain to finish.</summary>
+        private static void MajorAnchorFollowsItsPrerequisite()
         {
             var graph = new LayoutGraph(10);
             for (int i = 1; i <= 3; i++) graph.AddEdge(0, i); // minor anchor 0
@@ -921,23 +921,8 @@ namespace ResearchOrganized.Tests
 
             var options = AnchorOptions(10, new[] { 0, 6 }, new[] { 6 });
             var result = TabLayout.Compute(graph, options);
-            AssertAloneInColumn(result, 6, "major anchor");
-            for (int i = 0; i <= 5; i++)
-                IsTrue(result.Layer[6] > result.Layer[i], string.Format("major anchor comes after project {0}, placed before it", i));
-        }
-
-        /// <summary>A later minor anchor whose prerequisite sits just before a major anchor's column must not join it.</summary>
-        private static void MinorAnchorKeepsOutOfMajorColumn()
-        {
-            var graph = new LayoutGraph(11);
-            for (int i = 1; i <= 3; i++) graph.AddEdge(0, i); // minor anchor 0
-            graph.AddEdge(4, 5); graph.AddEdge(4, 6);         // major anchor 4
-            graph.AddEdge(1, 7);                              // minor anchor 7 follows 0's first child
-            for (int i = 8; i <= 10; i++) graph.AddEdge(7, i);
-
-            var options = AnchorOptions(11, new[] { 0, 4, 7 }, new[] { 4 });
-            var result = TabLayout.Compute(graph, options);
-            AssertAloneInColumn(result, 4, "major anchor");
+            AreEqual(result.Layer[1] + 1, result.Layer[6], "major anchor sits right after its prerequisite");
+            IsTrue(result.Layer[6] < result.Layer[5], "major anchor does not wait for the unrelated chain");
         }
 
         /// <summary>

@@ -98,15 +98,26 @@ namespace ResearchOrganized
                 ApplyCurTab(__instance, __instance.CurTab);
             }
 
+            // A row left of Semi Random Research's button: the gear, then the full screen toggle.
             float right = leftOutRect.xMax;
             if (semiRandomResearchActive) right -= SemiRandomResearchButtonSize + SettingsButtonGap;
             float top = leftOutRect.yMin + (SemiRandomResearchButtonSize - SettingsButtonSize) / 2f;
-            var rect = new Rect(right - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
+            var gearRect = new Rect(right - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
+            var toggleRect = new Rect(gearRect.x - SettingsButtonGap - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
 
-            if (Widgets.ButtonImage(rect, SettingsGearTex, SettingsButtonColor, GenUI.MouseoverColor, true, "ResearchOrganized_SettingsButtonTip".Translate()))
+            if (Widgets.ButtonImage(gearRect, SettingsGearTex, SettingsButtonColor, GenUI.MouseoverColor, true, "ResearchOrganized_SettingsButtonTip".Translate()))
             {
                 var mod = LoadedModManager.GetMod<ResearchOrganizedMod>();
                 if (mod != null) Find.WindowStack.Add(new Dialog_ModSettings(mod));
+                Event.current.Use();
+            }
+
+            bool fullScreen = ResearchOrganizedMod.settings.fullScreenResearch;
+            string toggleTip = (fullScreen ? "ResearchOrganized_ExitFullScreenTip" : "ResearchOrganized_EnterFullScreenTip").Translate();
+            if (Widgets.ButtonImage(toggleRect, fullScreen ? ExitFullScreenTex : EnterFullScreenTex, SettingsButtonColor, GenUI.MouseoverColor, true, toggleTip))
+            {
+                ResearchOrganizedMod.settings.fullScreenResearch = !fullScreen;
+                ResearchOrganizedMod.settings.Write();
                 Event.current.Use();
             }
         }
@@ -225,6 +236,8 @@ namespace ResearchOrganized
         /// <summary>PostOpen postfix: vanilla refills the tab strip with every tab, so it is rebuilt on the next draw, and counts are recomputed.</summary>
         public static void OnResearchWindowOpened()
         {
+            // A full screen layout left over from before full screen was turned off is undone, and the window resized, on the first draw.
+            fullScreenApplied = ResearchOrganizedMod.settings.fullScreenResearch || layoutTreeHeight > 0f;
             MarkTabStripDirty();
             InvalidateTabStats();
         }

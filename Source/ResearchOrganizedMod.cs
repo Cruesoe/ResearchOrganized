@@ -84,6 +84,9 @@ namespace ResearchOrganized
             listing.CheckboxLabeled("ResearchOrganized_HideFutureTechLevels".Translate(), ref settings.hideFutureTechLevels,
                 "ResearchOrganized_HideFutureTechLevelsTip".Translate());
 
+            listing.CheckboxLabeled("ResearchOrganized_FullScreen".Translate(), ref settings.fullScreenResearch,
+                "ResearchOrganized_FullScreenTip".Translate());
+
             listing.CheckboxLabeled("ResearchOrganized_ShowTabCounts".Translate(), ref settings.showTabProjectCounts,
                 "ResearchOrganized_ShowTabCountsTip".Translate());
 

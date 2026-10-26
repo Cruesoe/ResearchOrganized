@@ -40,7 +40,7 @@ namespace ResearchOrganized.Layout
 
             var placed = new bool[n];
             var occupied = new HashSet<long>();
-            var reserved = new HashSet<int>(); // columns held alone by a major anchor
+            var reserved = new HashSet<int>(); // columns held alone by an era finale
             int currentColumn = 0;
 
             var ancestorCache = new HashSet<int>[n];
@@ -164,7 +164,8 @@ namespace ResearchOrganized.Layout
                     // An anchor sits right after anything already placed before it (or from the epoch's
                     // first column with nothing placed), even among the starters, in the first column with
                     // room for the batch whose next column has room for its followers and where it can sit
-                    // centered on them. A major anchor always goes after everything so far, alone in its column.
+                    // centered on them. A major anchor with no placed prerequisite, and an era finale, go after everything
+                    // so far; a finale also stands alone in its column.
                     bool followsPlaced = true;
                     int batchColumn = anchorFloor;
                     foreach (int anchor in batch)
@@ -180,7 +181,7 @@ namespace ResearchOrganized.Layout
                         if (!hasPlacedParent) followsPlaced = false;
                     }
                     bool majorBatch = isMajorAnchor[batch[0]];
-                    if (majorBatch) batchColumn = Math.Max(batchColumn, currentColumn);
+                    if (isFinale[batch[0]] || (majorBatch && !followsPlaced)) batchColumn = Math.Max(batchColumn, currentColumn);
                     if (options.trace != null)
                     {
                         var names = new List<string>();
@@ -204,9 +205,9 @@ namespace ResearchOrganized.Layout
                     {
                         while (batchColumn < currentColumn)
                         {
-                            string skip = reserved.Contains(batchColumn) ? "held by a major anchor"
+                            string skip = reserved.Contains(batchColumn) ? "held by an era finale"
                                 : CountInColumn(occupied, batchColumn) + batch.Count > maxNodes ? "no room for the batch"
-                                : CountInColumn(occupied, batchColumn + 1) + batchCapacity > maxNodes ? "no room for its followers in the next column"
+                                : CountInColumn(occupied, batchColumn + 1) + Math.Min(batchCapacity, maxNodes) > maxNodes ? "no room for its followers in the next column"
                                 : null;
                             if (skip == null) break;
                             Trace(options, "  column {0} skipped: {1}", batchColumn, skip);
@@ -271,7 +272,7 @@ namespace ResearchOrganized.Layout
                         batchColumn++;
                     }
 
-                    if (majorBatch) reserved.Add(batchColumn);
+                    if (isFinale[batch[0]]) reserved.Add(batchColumn);
                     Trace(options, "  placed in column {0}; {1} follower(s) in columns {2}-{3}", batchColumn, allDependents.Count, batchColumn + 1, dependentColumn - 1);
                     currentColumn = Math.Max(currentColumn, batchColumn + 1);
                     if (allDependents.Count > 0) currentColumn = Math.Max(currentColumn, dependentColumn);
