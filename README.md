@@ -21,4 +21,4 @@ Sorts research projects into tech-level tabs and lays each tab out as a tidy, re
 - Loads after the ProgressionLESS suite, so its research lands in the right tabs.
 - With VFE Tribals, its Basics tab takes the Primitive projects.
 - With Save Our Ship 2, its Ship and Archotech tabs keep their own projects.
-- Semi Random Research's button and the settings gear sit side by side; Research Icons works alongside.
+- Semi Random Research's button and the settings gear sit side by side; Research Icons works alongside, with columns widened to fit its wider cards.
