@@ -154,7 +154,7 @@ namespace ResearchOrganized
 
             var graph = BuildGraph(tabNodes);
 
-            var options = BuildOptions(tabName);
+            var options = BuildOptions(tabName, tabNodes);
             options.epoch = new int[tabNodes.Count];
             options.isAnchor = new bool[tabNodes.Count];
             options.isMajorAnchor = new bool[tabNodes.Count];
@@ -253,7 +253,10 @@ namespace ResearchOrganized
             return rank;
         }
 
-        private static LayoutOptions BuildOptions(string tabName)
+        // Vanilla CoordToPixelsX: pixels per unit of researchViewX.
+        private const float PixelsPerX = 190f;
+
+        private static LayoutOptions BuildOptions(string tabName, List<ResearchProjectDef> tabNodes)
         {
             var options = new LayoutOptions
             {
@@ -269,6 +272,12 @@ namespace ResearchOrganized
                 options.yStep = perTab.yStep;
                 options.maxNodesPerColumn = perTab.maxNodesPerColumn;
             }
+
+            // Column steps are set for vanilla's card width; widen them by however much wider the tab's widest card is drawn.
+            float extraWidth = 0f;
+            foreach (var project in tabNodes)
+                extraWidth = Math.Max(extraWidth, ResearchIconsCompat.CardWidth(project) - ResearchIconsCompat.VanillaCardWidth);
+            options.xStep += extraWidth / PixelsPerX;
 
             // Full screen fits more projects into each column when its tree is taller.
             int fullScreenRows = ResearchOrganizedMain.FullScreenRows(options.yStep);

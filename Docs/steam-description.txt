@@ -27,7 +27,7 @@ In some cases the result is not strictly linear, but I believe it makes the tree
 [/list]
 
 [h2]Compatibility[/h2]
-Works with [b]Node Research[/b] (foundation technologies get a gold corner mark, and you can switch freely between its node view and these tabs), [b]Semi Random Research Pfork Continued[/b] (its button and the settings gear sit side by side), [b]Research Icons[/b], [b]Save Our Ship 2[/b] (its Ship and Archotech tabs keep their projects), and [b]ProgressionLESS[/b] and [b]VFE Tribals[/b] (their research lands in the right tabs).
+Works with [b]Node Research[/b] (foundation technologies get a gold corner mark, and you can switch freely between its node view and these tabs), [b]Semi Random Research Pfork Continued[/b] (its button and the settings gear sit side by side), [b]Research Icons[/b] (columns widen to fit its wider cards), [b]Save Our Ship 2[/b] (its Ship and Archotech tabs keep their projects), and [b]ProgressionLESS[/b] and [b]VFE Tribals[/b] (their research lands in the right tabs).
 Tested with Ferny's Progression mod pack and Path of the Muffalo (as long as you remove the conflicts!).
 Not compatible with other research tab organizers, because they control the same system.
 Safe to add to or remove from an existing save.
