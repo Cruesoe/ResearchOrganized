@@ -32,6 +32,9 @@ namespace ResearchOrganized.Tests
             Run("cycle reversal is deterministic and acyclic", CycleReversalIsDeterministic);
             Run("long-edge crossings are counted", LongEdgeCrossingsAreCounted);
             Run("row optimizer removes a crossing", RowOptimizerRemovesCrossing);
+            Run("a card slides into a free row level with its prerequisite", CardSlidesLevelWithPrerequisite);
+            Run("a card stays put when its prerequisite's row is taken", CardKeepsRowWhenTargetTaken);
+            Run("VFE Tribals Basics keeps Mining, Construction and Furniture level", BasicsMiningBranchStaysLevel);
             Run("tab override replaces an ignored built-in tab", TabOverrideReplacesIgnoredTab);
             Run("preserved tab keeps its membership", PreservedTabKeepsMembership);
             Run("anomaly routing has highest priority", AnomalyRoutingHasHighestPriority);
@@ -223,6 +226,54 @@ namespace ResearchOrganized.Tests
             AreEqual(0, CrossingCounter.Count(graph, columns, rows), "crossing after optimization");
             AreEqual(0, columns[0], "source column remained fixed");
             AreEqual(1, columns[2], "destination column remained fixed");
+        }
+
+        private static void CardSlidesLevelWithPrerequisite()
+        {
+            // Irrigation (1) -> Fire suppression (2) -> follow-up (3); an anchor (0) holds Irrigation's old row.
+            var graph = new LayoutGraph(4);
+            graph.AddEdge(1, 2);
+            graph.AddEdge(2, 3);
+            var columns = new[] { 0, 0, 1, 2 };
+            var rows = new[] { 0, 1, 0, 0 };
+
+            RowOptimizer.Improve(graph, new LayoutOptions(), new[] { true, true, false, false }, columns, rows);
+
+            AreEqual(1, rows[2], "card moved level with its prerequisite");
+            AreEqual(1, rows[3], "level follower moved with it");
+        }
+
+        private static void CardKeepsRowWhenTargetTaken()
+        {
+            // The anchor (3) holds the row Fire suppression (2) would need.
+            var graph = new LayoutGraph(4);
+            graph.AddEdge(1, 2);
+            var columns = new[] { 0, 0, 1, 1 };
+            var rows = new[] { 0, 1, 0, 1 };
+
+            RowOptimizer.Improve(graph, new LayoutOptions(), new[] { true, true, false, true }, columns, rows);
+
+            AreEqual(0, rows[2], "card kept its row");
+            AreEqual(1, rows[3], "anchor kept its row");
+        }
+
+        private static void BasicsMiningBranchStaysLevel()
+        {
+            LayoutGraph graph = RepresentativeFixtures.VfeTribalsBasics();
+            int n = graph.NodeCount;
+            // Cheapest first, then defName, as the mod ranks them.
+            int[] order = { 1, 4, 6, 2, 0, 9, 5, 8, 10, 11, 7, 3, 12 };
+            var tieRank = new int[n];
+            for (int position = 0; position < n; position++) tieRank[order[position]] = position;
+            var isAnchor = new bool[n];
+            isAnchor[0] = true;
+            var options = new LayoutOptions { maxNodesPerColumn = 10, tieRank = tieRank, isAnchor = isAnchor };
+
+            LayoutResult result = TabLayout.Compute(graph, options);
+
+            AreEqual(0, result.Crossings, "Basics has no crossings");
+            IsTrue(Math.Abs(result.Y[5] - result.Y[6]) < 0.001f, "Construction is level with Mining");
+            IsTrue(Math.Abs(result.Y[6] - result.Y[7]) < 0.001f, "Furniture is level with Construction");
         }
 
         private static void TabOverrideReplacesIgnoredTab()

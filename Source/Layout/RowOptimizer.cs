@@ -5,10 +5,12 @@ namespace ResearchOrganized.Layout
 {
     /// <summary>
     /// Improves rows without changing columns, anchors, epochs, or capacity. Barycentric sweeps
-    /// make broad moves toward connected neighbors; adjacent swaps then refine the result.
+    /// make broad moves toward connected neighbors; adjacent swaps then refine the result, and a
+    /// final pass slides cards into free rows level with a prerequisite.
     /// Swap scoring is local to incident edges, avoiding a full graph recount per candidate.
     ///
-    /// Judged on the drawn tree alone - fewest crossing connectors, then shortest connectors.
+    /// Judged on the drawn tree alone - fewest crossing connectors, then shortest connectors,
+    /// then most level connectors.
     /// Where a project sat in its own mod's XML is not considered: this layout moves nearly
     /// every card anyway, and preferring the authored row used to outrank connector length,
     /// which pulled a parent off the row its follower had already been aligned to.
@@ -25,12 +27,14 @@ namespace ResearchOrganized.Layout
         {
             public int Crossings;
             public long VerticalSpan;
+            public int LevelLinks;
         }
 
         private struct LocalScore
         {
             public int Crossings;
             public long VerticalSpan;
+            public int LevelLinks;
         }
 
         public static void Improve(LayoutGraph graph, LayoutOptions options, bool[] isAnchor, int[] column, int[] row)
@@ -57,6 +61,97 @@ namespace ResearchOrganized.Layout
                     minColumn, maxColumn, reverse, ref current)) improved = true;
                 if (!improved) break;
             }
+
+            for (int pass = 0; pass < MaxPasses; pass++)
+            {
+                if (!StraightenSweep(graph, edges, options, isAnchor, column, row, ref current)) break;
+            }
+        }
+
+        /// <summary>
+        /// Slides each card into a free row level with one of its prerequisites, taking along any
+        /// followers already level with it. Anchors stay put, so they stay centered on their followers.
+        /// </summary>
+        private static bool StraightenSweep(LayoutGraph graph, List<LayoutGraph.Edge> edges, LayoutOptions options,
+            bool[] isAnchor, int[] column, int[] row, ref Score current)
+        {
+            var occupied = new HashSet<long>();
+            var nodes = new List<int>();
+            for (int node = 0; node < graph.NodeCount; node++)
+            {
+                occupied.Add(CellKey(column[node], row[node]));
+                nodes.Add(node);
+            }
+            nodes.Sort((first, second) =>
+            {
+                if (column[first] != column[second]) return column[first].CompareTo(column[second]);
+                return row[first].CompareTo(row[second]);
+            });
+
+            bool improved = false;
+            foreach (int node in nodes)
+            {
+                if (isAnchor[node]) continue;
+                IReadOnlyList<int> parents = graph.ParentsOf(node);
+                for (int i = 0; i < parents.Count; i++)
+                {
+                    int target = row[parents[i]];
+                    if (target == row[node]) continue;
+                    List<int> block = LevelBlock(graph, isAnchor, row, node);
+                    if (TryMoveBlock(graph, edges, options, column, row, occupied, block, target, ref current)) improved = true;
+                }
+            }
+            return improved;
+        }
+
+        /// <summary>The card and every non-anchor follower reached through level connectors.</summary>
+        private static List<int> LevelBlock(LayoutGraph graph, bool[] isAnchor, int[] row, int start)
+        {
+            var block = new List<int> { start };
+            var seen = new HashSet<int> { start };
+            for (int i = 0; i < block.Count; i++)
+            {
+                IReadOnlyList<int> children = graph.ChildrenOf(block[i]);
+                for (int c = 0; c < children.Count; c++)
+                {
+                    int child = children[c];
+                    if (!isAnchor[child] && row[child] == row[start] && seen.Add(child)) block.Add(child);
+                }
+            }
+            return block;
+        }
+
+        private static bool TryMoveBlock(LayoutGraph graph, List<LayoutGraph.Edge> edges, LayoutOptions options,
+            int[] column, int[] row, HashSet<long> occupied, List<int> block, int target, ref Score current)
+        {
+            for (int i = 0; i < block.Count; i++)
+                if (occupied.Contains(CellKey(column[block[i]], target))) return false;
+
+            int source = row[block[0]];
+            HashSet<int> affectedEdges = IncidentEdges(edges, new HashSet<int>(block));
+            LocalScore before = EvaluateLocal(edges, options, column, row, affectedEdges, graph);
+            for (int i = 0; i < block.Count; i++) row[block[i]] = target;
+            LocalScore after = EvaluateLocal(edges, options, column, row, affectedEdges, graph);
+            Score candidate = ApplyDelta(current, before, after);
+
+            if (!IsBetter(candidate, current))
+            {
+                for (int i = 0; i < block.Count; i++) row[block[i]] = source;
+                return false;
+            }
+
+            current = candidate;
+            for (int i = 0; i < block.Count; i++)
+            {
+                occupied.Remove(CellKey(column[block[i]], source));
+                occupied.Add(CellKey(column[block[i]], target));
+            }
+            return true;
+        }
+
+        private static long CellKey(int column, int row)
+        {
+            return ((long)column << 32) ^ (uint)row;
         }
 
         private static bool BarycentricSweep(LayoutGraph graph, List<LayoutGraph.Edge> edges, LayoutOptions options,
@@ -193,7 +288,10 @@ namespace ResearchOrganized.Layout
         {
             var score = new Score { Crossings = CrossingCounter.Count(graph, column, row, options.xStep, options.yStep) };
             for (int i = 0; i < edges.Count; i++)
+            {
                 score.VerticalSpan += Math.Abs((long)row[edges[i].Parent] - row[edges[i].Child]);
+                if (row[edges[i].Parent] == row[edges[i].Child]) score.LevelLinks++;
+            }
             return score;
         }
 
@@ -208,6 +306,7 @@ namespace ResearchOrganized.Layout
             {
                 LayoutGraph.Edge edge = edges[edgeIndex];
                 score.VerticalSpan += Math.Abs((long)row[edge.Parent] - row[edge.Child]);
+                if (row[edge.Parent] == row[edge.Child]) score.LevelLinks++;
             }
             return score;
         }
@@ -225,14 +324,16 @@ namespace ResearchOrganized.Layout
             return new Score
             {
                 Crossings = current.Crossings - before.Crossings + after.Crossings,
-                VerticalSpan = current.VerticalSpan - before.VerticalSpan + after.VerticalSpan
+                VerticalSpan = current.VerticalSpan - before.VerticalSpan + after.VerticalSpan,
+                LevelLinks = current.LevelLinks - before.LevelLinks + after.LevelLinks
             };
         }
 
         private static bool IsBetter(Score candidate, Score current)
         {
             if (candidate.Crossings != current.Crossings) return candidate.Crossings < current.Crossings;
-            return candidate.VerticalSpan < current.VerticalSpan;
+            if (candidate.VerticalSpan != current.VerticalSpan) return candidate.VerticalSpan < current.VerticalSpan;
+            return candidate.LevelLinks > current.LevelLinks;
         }
 
         private static void Swap(int[] values, int first, int second)
