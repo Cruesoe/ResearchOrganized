@@ -27,6 +27,11 @@
   <ResearchOrganized_CombineIndustrial>Combine Industrial</ResearchOrganized_CombineIndustrial>
   <ResearchOrganized_CombineIndustrialTip>Merges High and Late Industrial technologies back into the main Industrial tab.</ResearchOrganized_CombineIndustrialTip>
   <ResearchOrganized_CombineIndustrialIncludedTip>Included in Combine All Tabs. Turn that off to choose this separately.</ResearchOrganized_CombineIndustrialIncludedTip>
+  <ResearchOrganized_SeparateEras>Space Between Eras</ResearchOrganized_SeparateEras>
+  <ResearchOrganized_SeparateErasTip>Leaves a narrow gap between one tech level's block and the next on the combined tab. Off, the blocks sit side by side, as in the vanilla tree.</ResearchOrganized_SeparateErasTip>
+  <ResearchOrganized_CrossEraLines>Lines Between Eras</ResearchOrganized_CrossEraLines>
+  <ResearchOrganized_CrossEraLinesTip>Draws prerequisite lines between projects of different tech levels on the combined tab, as vanilla does. Turn off to hide them and cut the clutter.</ResearchOrganized_CrossEraLinesTip>
+  <ResearchOrganized_RequiresCombineAllTabs>Requires Combine All Tabs.</ResearchOrganized_RequiresCombineAllTabs>
 
   <ResearchOrganized_SectionColors>Colors</ResearchOrganized_SectionColors>
   <ResearchOrganized_ColorCards>Color Cards by Tech Level</ResearchOrganized_ColorCards>
@@ -43,10 +48,10 @@
   <ResearchOrganized_ColorAnomaly>Anomaly</ResearchOrganized_ColorAnomaly>
 
   <ResearchOrganized_SectionLayout>Layout</ResearchOrganized_SectionLayout>
-  <ResearchOrganized_AnchorIntro>A project with this many direct follow-ups on its own tab is treated as a hub: it keeps its place in the tree when a column is full, and the lesser projects move aside instead.</ResearchOrganized_AnchorIntro>
-  <ResearchOrganized_MinorAnchor>Follow-ups for a minor anchor:</ResearchOrganized_MinorAnchor>
-  <ResearchOrganized_MajorAnchor>Follow-ups for a major anchor:</ResearchOrganized_MajorAnchor>
-  <ResearchOrganized_MajorAnchorTip>A major anchor is never grouped with another hub. With no prerequisite on its tab it starts after everything before it; otherwise it sits as soon after its prerequisites as there is room.</ResearchOrganized_MajorAnchorTip>
+  <ResearchOrganized_MinorAnchor>Follow-ups for a minor hub:</ResearchOrganized_MinorAnchor>
+  <ResearchOrganized_MinorAnchorTip>A project with this many direct follow-ups on its own tab is treated as a hub: it keeps its place in the tree when a column is full, and the lesser projects move aside instead.</ResearchOrganized_MinorAnchorTip>
+  <ResearchOrganized_MajorAnchor>Follow-ups for a major hub:</ResearchOrganized_MajorAnchor>
+  <ResearchOrganized_MajorAnchorTip>A major hub is never grouped with another hub. With no prerequisite on its tab it starts after everything before it; otherwise it sits as soon after its prerequisites as there is room.</ResearchOrganized_MajorAnchorTip>
   <ResearchOrganized_WriteLayoutLog>Write Layout Log</ResearchOrganized_WriteLayoutLog>
   <ResearchOrganized_WriteLayoutLogTip>Writes every project's column, row and hub type, and each hub's placement decisions, to Player.log whenever the layout is built.</ResearchOrganized_WriteLayoutLogTip>
   <ResearchOrganized_ResetDefaults>Reset to Defaults</ResearchOrganized_ResetDefaults>

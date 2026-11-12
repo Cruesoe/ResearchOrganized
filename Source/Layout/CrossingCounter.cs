@@ -4,11 +4,10 @@ using System.Collections.Generic;
 namespace ResearchOrganized.Layout
 {
     /// <summary>
-    /// Counts unique pairs of rendered prerequisite connectors that intersect. RimWorld 1.6
-    /// draws a straight line from the prerequisite card's right edge to the dependent card's
-    /// left edge. Its research view uses 190 pixels per X unit, 100 pixels per Y unit, and a
-    /// 140-pixel card width; using those values here makes the optimizer measure the geometry
-    /// players actually see.
+    /// Counts unique pairs of rendered prerequisite connectors that intersect. The research
+    /// window draws a straight line from the prerequisite card's right edge to the dependent
+    /// card's left edge, at 190 pixels per X unit, 100 pixels per Y unit and a 140-pixel card
+    /// width; those values are used here.
     ///
     /// Every edge handed here is taken to be a line on screen. Links drawn with nothing between
     /// them are the caller's to filter out, with <see cref="LayoutGraph.DrawnOnly"/>.

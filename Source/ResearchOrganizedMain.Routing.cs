@@ -2,11 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Reflection.Emit;
 using HarmonyLib;
 using ResearchOrganized.Layout;
 using RimWorld;
-using UnityEngine;
 using Verse;
 
 namespace ResearchOrganized
@@ -40,6 +38,8 @@ namespace ResearchOrganized
             return tab != null && (IsGravtechTab(tab) || UncombinedTabs.Contains(tab.defName));
         }
 
+        private static readonly FieldInfo defsListField = AccessTools.Field(typeof(DefDatabase<ResearchTabDef>), "defsList");
+        private static readonly FieldInfo defsByNameField = AccessTools.Field(typeof(DefDatabase<ResearchTabDef>), "defsByName");
         private static readonly FieldInfo tabInfoVisibilityField = AccessTools.Field(typeof(ResearchManager), "tabInfoVisibility");
         private static readonly FieldInfo defMapValuesField = AccessTools.Field(typeof(DefMap<ResearchTabDef, bool>), "values");
 
@@ -217,8 +217,6 @@ namespace ResearchOrganized
         {
             try
             {
-                var defsListField = AccessTools.Field(typeof(DefDatabase<ResearchTabDef>), "defsList");
-                var defsByNameField = AccessTools.Field(typeof(DefDatabase<ResearchTabDef>), "defsByName");
                 if (defsListField == null || defsByNameField == null) return;
                 var defsList = (List<ResearchTabDef>)defsListField.GetValue(null);
                 var defsByName = (Dictionary<string, ResearchTabDef>)defsByNameField.GetValue(null);
@@ -241,22 +239,13 @@ namespace ResearchOrganized
             catch (Exception ex) { Log.Error($"[Research: Organized] Hide Tabs Error: {ex.Message}"); }
         }
 
-        /// <summary>
-        /// Puts back every tab a previous pass removed.
-        ///
-        /// Hiding a tab deletes it from the def database, which used to be a one-way trip:
-        /// re-running the organizer could never bring a tab back, so changing a setting that
-        /// refills a tab left it permanently invisible. Keeping the removed defs lets the
-        /// organizer be run more than once in a session.
-        /// </summary>
+        /// <summary>Puts every tab a previous pass removed from the def database back, so a rerun can refill it.</summary>
         private static void RestoreHiddenTabs()
         {
             if (hiddenTabs.Count == 0) return;
 
             try
             {
-                var defsListField = AccessTools.Field(typeof(DefDatabase<ResearchTabDef>), "defsList");
-                var defsByNameField = AccessTools.Field(typeof(DefDatabase<ResearchTabDef>), "defsByName");
                 if (defsListField == null || defsByNameField == null) return;
                 var defsList = (List<ResearchTabDef>)defsListField.GetValue(null);
                 var defsByName = (Dictionary<string, ResearchTabDef>)defsByNameField.GetValue(null);
@@ -276,7 +265,6 @@ namespace ResearchOrganized
 
         private static void SortAndIndexTabs()
         {
-            var defsListField = AccessTools.Field(typeof(DefDatabase<ResearchTabDef>), "defsList");
             if (defsListField == null) return;
             if (defsListField.GetValue(null) is List<ResearchTabDef> list)
             {

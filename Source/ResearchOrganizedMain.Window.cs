@@ -2,9 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Reflection.Emit;
 using HarmonyLib;
-using ResearchOrganized.Layout;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -16,11 +14,47 @@ namespace ResearchOrganized
         private static FieldInfo researchTabRecordDefField;
         private static ConstructorInfo researchTabRecordCtor;
         private static readonly FieldInfo researchWindowCurTabField = AccessTools.Field(typeof(MainTabWindow_Research), "curTabInt");
-        private static readonly FieldInfo researchWindowSelectedProjectField = AccessTools.Field(typeof(MainTabWindow_Research), "selectedProject");
+        private static readonly AccessTools.FieldRef<MainTabWindow_Research, ResearchProjectDef> researchWindowSelectedProjectRef = SelectedProjectRef();
         private static readonly MethodInfo researchWindowUpdateSelectedMethod = AccessTools.Method(typeof(MainTabWindow_Research), "UpdateSelectedProject");
         private static FieldInfo researchWindowTabsField;
         private static readonly FieldInfo researchWindowScrollPositionerField = AccessTools.Field(typeof(MainTabWindow_Research), "scrollPositioner");
-        private static Game lastResearchWindowGame;
+
+        /// <summary>Whether the research window has opened in the current game; reset as each game finishes loading.</summary>
+        private static bool researchWindowOpenedThisGame;
+
+        /// <summary>The research window's tab strip list. Vanilla clears and refills the same list, so it is read once per window.</summary>
+        private static System.Collections.IList researchWindowTabs;
+        private static MainTabWindow_Research researchWindowTabsOwner;
+
+        /// <summary>Each tab strip record's tab, read once per record; cleared whenever the strip is refilled.</summary>
+        private static readonly Dictionary<object, ResearchTabDef> tabRecordDefs = new Dictionary<object, ResearchTabDef>();
+
+        private static AccessTools.FieldRef<MainTabWindow_Research, ResearchProjectDef> SelectedProjectRef()
+        {
+            var field = AccessTools.Field(typeof(MainTabWindow_Research), "selectedProject");
+            return field == null ? null : AccessTools.FieldRefAccess<MainTabWindow_Research, ResearchProjectDef>(field);
+        }
+
+        private static ResearchProjectDef SelectedProject(MainTabWindow_Research window) =>
+            researchWindowSelectedProjectRef == null || window == null ? null : researchWindowSelectedProjectRef(window);
+
+        private static System.Collections.IList TabRecords(MainTabWindow_Research window)
+        {
+            if (researchWindowTabsField == null || window == null) return null;
+            if (window != researchWindowTabsOwner)
+            {
+                researchWindowTabs = researchWindowTabsField.GetValue(window) as System.Collections.IList;
+                researchWindowTabsOwner = window;
+            }
+            return researchWindowTabs;
+        }
+
+        private static ResearchTabDef TabRecordDef(object record)
+        {
+            if (record == null || researchTabRecordDefField == null) return null;
+            if (!tabRecordDefs.TryGetValue(record, out var def)) tabRecordDefs[record] = def = researchTabRecordDefField.GetValue(record) as ResearchTabDef;
+            return def;
+        }
 
         // Semi Random Research's DrawLeftRect patch class: P-Fork Continued, then older versions.
         private static readonly string[] SemiRandomResearchPatchTypes =
@@ -85,9 +119,9 @@ namespace ResearchOrganized
         /// <summary>Disarms vanilla's scroll to the current project on every open but the first in each game.</summary>
         public static void KeepScrollOnReopen(MainTabWindow_Research __instance)
         {
-            if (lastResearchWindowGame == Current.Game)
+            if (researchWindowOpenedThisGame)
                 (researchWindowScrollPositionerField.GetValue(__instance) as ScrollPositioner)?.Arm(false);
-            lastResearchWindowGame = Current.Game;
+            researchWindowOpenedThisGame = true;
         }
 
         public static void DrawSettingsButton(MainTabWindow_Research __instance, Rect leftOutRect)
@@ -105,7 +139,7 @@ namespace ResearchOrganized
             var gearRect = new Rect(right - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
             var toggleRect = new Rect(gearRect.x - SettingsButtonGap - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
 
-            if (Widgets.ButtonImage(gearRect, SettingsGearTex, SettingsButtonColor, GenUI.MouseoverColor, true, "ResearchOrganized_SettingsButtonTip".Translate()))
+            if (Widgets.ButtonImage(gearRect, SettingsGearTex, SettingsButtonColor, GenUI.MouseoverColor, true, TranslationCache.Get("ResearchOrganized_SettingsButtonTip")))
             {
                 var mod = LoadedModManager.GetMod<ResearchOrganizedMod>();
                 if (mod != null) Find.WindowStack.Add(new Dialog_ModSettings(mod));
@@ -113,7 +147,7 @@ namespace ResearchOrganized
             }
 
             bool fullScreen = ResearchOrganizedMod.settings.fullScreenResearch;
-            string toggleTip = (fullScreen ? "ResearchOrganized_ExitFullScreenTip" : "ResearchOrganized_EnterFullScreenTip").Translate();
+            string toggleTip = TranslationCache.Get(fullScreen ? "ResearchOrganized_ExitFullScreenTip" : "ResearchOrganized_EnterFullScreenTip");
             if (Widgets.ButtonImage(toggleRect, fullScreen ? ExitFullScreenTex : EnterFullScreenTex, SettingsButtonColor, GenUI.MouseoverColor, true, toggleTip))
             {
                 ResearchOrganizedMod.settings.fullScreenResearch = !fullScreen;
@@ -139,8 +173,9 @@ namespace ResearchOrganized
                 if (Current.Game == null) return;
                 var window = MainButtonDefOf.Research?.TabWindow as MainTabWindow_Research
                              ?? Find.WindowStack?.WindowOfType<MainTabWindow_Research>();
-                if (window == null || researchWindowTabsField == null || researchTabRecordCtor == null || researchWindowCurTabField == null) return;
-                if (!(researchWindowTabsField.GetValue(window) is System.Collections.IList tabs)) return;
+                if (window == null || researchTabRecordCtor == null || researchWindowCurTabField == null) return;
+                var tabs = TabRecords(window);
+                if (tabs == null) return;
 
                 BuildTabStrip(window, tabs, null);
                 tabStripDirty = true;
@@ -148,7 +183,7 @@ namespace ResearchOrganized
                 var target = window.CurTab;
                 if (target == null || !DefDatabase<ResearchTabDef>.AllDefsListForReading.Contains(target))
                 {
-                    var selectedProject = researchWindowSelectedProjectField?.GetValue(window) as ResearchProjectDef;
+                    var selectedProject = SelectedProject(window);
                     target = selectedProject?.tab ?? DefDatabase<ResearchTabDef>.AllDefsListForReading.FirstOrDefault();
                 }
 
@@ -174,6 +209,7 @@ namespace ResearchOrganized
         private static void BuildTabStrip(MainTabWindow_Research window, System.Collections.IList tabs, HashSet<ResearchTabDef> shown)
         {
             tabs.Clear();
+            tabRecordDefs.Clear();
             foreach (var tabDef in DefDatabase<ResearchTabDef>.AllDefs)
             {
                 if (shown != null && !shown.Contains(tabDef)) continue;
@@ -192,7 +228,8 @@ namespace ResearchOrganized
         public static void RefreshTabStripIfDirty(MainTabWindow_Research __instance)
         {
             if (!tabStripDirty || researchTabRecordCtor == null) return;
-            if (!(researchWindowTabsField.GetValue(__instance) is System.Collections.IList tabs)) return;
+            var tabs = TabRecords(__instance);
+            if (tabs == null) return;
             // Reading the list may rebuild it, which marks the strip dirty again; clear the flag afterwards.
             var visible = __instance.VisibleResearchProjects;
             tabStripDirty = false;
@@ -213,7 +250,7 @@ namespace ResearchOrganized
                     researchWindowViewWidthField.SetValue(__instance, ((Vector2)researchWindowViewSizeMethod.Invoke(__instance, new object[] { __instance.CurTab })).x);
                 return;
             }
-            var selectedTab = (researchWindowSelectedProjectField?.GetValue(__instance) as ResearchProjectDef)?.tab;
+            var selectedTab = SelectedProject(__instance)?.tab;
             var target = selectedTab != null && shown.Contains(selectedTab)
                 ? selectedTab
                 : DefDatabase<ResearchTabDef>.AllDefsListForReading.First(shown.Contains);
@@ -238,6 +275,7 @@ namespace ResearchOrganized
         {
             // A full screen layout left over from before full screen was turned off is undone, and the window resized, on the first draw.
             fullScreenApplied = ResearchOrganizedMod.settings.fullScreenResearch || layoutTreeHeight > 0f;
+            tabRecordDefs.Clear();
             MarkTabStripDirty();
             InvalidateTabStats();
         }
@@ -247,8 +285,7 @@ namespace ResearchOrganized
         {
             if (!__result.NullOrEmpty() && __result.StripTags().Trim().Length == 0) __result = "";
 
-            if (researchTabRecordDefField == null) return;
-            if (!(researchTabRecordDefField.GetValue(__instance) is ResearchTabDef tabDef)) return;
+            if (!(TabRecordDef(__instance) is ResearchTabDef tabDef)) return;
 
             var stats = GetTabStats(tabDef);
             string counts = "ResearchOrganized_TabCounts".Translate(stats.completedProjects, stats.totalProjects,
@@ -256,16 +293,18 @@ namespace ResearchOrganized
             __result = __result.NullOrEmpty() ? counts : __result + "\n\n" + counts;
         }
 
-        /// <summary>Sets every tab's label, with its completed/total count when that setting is on. Runs every frame the window draws.</summary>
-        public static void UpdateTabLabelsWithCounts(object __instance)
+        /// <summary>Sets every tab's label, with its completed/total count when that setting is on. Runs on every event the window draws.</summary>
+        public static void UpdateTabLabelsWithCounts(MainTabWindow_Research __instance)
         {
-            if (!(researchWindowTabsField.GetValue(__instance) is System.Collections.IEnumerable tabRecords)) return;
+            var tabRecords = TabRecords(__instance);
+            if (tabRecords == null) return;
 
             bool showCounts = ResearchOrganizedMod.settings.showTabProjectCounts;
-            foreach (object tabRecordObj in tabRecords)
+            for (int i = 0; i < tabRecords.Count; i++)
             {
-                if (!(researchTabRecordDefField.GetValue(tabRecordObj) is ResearchTabDef tabDef)) continue;
-                ((TabRecord)tabRecordObj).label = showCounts ? GetTabStats(tabDef).countLabel : tabDef.LabelCap.ToString();
+                if (!(tabRecords[i] is TabRecord record) || !(TabRecordDef(record) is ResearchTabDef tabDef)) continue;
+                string label = showCounts ? GetTabStats(tabDef).countLabel : tabDef.LabelCap.RawText;
+                if (!ReferenceEquals(record.label, label)) record.label = label;
             }
         }
 

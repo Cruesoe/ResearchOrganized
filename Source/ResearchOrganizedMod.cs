@@ -15,9 +15,16 @@ namespace ResearchOrganized
             new Color(0.30f, 0.00f, 0.30f), new Color(0.60f, 0.30f, 0.60f), new Color(0.30f, 0.30f, 0.30f), new Color(0.60f, 0.60f, 0.60f)
         };
 
+        private const float RowHeight = 24f;
+        private const float ColumnGap = 24f;
+        private const float SubOptionIndent = 24f;
+        private const float ColorLabelWidth = 120f;
+        private const float ResetButtonHeight = 32f;
+
         /// <summary>Values the layout was actually built with, so we know when to redo it.</summary>
         private bool appliedCombineAllTabs;
         private bool appliedCombineIndustrial;
+        private bool appliedSeparateEras;
         private int appliedMinorAnchorThreshold;
         private int appliedMajorAnchorThreshold;
         private bool appliedWriteLayoutLog;
@@ -25,11 +32,15 @@ namespace ResearchOrganized
         private string minorThresholdBuffer;
         private string majorThresholdBuffer;
 
+        private Vector2 settingsScroll;
+        private float settingsHeight = 1000f;
+
         public ResearchOrganizedMod(ModContentPack content) : base(content)
         {
             settings = GetSettings<ResearchOrganizedSettings>();
             appliedCombineAllTabs = settings.combineAllTabs;
             appliedCombineIndustrial = settings.combineIndustrial;
+            appliedSeparateEras = settings.separateEras;
             appliedMinorAnchorThreshold = settings.minorAnchorChildThreshold;
             appliedMajorAnchorThreshold = settings.majorAnchorChildThreshold;
             appliedWriteLayoutLog = settings.writeLayoutLog;
@@ -44,6 +55,7 @@ namespace ResearchOrganized
         {
             bool structureChanged = settings.combineAllTabs != appliedCombineAllTabs
                                  || settings.combineIndustrial != appliedCombineIndustrial
+                                 || settings.separateEras != appliedSeparateEras
                                  || settings.minorAnchorChildThreshold != appliedMinorAnchorThreshold
                                  || settings.majorAnchorChildThreshold != appliedMajorAnchorThreshold
                                  || (settings.writeLayoutLog && !appliedWriteLayoutLog);
@@ -56,6 +68,7 @@ namespace ResearchOrganized
             {
                 appliedCombineAllTabs = settings.combineAllTabs;
                 appliedCombineIndustrial = settings.combineIndustrial;
+                appliedSeparateEras = settings.separateEras;
                 appliedMinorAnchorThreshold = settings.minorAnchorChildThreshold;
                 appliedMajorAnchorThreshold = settings.majorAnchorChildThreshold;
                 ResearchOrganizedMain.OrganizeTabsAndLayout();
@@ -63,102 +76,35 @@ namespace ResearchOrganized
             appliedWriteLayoutLog = settings.writeLayoutLog;
         }
 
-        private Vector2 settingsScroll;
-        private float settingsHeight = 1000f;
-
+        /// <summary>Two columns: research window and tabs on the left, colors and layout on the right, with the reset button below.</summary>
         public override void DoSettingsWindowContents(Rect inRect)
         {
-            const float ResetButtonHeight = 32f;
             Rect outRect = new Rect(inRect.x, inRect.y, inRect.width, inRect.height - ResetButtonHeight - 10f);
             Rect viewRect = new Rect(0f, 0f, outRect.width - 16f, settingsHeight);
+            float columnWidth = (viewRect.width - ColumnGap) / 2f;
 
             Widgets.BeginScrollView(outRect, ref settingsScroll, viewRect);
-            Listing_Standard listing = new Listing_Standard();
-            listing.Begin(viewRect);
 
-            SectionHeader(listing, "ResearchOrganized_SectionResearchWindow".Translate());
+            var left = new Listing_Standard();
+            left.Begin(new Rect(0f, 0f, columnWidth, viewRect.height));
+            DrawResearchWindowSection(left);
+            DrawTabsSection(left);
+            float leftHeight = left.CurHeight;
+            left.End();
 
-            listing.CheckboxLabeled("ResearchOrganized_HideUnavailable".Translate(), ref settings.hideUnavailableProjects,
-                "ResearchOrganized_HideUnavailableTip".Translate());
+            var right = new Listing_Standard();
+            right.Begin(new Rect(columnWidth + ColumnGap, 0f, columnWidth, viewRect.height));
+            DrawColorsSection(right);
+            DrawLayoutSection(right);
+            float rightHeight = right.CurHeight;
+            right.End();
 
-            listing.CheckboxLabeled("ResearchOrganized_HideFutureTechLevels".Translate(), ref settings.hideFutureTechLevels,
-                "ResearchOrganized_HideFutureTechLevelsTip".Translate());
-
-            listing.CheckboxLabeled("ResearchOrganized_FullScreen".Translate(), ref settings.fullScreenResearch,
-                "ResearchOrganized_FullScreenTip".Translate());
-
-            listing.CheckboxLabeled("ResearchOrganized_ShowTabCounts".Translate(), ref settings.showTabProjectCounts,
-                "ResearchOrganized_ShowTabCountsTip".Translate());
-
-            listing.CheckboxLabeled("ResearchOrganized_SuppressEmergenceLines".Translate(), ref settings.suppressEmergenceLines,
-                "ResearchOrganized_SuppressEmergenceLinesTip".Translate());
-
-            SectionHeader(listing, "ResearchOrganized_SectionTabs".Translate());
-
-            listing.CheckboxLabeled("ResearchOrganized_CombineAllTabs".Translate(), ref settings.combineAllTabs,
-                "ResearchOrganized_CombineAllTabsTip".Translate());
-
-            if (settings.combineAllTabs)
-            {
-                Rect industrialRect = listing.GetRect(24f);
-                GUI.color = Color.gray;
-                Widgets.Label(industrialRect, "ResearchOrganized_CombineIndustrial".Translate());
-                GUI.color = Color.white;
-                Widgets.CheckboxDraw(industrialRect.xMax - 24f, industrialRect.y, true, true);
-                TooltipHandler.TipRegion(industrialRect, "ResearchOrganized_CombineIndustrialIncludedTip".Translate());
-                listing.Gap(listing.verticalSpacing);
-            }
-            else
-            {
-                listing.CheckboxLabeled("ResearchOrganized_CombineIndustrial".Translate(), ref settings.combineIndustrial,
-                    "ResearchOrganized_CombineIndustrialTip".Translate());
-            }
-
-            SectionHeader(listing, "ResearchOrganized_SectionColors".Translate());
-
-            bool useColors = !settings.disableCustomColors;
-            listing.CheckboxLabeled("ResearchOrganized_ColorCards".Translate(), ref useColors,
-                "ResearchOrganized_ColorCardsTip".Translate());
-            settings.disableCustomColors = !useColors;
-
-            listing.Gap(6f);
-            DrawColorPalette(listing, "ResearchOrganized_ColorUndefined".Translate(), ref settings.colorUndefined, useColors);
-            DrawColorPalette(listing, "ResearchOrganized_ColorAnimal".Translate(), ref settings.colorAnimal, useColors);
-            DrawColorPalette(listing, "ResearchOrganized_ColorNeolithic".Translate(), ref settings.colorNeolithic, useColors);
-            DrawColorPalette(listing, "ResearchOrganized_ColorMedieval".Translate(), ref settings.colorMedieval, useColors);
-            DrawColorPalette(listing, "ResearchOrganized_ColorIndustrial".Translate(), ref settings.colorIndustrial, useColors);
-            DrawColorPalette(listing, "ResearchOrganized_ColorSpacer".Translate(), ref settings.colorSpacer, useColors);
-            DrawColorPalette(listing, "ResearchOrganized_ColorUltra".Translate(), ref settings.colorUltra, useColors);
-            DrawColorPalette(listing, "ResearchOrganized_ColorArchotech".Translate(), ref settings.colorArchotech, useColors);
-            DrawColorPalette(listing, "ResearchOrganized_ColorAnomaly".Translate(), ref settings.colorAnomaly, useColors);
-
-            SectionHeader(listing, "ResearchOrganized_SectionLayout".Translate());
-
-            listing.Label("ResearchOrganized_AnchorIntro".Translate());
-
-            Rect minorRect = listing.GetRect(24f);
-            Widgets.Label(new Rect(minorRect.x, minorRect.y, minorRect.width - 60f, minorRect.height), "ResearchOrganized_MinorAnchor".Translate());
-            Widgets.TextFieldNumeric(new Rect(minorRect.xMax - 50f, minorRect.y, 50f, minorRect.height),
-                ref settings.minorAnchorChildThreshold, ref minorThresholdBuffer, 1f, 99f);
-            listing.Gap(listing.verticalSpacing);
-
-            Rect majorRect = listing.GetRect(24f);
-            Widgets.Label(new Rect(majorRect.x, majorRect.y, majorRect.width - 60f, majorRect.height), "ResearchOrganized_MajorAnchor".Translate());
-            Widgets.TextFieldNumeric(new Rect(majorRect.xMax - 50f, majorRect.y, 50f, majorRect.height),
-                ref settings.majorAnchorChildThreshold, ref majorThresholdBuffer, 2f, 99f);
-            TooltipHandler.TipRegion(majorRect, "ResearchOrganized_MajorAnchorTip".Translate());
-            listing.Gap(listing.verticalSpacing);
-
-            listing.CheckboxLabeled("ResearchOrganized_WriteLayoutLog".Translate(), ref settings.writeLayoutLog,
-                "ResearchOrganized_WriteLayoutLogTip".Translate());
-
-            settingsHeight = listing.CurHeight + 10f;
-            listing.End();
+            settingsHeight = Mathf.Max(leftHeight, rightHeight) + 10f;
             Widgets.EndScrollView();
 
-            Listing_Standard footer = new Listing_Standard();
+            var footer = new Listing_Standard();
             footer.Begin(new Rect(inRect.x, inRect.yMax - ResetButtonHeight, 200f, ResetButtonHeight));
-            if (footer.ButtonText("ResearchOrganized_ResetDefaults".Translate()))
+            if (footer.ButtonText(T("ResearchOrganized_ResetDefaults")))
             {
                 settings.CopyFrom(new ResearchOrganizedSettings());
                 minorThresholdBuffer = settings.minorAnchorChildThreshold.ToString();
@@ -171,41 +117,135 @@ namespace ResearchOrganized
             ResearchOrganizedMain.RefreshColors();
         }
 
-        private static void SectionHeader(Listing_Standard listing, string title)
+        private void DrawResearchWindowSection(Listing_Standard listing)
+        {
+            SectionHeader(listing, "ResearchOrganized_SectionResearchWindow");
+            Checkbox(listing, "ResearchOrganized_FullScreen", "ResearchOrganized_FullScreenTip", ref settings.fullScreenResearch);
+            Checkbox(listing, "ResearchOrganized_HideUnavailable", "ResearchOrganized_HideUnavailableTip", ref settings.hideUnavailableProjects);
+            Checkbox(listing, "ResearchOrganized_HideFutureTechLevels", "ResearchOrganized_HideFutureTechLevelsTip", ref settings.hideFutureTechLevels);
+            Checkbox(listing, "ResearchOrganized_ShowTabCounts", "ResearchOrganized_ShowTabCountsTip", ref settings.showTabProjectCounts);
+            Checkbox(listing, "ResearchOrganized_SuppressEmergenceLines", "ResearchOrganized_SuppressEmergenceLinesTip", ref settings.suppressEmergenceLines);
+        }
+
+        private void DrawTabsSection(Listing_Standard listing)
+        {
+            SectionHeader(listing, "ResearchOrganized_SectionTabs");
+
+            // Combine All Tabs includes Combine Industrial, so it shows ticked and locked while that is on.
+            bool combineAll = settings.combineAllTabs;
+            if (combineAll)
+            {
+                bool included = true;
+                Checkbox(listing, "ResearchOrganized_CombineIndustrial", "ResearchOrganized_CombineIndustrialTip", ref included, disabled: true,
+                    disabledTipKey: "ResearchOrganized_CombineIndustrialIncludedTip");
+            }
+            else
+            {
+                Checkbox(listing, "ResearchOrganized_CombineIndustrial", "ResearchOrganized_CombineIndustrialTip", ref settings.combineIndustrial);
+            }
+
+            Checkbox(listing, "ResearchOrganized_CombineAllTabs", "ResearchOrganized_CombineAllTabsTip", ref settings.combineAllTabs);
+            Checkbox(listing, "ResearchOrganized_SeparateEras", "ResearchOrganized_SeparateErasTip", ref settings.separateEras, SubOptionIndent,
+                !combineAll, "ResearchOrganized_RequiresCombineAllTabs");
+            Checkbox(listing, "ResearchOrganized_CrossEraLines", "ResearchOrganized_CrossEraLinesTip", ref settings.crossEraLines, SubOptionIndent,
+                !combineAll, "ResearchOrganized_RequiresCombineAllTabs");
+        }
+
+        private void DrawColorsSection(Listing_Standard listing)
+        {
+            SectionHeader(listing, "ResearchOrganized_SectionColors");
+
+            bool useColors = !settings.disableCustomColors;
+            Checkbox(listing, "ResearchOrganized_ColorCards", "ResearchOrganized_ColorCardsTip", ref useColors);
+            settings.disableCustomColors = !useColors;
+
+            DrawColorPalette(listing, "ResearchOrganized_ColorUndefined", ref settings.colorUndefined, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorAnimal", ref settings.colorAnimal, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorNeolithic", ref settings.colorNeolithic, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorMedieval", ref settings.colorMedieval, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorIndustrial", ref settings.colorIndustrial, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorSpacer", ref settings.colorSpacer, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorUltra", ref settings.colorUltra, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorArchotech", ref settings.colorArchotech, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorAnomaly", ref settings.colorAnomaly, useColors);
+        }
+
+        private void DrawLayoutSection(Listing_Standard listing)
+        {
+            SectionHeader(listing, "ResearchOrganized_SectionLayout");
+            NumericField(listing, "ResearchOrganized_MinorAnchor", "ResearchOrganized_MinorAnchorTip", ref settings.minorAnchorChildThreshold, ref minorThresholdBuffer, 1f);
+            NumericField(listing, "ResearchOrganized_MajorAnchor", "ResearchOrganized_MajorAnchorTip", ref settings.majorAnchorChildThreshold, ref majorThresholdBuffer, 2f);
+            Checkbox(listing, "ResearchOrganized_WriteLayoutLog", "ResearchOrganized_WriteLayoutLogTip", ref settings.writeLayoutLog);
+        }
+
+        private string T(string key)
+        {
+            return TranslationCache.Get(key);
+        }
+
+        private void SectionHeader(Listing_Standard listing, string key)
         {
             if (listing.CurHeight > 0f) listing.GapLine();
             Text.Font = GameFont.Medium;
-            listing.Label(title);
+            listing.Label(T(key));
             Text.Font = GameFont.Small;
             listing.Gap(4f);
         }
 
-        private void DrawColorPalette(Listing_Standard listing, string label, ref Color selectedColor, bool enabled)
+        /// <summary>A checkbox row with a tooltip; a disabled row is greyed and inert, with <paramref name="disabledTipKey"/> as its tooltip.</summary>
+        private void Checkbox(Listing_Standard listing, string key, string tipKey, ref bool value, float indent = 0f,
+            bool disabled = false, string disabledTipKey = null)
         {
-            Rect rect = listing.GetRect(28f);
+            Rect rect = listing.GetRect(RowHeight);
+            rect.xMin += indent;
+            if (!disabled && Mouse.IsOver(rect)) Widgets.DrawHighlight(rect);
+            if (disabled) GUI.color = Color.gray;
+            Widgets.CheckboxLabeled(rect, T(key), ref value, disabled);
+            GUI.color = Color.white;
+            TooltipHandler.TipRegion(rect, disabled && disabledTipKey != null ? T(disabledTipKey) : T(tipKey));
+            listing.Gap(listing.verticalSpacing);
+        }
+
+        private void NumericField(Listing_Standard listing, string key, string tipKey, ref int value, ref string buffer, float min)
+        {
+            Rect rect = listing.GetRect(RowHeight);
+            if (Mouse.IsOver(rect)) Widgets.DrawHighlight(rect);
+            Widgets.Label(new Rect(rect.x, rect.y, rect.width - 60f, rect.height), T(key));
+            Widgets.TextFieldNumeric(new Rect(rect.xMax - 50f, rect.y, 50f, rect.height), ref value, ref buffer, min, 99f);
+            TooltipHandler.TipRegion(rect, T(tipKey));
+            listing.Gap(listing.verticalSpacing);
+        }
+
+        private void DrawColorPalette(Listing_Standard listing, string key, ref Color selectedColor, bool enabled)
+        {
+            Rect rect = listing.GetRect(RowHeight);
             if (!enabled)
             {
                 GUI.color = Color.gray;
-                TooltipHandler.TipRegion(rect, "ResearchOrganized_RequiresColorCards".Translate());
+                TooltipHandler.TipRegion(rect, T("ResearchOrganized_RequiresColorCards"));
             }
-            Widgets.Label(new Rect(rect.x, rect.y + 4f, 150f, rect.height), label);
+            Widgets.Label(new Rect(rect.x, rect.y + 2f, ColorLabelWidth, rect.height - 2f), T(key));
 
-            float curX = rect.x + 160f;
+            // Swatches share the space right of the label, up to 24 pixels apart.
+            float step = Mathf.Min(24f, (rect.width - ColorLabelWidth) / Palette.Length);
+            float size = Mathf.Min(step - 2f, rect.height - 2f);
+            float curX = rect.x + ColorLabelWidth;
             foreach (Color color in Palette)
             {
-                Rect swatchRect = new Rect(curX, rect.y + 2f, 24f, 24f);
+                Rect swatchRect = new Rect(curX, rect.y + (rect.height - size) / 2f, size, size);
                 Widgets.DrawBoxSolid(swatchRect, enabled ? color : Color.Lerp(color, Color.gray, 0.6f));
 
                 if (ColorsMatch(color, selectedColor)) Widgets.DrawBox(swatchRect, 2);
 
                 if (enabled && Widgets.ButtonInvisible(swatchRect)) selectedColor = color;
 
-                curX += 28f;
+                curX += step;
             }
             GUI.color = Color.white;
+            listing.Gap(2f);
         }
 
-        private bool ColorsMatch(Color a, Color b)
+        private static bool ColorsMatch(Color a, Color b)
         {
             return Mathf.Abs(a.r - b.r) < 0.01f &&
                    Mathf.Abs(a.g - b.g) < 0.01f &&

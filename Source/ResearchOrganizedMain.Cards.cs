@@ -1,10 +1,7 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
-using ResearchOrganized.Layout;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -122,7 +119,7 @@ namespace ResearchOrganized
                 GUI.color = FoundationGold;
                 GUI.DrawTexture(notch, FoundationNotchTex);
                 GUI.color = previous;
-                TooltipHandler.TipRegion(rect, "ResearchOrganized_FoundationTech".Translate());
+                TooltipHandler.TipRegion(rect, TranslationCache.Get("ResearchOrganized_FoundationTech"));
             }
             return result;
         }
@@ -155,7 +152,7 @@ namespace ResearchOrganized
         /// only when the prerequisite's tab equals CurTab; this sits on the CurTab side of that
         /// comparison and answers null to skip one, since null never equals a real tab.
         /// Skipped:
-        /// - on the combined tab, any line between two eras;
+        /// - on the combined tab, any line between two eras, when the "Lines Between Eras" setting is off;
         /// - on any tab, a line into or out of a Node Research emergence node, unless one of
         ///   its two ends is selected, so its highlighted requirements still show on click - only
         ///   when the "Suppress Emergence Lines" setting is on.
@@ -165,12 +162,12 @@ namespace ResearchOrganized
             ResearchProjectDef project, ResearchProjectDef prerequisite)
         {
             if (curTab == null) return curTab;
-            if (curTab == activeCombinedTab
+            if (curTab == activeCombinedTab && !ResearchOrganizedMod.settings.crossEraLines
                 && ResearchOrganizedLayout.EraBucket(project) != ResearchOrganizedLayout.EraBucket(prerequisite)) return null;
             if (ResearchOrganizedMod.settings.suppressEmergenceLines
                 && (ResearchOrganizedLayout.IsEraCapstone(project) || ResearchOrganizedLayout.IsEraCapstone(prerequisite)))
             {
-                var selected = researchWindowSelectedProjectField?.GetValue(window);
+                var selected = SelectedProject(window);
                 if (selected != project && selected != prerequisite) return null;
             }
             return curTab;
