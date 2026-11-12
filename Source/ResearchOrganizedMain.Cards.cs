@@ -1,10 +1,7 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
-using ResearchOrganized.Layout;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -122,7 +119,7 @@ namespace ResearchOrganized
                 GUI.color = FoundationGold;
                 GUI.DrawTexture(notch, FoundationNotchTex);
                 GUI.color = previous;
-                TooltipHandler.TipRegion(rect, "ResearchOrganized_FoundationTech".Translate());
+                TooltipHandler.TipRegion(rect, TranslationCache.Get("ResearchOrganized_FoundationTech"));
             }
             return result;
         }
@@ -170,7 +167,7 @@ namespace ResearchOrganized
             if (ResearchOrganizedMod.settings.suppressEmergenceLines
                 && (ResearchOrganizedLayout.IsEraCapstone(project) || ResearchOrganizedLayout.IsEraCapstone(prerequisite)))
             {
-                var selected = researchWindowSelectedProjectField?.GetValue(window);
+                var selected = SelectedProject(window);
                 if (selected != project && selected != prerequisite) return null;
             }
             return curTab;

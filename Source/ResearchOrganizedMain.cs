@@ -1,12 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using System.Reflection.Emit;
 using HarmonyLib;
-using ResearchOrganized.Layout;
 using RimWorld;
-using UnityEngine;
 using Verse;
 
 namespace ResearchOrganized
@@ -52,13 +48,8 @@ namespace ResearchOrganized
                 harmony.Patch(listProjectsMethod, transpiler: new HarmonyMethod(typeof(ResearchOrganizedMain), nameof(CrossEraLineTranspiler)));
             }
 
-            // Some mods create their own ResearchProjectDefs from their own static
-            // constructor - Node Research's per-era "advance to the next tech level" nodes,
-            // for one - and static constructor order between mods is not guaranteed, so a
-            // pass run here can run before those defs exist. Game.FinalizeInit fires once an
-            // actual game has started, which is guaranteed to be after every mod's static
-            // constructor has finished, so redoing the pass there catches anything created
-            // late instead of leaving it wherever its creator left it.
+            // Reruns the pass as each game starts, after every mod's static constructor, to catch
+            // research defs created there (Node Research's emergence nodes) after this one ran.
             var finalizeInitMethod = AccessTools.Method(typeof(Game), nameof(Game.FinalizeInit));
             if (finalizeInitMethod != null)
             {
@@ -79,11 +70,7 @@ namespace ResearchOrganized
                     new[] { typeof(ResearchTabDef), typeof(string), typeof(Action), typeof(Func<bool>) });
             }
 
-            // Optional per-tab completed/total project counts (Settings). The tab strip is
-            // rebuilt from ResearchTabDef.LabelCap once in PostOpen and never touched again, so
-            // the counts are kept live by rewriting each TabRecord's label field every frame
-            // instead - the private tabs list is reached by reflection since ResearchTabRecord
-            // itself is a private nested type.
+            // Tab strip upkeep: hidden tabs are dropped and labels kept current (with counts when that setting is on) as the window draws.
             researchWindowTabsField = AccessTools.Field(typeof(MainTabWindow_Research), "tabs");
             var doWindowContentsMethod = AccessTools.Method(typeof(MainTabWindow_Research), "DoWindowContents");
             if (doWindowContentsMethod != null && researchWindowTabsField != null && researchTabRecordDefField != null)
@@ -140,6 +127,7 @@ namespace ResearchOrganized
 
         private static void OnGameFinalizeInit()
         {
+            researchWindowOpenedThisGame = false;
             OrganizeTabsAndLayout();
         }
 
@@ -178,8 +166,7 @@ namespace ResearchOrganized
                     var projects = DefDatabase<ResearchProjectDef>.AllDefs.Where(p => p.tab == tab).ToList();
                     if (projects.Count == 0) continue;
 
-                    // Contain failures to the tab that caused them. One bad tab used to
-                    // abort this loop, leaving every remaining tab at its authored layout.
+                    // A failure leaves only that tab at its authored layout.
                     try
                     {
                         ResearchOrganizedLayout.ApplyLayout(projects, tab.defName, anchors, anchorOrder, majorAnchors,
@@ -192,21 +179,11 @@ namespace ResearchOrganized
                     }
                 }
 
-                // REQUIRED, and not for the reason its name suggests. The research window
-                // renders from ResearchProjectDef.ResearchViewX/Y, which are properties over
-                // private fields x/y - and this method is the only thing that copies
-                // researchViewX/researchViewY into them. Without this call every coordinate
-                // written above is ignored and the tree draws at its authored XML positions.
-                //
-                // Its actual de-overlap pass is a no-op for us: it only nudges projects on
-                // the same tab that are within 0.5 in x AND 0.25 in y, while this layout
-                // keeps real columns at least xStep (1.0) apart and rows at least yStep
-                // (0.63) apart.
+                // Copies researchViewX/Y into the private x/y the window draws from; its overlap nudge
+                // only touches cards closer than this layout ever places them.
                 ResearchProjectDef.GenerateNonOverlappingCoordinates();
 
-                // Everything above has just moved projects off the tab Node Research parks
-                // them on, so tell it where they went. Without this its own collapse is a
-                // no-op - it still believes it holds - and its window comes up empty.
+                // Tells Node Research where its parked projects went, so its window re-collapses them.
                 NodeResearchCompat.SyncTabs();
 
                 // Tabs may have been hidden, restored or re-indexed; the research window keeps a

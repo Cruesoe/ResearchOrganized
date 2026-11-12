@@ -19,7 +19,7 @@ In some cases the result is not strictly linear, but I believe it makes the tree
 [*][b]Hide Unavailable Projects[/b]: shows only finished projects and those you can start now. Off by default.
 [*][b]Hide Future Tech Levels[/b]: hides unfinished projects above your colony's tech level. Off by default.
 [*][b]Full Screen Research Window[/b]: makes the research window as tall as the screen and fits as many projects into each column as that allows. A button beside the gear in the research window toggles it too. Off by default.
-[*][b]Show Tab Project Counts[/b]: shows completed/total counts on each tab.
+[*][b]Show Tab Project Counts[/b]: shows completed/total counts on each tab. Off by default.
 [*][b]Combine All Tabs[/b]: puts everything except Anomaly, Gravship and Save Our Ship 2 on the Main tab, with each era in its own block from left to right. Off by default.
 [*][b]Space Between Eras[/b] and [b]Lines Between Eras[/b]: on the combined tab, leave a gap between era blocks, and draw the lines between projects of different eras. By default there is no gap and every line is drawn, as in the vanilla tree.
 [*][b]Combine Industrial[/b]: merges High and Late Industrial back into one Industrial tab. Off by default.

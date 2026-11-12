@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using Verse;
 
@@ -35,10 +34,6 @@ namespace ResearchOrganized
 
         private Vector2 settingsScroll;
         private float settingsHeight = 1000f;
-
-        /// <summary>Translated settings text by key; cleared when the language changes.</summary>
-        private readonly Dictionary<string, string> text = new Dictionary<string, string>();
-        private LoadedLanguage textLanguage;
 
         public ResearchOrganizedMod(ModContentPack content) : base(content)
         {
@@ -84,12 +79,6 @@ namespace ResearchOrganized
         /// <summary>Two columns: research window and tabs on the left, colors and layout on the right, with the reset button below.</summary>
         public override void DoSettingsWindowContents(Rect inRect)
         {
-            if (textLanguage != LanguageDatabase.activeLanguage)
-            {
-                text.Clear();
-                textLanguage = LanguageDatabase.activeLanguage;
-            }
-
             Rect outRect = new Rect(inRect.x, inRect.y, inRect.width, inRect.height - ResetButtonHeight - 10f);
             Rect viewRect = new Rect(0f, 0f, outRect.width - 16f, settingsHeight);
             float columnWidth = (viewRect.width - ColumnGap) / 2f;
@@ -191,8 +180,7 @@ namespace ResearchOrganized
 
         private string T(string key)
         {
-            if (!text.TryGetValue(key, out string value)) text[key] = value = key.Translate();
-            return value;
+            return TranslationCache.Get(key);
         }
 
         private void SectionHeader(Listing_Standard listing, string key)
