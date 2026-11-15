@@ -9,12 +9,12 @@
     <maxNodesPerColumn>10</maxNodesPerColumn>
 
     <ignoredTabs>
-      <li>VGE_Gravtech</li>
       <li>TabAnimal</li>
     </ignoredTabs>
 
     <!-- Save Our Ship 2 looks its tabs up by name at startup, so they must keep their projects. -->
     <preservedTabs>
+      <li MayRequire="vanillaexpanded.gravship">VGE_Gravtech</li>
       <li MayRequire="OskarPotocki.VFE.Tribals">VFET_Basics</li>
       <li MayRequire="kentington.saveourship2">ResearchTabShip</li>
       <li MayRequire="kentington.saveourship2">ResearchTabArchotech</li>

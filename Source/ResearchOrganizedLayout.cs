@@ -30,7 +30,7 @@ namespace ResearchOrganized
         private static readonly Dictionary<ResearchProjectDef, bool> capstoneCache =
             new Dictionary<ResearchProjectDef, bool>();
 
-        /// <summary>Blank columns between two era blocks on the combined tab.</summary>
+        /// <summary>Blank columns between two era blocks on the combined tab when "Space Between Eras" is on.</summary>
         private const float EraGapColumns = 0.25f;
 
         /// <summary>
@@ -145,7 +145,7 @@ namespace ResearchOrganized
         /// nothing on another tab can shift where it is placed.
         /// </summary>
         /// <param name="eraBuckets">Lays each tech level out as a block of its own, left to
-        /// right, with a blank column between blocks - the single tab "Combine All Tabs" produces.</param>
+        /// right, with a gap between blocks when "Space Between Eras" is on - the single tab "Combine All Tabs" produces.</param>
         public static void ApplyLayout(List<ResearchProjectDef> tabNodes, string tabName,
             HashSet<ResearchProjectDef> anchors, Dictionary<ResearchProjectDef, int> anchorOrder,
             HashSet<ResearchProjectDef> majorAnchors, bool eraBuckets = false)
@@ -187,7 +187,8 @@ namespace ResearchOrganized
             {
                 var bucket = new int[tabNodes.Count];
                 for (int i = 0; i < tabNodes.Count; i++) bucket[i] = EraBucket(tabNodes[i]);
-                result = TabLayout.ComputeBuckets(graph, options, bucket, EraGapColumns);
+                bool separateEras = ResearchOrganizedMod.settings != null && ResearchOrganizedMod.settings.separateEras;
+                result = TabLayout.ComputeBuckets(graph, options, bucket, separateEras ? EraGapColumns : 0f);
             }
             else
             {

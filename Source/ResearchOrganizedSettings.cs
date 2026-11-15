@@ -7,6 +7,8 @@ namespace ResearchOrganized
     {
         public bool combineAllTabs = false;
         public bool combineIndustrial = false;
+        public bool separateEras = false;
+        public bool crossEraLines = true;
         public int minorAnchorChildThreshold = 3;
         public int majorAnchorChildThreshold = 7;
         public bool disableCustomColors = false;
@@ -32,6 +34,8 @@ namespace ResearchOrganized
             base.ExposeData();
             Scribe_Values.Look(ref combineAllTabs, "combineAllTabs", false);
             Scribe_Values.Look(ref combineIndustrial, "combineIndustrial", false);
+            Scribe_Values.Look(ref separateEras, "separateEras", false);
+            Scribe_Values.Look(ref crossEraLines, "crossEraLines", true);
             Scribe_Values.Look(ref minorAnchorChildThreshold, "minorAnchorChildThreshold", 3);
             Scribe_Values.Look(ref majorAnchorChildThreshold, "majorAnchorChildThreshold", 7);
             Scribe_Values.Look(ref disableCustomColors, "disableCustomColors", false);
@@ -56,6 +60,8 @@ namespace ResearchOrganized
         {
             combineAllTabs = defaults.combineAllTabs;
             combineIndustrial = defaults.combineIndustrial;
+            separateEras = defaults.separateEras;
+            crossEraLines = defaults.crossEraLines;
             minorAnchorChildThreshold = defaults.minorAnchorChildThreshold;
             majorAnchorChildThreshold = defaults.majorAnchorChildThreshold;
             disableCustomColors = defaults.disableCustomColors;

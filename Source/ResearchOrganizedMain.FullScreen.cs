@@ -110,7 +110,8 @@ namespace ResearchOrganized
         public static void MeasureTreeHeight(MainTabWindow_Research __instance, Rect rightOutRect, float maxTabX)
         {
             if (!ResearchOrganizedMod.settings.fullScreenResearch || resizedThisFrame || Event.current.type != EventType.Layout) return;
-            if (!(researchWindowTabsField?.GetValue(__instance) is System.Collections.IEnumerable tabs)) return;
+            var tabs = TabRecords(__instance);
+            if (tabs == null) return;
             measureTabs.Clear();
             foreach (TabRecord tab in tabs) measureTabs.Add(tab);
             Rect tabRect = rightOutRect;

@@ -6,7 +6,7 @@ Sorts research projects into tech-level tabs and lays each tab out as a tidy, re
 
 - Projects are grouped into Primitive, Neolithic, Medieval, Industrial, High and Late Industrial, Spacer, Ultra, Archotech, Anomaly and Miscellaneous tabs.
 - Each tab gets a clean, non-overlapping layout with fewer crossing lines. Follow-ups sit to the right of what they depend on, and branches fill the free space beside their prerequisites.
-- **Combine All Tabs** puts every project except Anomaly, Gravship and Save Our Ship 2 on the Main tab, with each tech level in its own block from left to right. Lines between blocks are hidden to cut the clutter.
+- **Combine All Tabs** puts every project except Anomaly, Gravship and Save Our Ship 2 on the Main tab, with each tech level in its own block from left to right. A gap between the blocks and the lines between eras can each be turned on or off; by default it looks like the vanilla tree, with no gap and every line drawn.
 - **Combine Industrial** merges High and Late Industrial back into one Industrial tab.
 - **Hide Unavailable Projects** shows only finished projects and those you can start now; **Hide Future Tech Levels** hides unfinished projects above your colony's tech level.
 - A project is raised to the tech level of its prerequisites, so a follow-up never sits in an earlier era than what it needs. Its research cost changes to match.

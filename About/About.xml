@@ -8,7 +8,7 @@
 
 Tabs
 - Projects are grouped into Primitive, Neolithic, Medieval, Industrial, High and Late Industrial, Spacer, Ultra, Archotech, Anomaly and Miscellaneous tabs.
-- Combine All Tabs puts every project except Anomaly and Gravship on the Main tab, with each tech level in its own block from left to right.
+- Combine All Tabs puts every project except Anomaly, Gravship and Save Our Ship 2 on the Main tab, with each tech level in its own block from left to right. A gap between the blocks and the lines between eras can each be turned on or off.
 - Combine Industrial merges High and Late Industrial back into one Industrial tab.
 - Tab tooltips show completed projects and research points, and the counts can be shown on the tabs too.
 - Empty tabs are hidden.

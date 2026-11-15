@@ -2,63 +2,6 @@ using System.Collections.Generic;
 
 namespace ResearchOrganized.Layout
 {
-    public sealed class LayoutOptions
-    {
-        public float xStep = 1f;
-        public float yStep = 0.63f;
-
-        /// <summary>Hard cap on cards per column. 0 or less means unbounded.</summary>
-        public int maxNodesPerColumn = 12;
-
-        /// <summary>Which tech level (or other grouping) each node belongs to. Processed in ascending order.</summary>
-        public int[] epoch;
-
-        /// <summary>Whether each node is a hub, placed ahead of the followers it claims.</summary>
-        public bool[] isAnchor;
-
-        /// <summary>Whether each anchor is a major hub: placed alone, in a new column after everything placed before it.</summary>
-        public bool[] isMajorAnchor;
-
-        /// <summary>Whether each node is its era's finale: the last anchor placed in its epoch, followed only by its own descendants.</summary>
-        public bool[] isFinale;
-
-        /// <summary>
-        /// Global placement order for anchors, lower first - normally shallowest in the
-        /// research tree first, so a node depending on two anchors reads as belonging to the
-        /// deeper, more specific one.
-        /// </summary>
-        public int[] anchorOrder;
-
-        /// <summary>Tie-break for otherwise-equal placement choices, lower first - the caller puts cheap projects first.</summary>
-        public int[] tieRank;
-
-        /// <summary>
-        /// A node that always goes last in its epoch, after everything else is placed,
-        /// regardless of what prerequisites it does or does not have - an era's "advance to
-        /// the next tech level" node, from mods like Node Research.
-        /// </summary>
-        public bool[] isCapstone;
-
-        /// <summary>When set, placement decisions are appended here as text, naming nodes from <see cref="nodeNames"/>.</summary>
-        public List<string> trace;
-        public string[] nodeNames;
-    }
-
-    public sealed class LayoutResult
-    {
-        public float[] X;
-        public float[] Y;
-
-        /// <summary>Column index per node.</summary>
-        public int[] Layer;
-
-        public HashSet<int> NodesInCycles = new HashSet<int>();
-        public List<LayoutGraph.Edge> ReversedEdges = new List<LayoutGraph.Edge>();
-
-        public int InitialCrossings;
-        public int Crossings;
-    }
-
     /// <summary>
     /// Lays out one research tab. Cycles (a mod's malformed prerequisites) are broken first so
     /// the rest of the pipeline can assume a clean DAG; the actual placement is
@@ -119,9 +62,8 @@ namespace ResearchOrganized.Layout
         /// side in ascending bucket order with a <paramref name="gapColumns"/>-column gap (fractions allowed)
         /// between them, so a later bucket never starts before an earlier one ends. The gap is in X only:
         /// <see cref="LayoutResult.Layer"/> numbers columns across buckets without it. An edge
-        /// between two buckets never steers placement, the same as an edge between two tabs -
-        /// and the window draws no line for it either, since the combined tab suppresses
-        /// connectors that cross eras. Crossing counts are summed per bucket.
+        /// between two buckets never steers placement, the same as an edge between two tabs.
+        /// Crossing counts are summed per bucket.
         /// </summary>
         public static LayoutResult ComputeBuckets(LayoutGraph graph, LayoutOptions options, int[] bucket, float gapColumns)
         {

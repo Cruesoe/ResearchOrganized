@@ -10,10 +10,7 @@ namespace ResearchOrganized.Layout
     /// Swap scoring is local to incident edges, avoiding a full graph recount per candidate.
     ///
     /// Judged on the drawn tree alone - fewest crossing connectors, then shortest connectors,
-    /// then most level connectors.
-    /// Where a project sat in its own mod's XML is not considered: this layout moves nearly
-    /// every card anyway, and preferring the authored row used to outrank connector length,
-    /// which pulled a parent off the row its follower had already been aligned to.
+    /// then most level connectors. A project's authored row in its mod's XML is not considered.
     ///
     /// The caller passes the drawn view of the graph, so a link with no connector - a hidden
     /// prerequisite, a virtual one - leaves no pull here at all: it has already had its say in

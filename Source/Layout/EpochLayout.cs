@@ -4,21 +4,13 @@ using System.Collections.Generic;
 namespace ResearchOrganized.Layout
 {
     /// <summary>
-    /// Lays out one research tab the way the original mod did, before it was rewritten from
-    /// scratch: group by tech level, place the cheap non-hub projects first, then work through
-    /// the hubs ("anchors") one capacity-limited batch at a time, placing each batch's own
-    /// followers right after it and centering the hub on them.
+    /// Lays out one research tab: group by tech level, place the cheap non-hub projects first,
+    /// then work through the hubs ("anchors") one capacity-limited batch at a time, placing each
+    /// batch's own followers right after it and centering the hub on them. Columns hold at most
+    /// <see cref="LayoutOptions.maxNodesPerColumn"/> cards.
     ///
-    /// This is a port, not a redesign - the earlier rewrite kept re-discovering, one bug
-    /// report at a time, problems this approach had already solved: a project with two dozen
-    /// followers holding its own column instead of being buried among them, a cheap early
-    /// project never getting shoved behind a big hub it does not need, and a hard cap on
-    /// column height instead of growing until the window can no longer show it.
-    ///
-    /// It runs on an already-acyclic graph - <see cref="TabLayout"/> breaks cycles first - so
-    /// unlike the original there is no "stuck node" case to special-case here: a topological
-    /// sort guarantees every node's same-tab prerequisites are resolvable before it is asked
-    /// to place.
+    /// Runs on an acyclic graph (<see cref="TabLayout"/> breaks cycles first), so every node's
+    /// same-tab prerequisites can be placed before it.
     /// </summary>
     public static class EpochLayout
     {

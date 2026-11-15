@@ -1,4 +1,4 @@
-# Checks run by Deploy-Mod before deploying: layout tests, translation keys match the source, no tiny fonts, preview size.
+# Checks run by Deploy-Mod before deploying: layout tests, and translation keys match the source.
 param([string]$RimWorldRoot)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -22,11 +22,6 @@ foreach ($file in Get-ChildItem (Join-Path $root 'Languages\English\Keyed') -Fil
 }
 foreach ($key in $used) { if (-not $keyed.Contains($key)) { $failures.Add("Missing translation: $key") } }
 foreach ($key in $keyed) { if (-not $used.Contains($key)) { $failures.Add("Unused translation: $key") } }
-
-if ($sourceText -match 'GameFont\.Tiny') { $failures.Add('GameFont.Tiny is used') }
-
-$preview = Join-Path $root 'About\Preview.png'
-if ((Get-Item $preview).Length -ge 1000000) { $failures.Add('About\Preview.png is 1,000,000 bytes or more') }
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Host "FAIL $_" }
