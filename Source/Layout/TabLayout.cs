@@ -45,6 +45,7 @@ namespace ResearchOrganized.Layout
             var drawn = broken.Acyclic.DrawnOnly();
             result.InitialCrossings = CrossingCounter.Count(drawn, column, row, options.xStep, options.yStep);
             RowOptimizer.Improve(drawn, options, isAnchor, column, row);
+            CenterCapstones(epoch, isCapstone, row);
 
             for (int node = 0; node < graph.NodeCount; node++)
             {
@@ -143,6 +144,28 @@ namespace ResearchOrganized.Layout
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Puts each capstone back on the vertical middle of the other projects in its era once
+        /// row optimization has finished; each capstone has a column to itself, so nothing collides.
+        /// </summary>
+        private static void CenterCapstones(int[] epoch, bool[] isCapstone, int[] row)
+        {
+            var minRow = new Dictionary<int, int>();
+            var maxRow = new Dictionary<int, int>();
+            for (int node = 0; node < row.Length; node++)
+            {
+                if (isCapstone[node]) continue;
+                int era = epoch[node];
+                if (!minRow.TryGetValue(era, out int low) || row[node] < low) minRow[era] = row[node];
+                if (!maxRow.TryGetValue(era, out int high) || row[node] > high) maxRow[era] = row[node];
+            }
+            for (int node = 0; node < row.Length; node++)
+            {
+                if (!isCapstone[node]) continue;
+                row[node] = minRow.TryGetValue(epoch[node], out int low) ? (low + maxRow[epoch[node]]) / 2 : 0;
+            }
         }
 
         private static T[] Subset<T>(T[] values, List<int> members)

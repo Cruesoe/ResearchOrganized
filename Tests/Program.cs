@@ -63,6 +63,7 @@ namespace ResearchOrganized.Tests
             Run("real modlist combined tab stays in era order", RealModlistCombinedFixture);
             Run("a capstone lands after everything else in its era", CapstoneLandsLast);
             Run("a capstone with no prerequisites still lands last", CapstoneWithNoPrerequisitesStillLandsLast);
+            Run("a capstone sits on the vertical middle of its era", CapstoneSitsMidEra);
 
             Run("a major anchor with no prerequisite starts a new column", MajorAnchorStandsAlone);
             Run("a major anchor with a placed prerequisite sits right after it", MajorAnchorFollowsItsPrerequisite);
@@ -941,7 +942,41 @@ namespace ResearchOrganized.Tests
             }
         }
 
-        // ---- major and minor anchors ------------------------------------------------
+        private static void CapstoneSitsMidEra()
+        {
+            const int count = 14, capstone = 13;
+            var graph = new LayoutGraph(count);
+            for (int i = 1; i <= 8; i++) graph.AddEdge(0, i);
+            graph.AddEdge(8, 9);
+            graph.AddEdge(9, 10);
+            graph.AddEdge(10, 11);
+            graph.AddEdge(11, 12);
+            graph.AddEdge(12, capstone); // the capstone needs only the end of a chain on the bottom row
+            var options = new LayoutOptions
+            {
+                maxNodesPerColumn = 10,
+                epoch = new int[count],
+                isAnchor = MarkAnchors(count, 0),
+                anchorOrder = new int[count],
+                tieRank = Identity(count),
+                isCapstone = MarkAnchors(count, capstone)
+            };
+
+            var result = TabLayout.Compute(graph, options);
+
+            int min = int.MaxValue, max = int.MinValue;
+            for (int i = 0; i < count; i++)
+            {
+                if (i == capstone) continue;
+                int r = (int)System.Math.Round(result.Y[i] / options.yStep);
+                if (r < min) min = r;
+                if (r > max) max = r;
+            }
+            int capstoneRow = (int)System.Math.Round(result.Y[capstone] / options.yStep);
+            IsTrue(capstoneRow == (min + max) / 2, string.Format("capstone on row {0}, era spans rows {1}-{2}", capstoneRow, min, max));
+        }
+
+        // ---- major and minor anchors------------------------------------------------
 
         /// <summary>Two ready root anchors with small fans: as minors they share a column, but a major one starts a new column after them.</summary>
         private static void MajorAnchorStandsAlone()
