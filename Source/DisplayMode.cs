@@ -49,7 +49,7 @@ namespace ResearchOrganized
         public static void Apply()
         {
             var button = MainButtonDefOf.Research;
-            if (button == null || WindowHandover.NodeResearchActive) return;
+            if (button == null) return;
             Type wanted = RethemedActive ? windowType : typeof(MainTabWindow_Research);
             bool ours = button.tabWindowClass == typeof(MainTabWindow_Research) || (windowType != null && button.tabWindowClass == windowType);
             if (!ours || button.tabWindowClass == wanted) return;
