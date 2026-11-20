@@ -1,37 +1,59 @@
-[b]Sorts research into tech-level tabs and lays each tab out as a tidy, readable tree.[/b]
+[b]Sorts research into tech-level tabs and lays each tab out as a tidy, readable tree, in the game's own research window or, with UI Rethemed - Core, a Rethemed research window of its own.[/b]
 
 In some cases the result is not strictly linear, but I believe it makes the tree much more readable in highly modded games.
 
-[h2]Features[/h2]
+[h2]Tabs and layout[/h2]
 [list]
 [*]Technologies are routed to their tech level's tab: Primitive, Neolithic, Medieval, Industrial, High Industrial, Late Industrial, Spacer, Ultra and Archotech. Empty tabs are hidden.
 [*]Industrial is split three ways: Industrial, High Industrial (needs the Hi-Tech Research Bench) and Late Industrial (needs the Multi-Analyzer).
 [*]Entity knowledge technologies are moved to the Anomaly tab.
 [*]No overlapping nodes and fewer crossing lines. Follow-ups sit to the right of what they need, and branches fill the space beside their prerequisites instead of trailing off the end of the tab.
 [*]A technology is raised to the era of its prerequisites, so a follow-up never sits in an earlier era than what it needs. Its research cost changes to match.
-[*]Nodes are colored by era and shaded by status (unavailable, available, researched).
-[*]Tab tooltips show completed projects and research points, the research window remembers where you scrolled, and a gear button opens the settings.
+[*]Tab tooltips show completed projects and research points.
 [*]Schematics can teach technologies from every era tab.
+[/list]
+
+[h2]Two research windows[/h2]
+The [b]Research Window[/b] setting picks which window the Research button opens.
+
+[b]Classic[/b] is the game's own research window, organized by this mod:
+[list]
+[*]Nodes are colored by era and shaded by status (unavailable, available, researched), with colors you pick.
+[*]The window remembers where you scrolled, a gear button opens the settings, and a button beside it toggles full screen.
+[/list]
+
+[b]Rethemed[/b] needs [b][LFS] UI Rethemed - Core[/b] and is a research window of its own in UI Rethemed's look:
+[list]
+[*]Drag to pan, use the mouse wheel to zoom, and press Fit to see the whole tab. Each tab remembers its view.
+[*]Cards show their era's color and their state at a glance (finished, available, being researched, locked), with up to three unlock icons, techprint and study counters, a progress strip and a hover card listing what the project needs and what it unlocks without further research.
+[*]Lines between projects are smooth curves, and selecting a project lights up its whole prerequisite chain.
+[*]Era bands tint each era's columns, with the era's title pinned along the top, on tabs laid out era by era.
+[*]A research queue in a foldable panel on the left: shift-click a project to queue it along with any prerequisites it still needs, and drag to reorder. When the current project finishes, the next one starts. Folded, the queue still shows as icons.
+[*]A foldable details panel on the right shows what the selected project needs (met or not), what it unlocks now and with more research, what it leads to, and buttons to research or queue it.
+[*]A bar along the top shows the current project's progress.
+[*]Research times: roughly how long each project takes to research is shown on its card, hover card and details, the progress bar shows how long the current project has left, and queue rows show when each project should be done, all at the colony's research pace over the last day (saved with the game), or at Semi Random Research - Continued's measured pace when it is installed, so both show the same times.
+[*]Search finds projects by name or by anything they unlock, and chips show or hide locked, finished and future-era projects.
 [/list]
 
 [h2]Settings[/h2]
 [list]
-[*][b]Hide Unavailable Projects[/b]: shows only finished projects and those you can start now. Off by default.
-[*][b]Hide Future Tech Levels[/b]: hides unfinished projects above your colony's tech level. Off by default.
-[*][b]Full Screen Research Window[/b]: makes the research window as tall as the screen and fits as many projects into each column as that allows. A button beside the gear in the research window toggles it too. Off by default.
+[*][b]Research Window[/b]: Classic or Rethemed. Classic by default; Rethemed needs UI Rethemed - Core.
+[*][b]Full Screen Research Window[/b]: makes the research window as tall as the screen; each window keeps its own choice. Off by default in Classic, where it also fits as many projects into each column as that height allows, and on by default in Rethemed.
+[*][b]Hide Unavailable Projects[/b], [b]Hide Future Tech Levels[/b] and [b]Hide Finished Projects[/b]: hide projects you can't start yet, unfinished projects above your colony's tech level, and projects you have already researched. Off by default.
 [*][b]Show Tab Project Counts[/b]: shows completed/total counts on each tab. Off by default.
-[*][b]Combine All Tabs[/b]: puts everything except Anomaly, Gravship and Save Our Ship 2 on the Main tab, with each era in its own block from left to right. Off by default.
-[*][b]Space Between Eras[/b] and [b]Lines Between Eras[/b]: on the combined tab, leave a gap between era blocks, and draw the lines between projects of different eras. By default there is no gap and every line is drawn, as in the vanilla tree.
-[*][b]Combine Industrial[/b]: merges High and Late Industrial back into one Industrial tab. Off by default.
-[*][b]Color Cards by Tech Level[/b]: pick each era's color, or turn the colors off.
 [*][b]Suppress Emergence Lines[/b]: hides lines to Node Research's emergence nodes unless one end is selected. On by default.
+[*][b]Combine All Tabs[/b]: puts everything except Anomaly, Gravship and Save Our Ship 2 on the Main tab, with each era in its own block from left to right. [b]Space Between Eras[/b] and [b]Lines Between Eras[/b] leave a gap between era blocks and draw the lines between eras. Off by default.
+[*][b]Combine Industrial[/b]: merges High and Late Industrial back into one Industrial tab. Off by default.
+[*][b]Color Cards by Tech Level[/b]: color cards by era, or use plain cards. In Classic, pick each era's color here; in Rethemed, on UI Rethemed - Core's settings page.
+[*]Rethemed only: open on the current project, curved lines, whole-chain highlight, era bands, research times, card size, column and row spacing, projects per column, unlock icons, techprint and study counters, progress strip and hover card.
 [/list]
 
 [h2]Compatibility[/h2]
-Works with [b]Node Research[/b] (foundation technologies get a gold corner mark, and you can switch freely between its node view and these tabs), [b]Semi Random Research Pfork Continued[/b] (its button and the settings gear sit side by side), [b]Research Icons[/b] (columns widen to fit its wider cards), [b]Save Our Ship 2[/b] (its Ship and Archotech tabs keep their projects), and [b]ProgressionLESS[/b] and [b]VFE Tribals[/b] (their research lands in the right tabs).
+Works with [b]Node Research[/b] (foundation technologies get a gold mark, and you can switch freely between its node view and these tabs), [b]Semi Random Research - Continued[/b] and [b]Research Queue[/b] (in Rethemed, their tree buttons open this window, with a button back in its title bar; the queue is off while Research Queue is active, or while Semi Random Research's Prohibit normal project selection is on), [b]Research Icons[/b] (in Classic, columns widen to fit its wider cards), [b]Save Our Ship 2[/b] (its Ship and Archotech tabs keep their projects), and [b]ProgressionLESS[/b] and [b]VFE Tribals[/b] (their research lands in the right tabs).
 Tested with Ferny's Progression mod pack and Path of the Muffalo (as long as you remove the conflicts!).
 Not compatible with other research tab organizers, because they control the same system.
-Safe to add to or remove from an existing save.
+Safe to add to an existing save. Removing it from a save logs one harmless error about its saved research queue.
 
 [h2]Credits[/h2]
 Inspired by [b]Leo39994[/b] (Clean Research Sort), [b]Aelanna[/b] (Research Tab Colours), [b]Mlie[/b] (Organized Research Tab [Continued]) and [b]Laz[/b] (Organized Research Tab). Thanks to [b]Ferny[/b] (Progression mod pack) and [b]LordBeef[/b] (Path of the Muffalo) for their mod packs, which were invaluable during testing, and to the wider RimWorld modding community.
+Thanks to [b]LazyFridayStudio[/b] for UI Rethemed - Core, which the Rethemed window is built on.

@@ -280,9 +280,20 @@ namespace ResearchOrganized
                 extraWidth = Math.Max(extraWidth, ResearchIconsCompat.CardWidth(project) - ResearchIconsCompat.VanillaCardWidth);
             options.xStep += extraWidth / PixelsPerX;
 
-            // Full screen fits more projects into each column when its tree is taller.
-            int fullScreenRows = ResearchOrganizedMain.FullScreenRows(options.yStep);
-            if (options.maxNodesPerColumn > 0 && fullScreenRows > options.maxNodesPerColumn) options.maxNodesPerColumn = fullScreenRows;
+            if (options.maxNodesPerColumn > 0)
+            {
+                if (DisplayMode.RethemedActive)
+                {
+                    // The Rethemed window's projects-per-column setting replaces every tab's own limit.
+                    options.maxNodesPerColumn = Math.Max(1, ResearchOrganizedMod.settings.maxPerColumn);
+                }
+                else
+                {
+                    // Classic full screen fits more projects into each column when its tree is taller.
+                    int fullScreenRows = ResearchOrganizedMain.FullScreenRows(options.yStep);
+                    if (fullScreenRows > options.maxNodesPerColumn) options.maxNodesPerColumn = fullScreenRows;
+                }
+            }
 
             return options;
         }

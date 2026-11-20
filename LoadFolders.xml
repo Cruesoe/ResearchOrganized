@@ -4,10 +4,14 @@
     <li>/</li>
     <li>Common</li>
     <li>1.6</li>
+    <li IfModActive="LazyFridayStudio.UIRethemed.Core">Common/Mods/UIRethemedCore</li>
+    <li IfModActive="LazyFridayStudio.UIRethemed.Core">1.6/Mods/UIRethemedCore</li>
   </v1.6>
   <v1.7>
     <li>/</li>
     <li>Common</li>
     <li>1.7</li>
+    <li IfModActive="LazyFridayStudio.UIRethemed.Core">Common/Mods/UIRethemedCore</li>
+    <li IfModActive="LazyFridayStudio.UIRethemed.Core">1.7/Mods/UIRethemedCore</li>
   </v1.7>
 </loadFolders>

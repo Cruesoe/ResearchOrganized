@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <!-- Research: Organized's tab on UI Rethemed - Core's settings page. The mod reads these colors by key
+       (UIRethemedSkin.CategoryColor) in the Rethemed window; the defaults are the mod's own card colors. -->
+  <UIRethemed.Core.ModThemeDef>
+    <defName>ResearchOrganized_Theme</defName>
+    <label>research: organized</label>
+    <description>The research window's project cards, tinted by tech level.</description>
+    <mod>cruesoe.research.organized</mod>
+    <icon>tree-structure</icon>
+    <order>210</order>
+    <colors>
+      <li>
+        <key>Animal</key>
+        <label>animal</label>
+        <description>Animal-era project cards.</description>
+        <group>Eras</group>
+        <color>73543D</color>
+      </li>
+      <li>
+        <key>Neolithic</key>
+        <label>neolithic</label>
+        <description>Neolithic project cards.</description>
+        <group>Eras</group>
+        <color>660000</color>
+      </li>
+      <li>
+        <key>Medieval</key>
+        <label>medieval</label>
+        <description>Medieval project cards.</description>
+        <group>Eras</group>
+        <color>666600</color>
+      </li>
+      <li>
+        <key>Industrial</key>
+        <label>industrial</label>
+        <description>Industrial project cards, including High and Late Industrial.</description>
+        <group>Eras</group>
+        <color>006600</color>
+      </li>
+      <li>
+        <key>Spacer</key>
+        <label>spacer</label>
+        <description>Spacer project cards, and the Gravship tab.</description>
+        <group>Eras</group>
+        <color>006666</color>
+      </li>
+      <li>
+        <key>Ultra</key>
+        <label>ultra</label>
+        <description>Ultra project cards.</description>
+        <group>Eras</group>
+        <color>000066</color>
+      </li>
+      <li>
+        <key>Archotech</key>
+        <label>archotech</label>
+        <description>Archotech project cards.</description>
+        <group>Eras</group>
+        <color>994D99</color>
+      </li>
+      <li>
+        <key>Anomaly</key>
+        <label>anomaly</label>
+        <description>Anomaly tab project cards.</description>
+        <group>Other categories</group>
+        <color>4D004D</color>
+      </li>
+      <li>
+        <key>Undefined</key>
+        <label>other</label>
+        <description>Project cards with no tech level.</description>
+        <group>Other categories</group>
+        <color>999999</color>
+      </li>
+    </colors>
+  </UIRethemed.Core.ModThemeDef>
+</Defs>

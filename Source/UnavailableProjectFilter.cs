@@ -45,24 +45,33 @@ namespace ResearchOrganized
         {
             if (__state) ResearchOrganizedMain.MarkTabStripDirty();
             var settings = ResearchOrganizedMod.settings;
-            if (!__state || __result == null || !(settings.hideUnavailableProjects || settings.hideFutureTechLevels)) return;
+            if (!__state || __result == null || !(settings.hideUnavailableProjects || settings.hideFutureTechLevels || settings.hideFinishedProjects)) return;
             if (Current.ProgramState != ProgramState.Playing || Find.ResearchManager == null) return;
             // Node Research raises the player faction's tech level as eras emerge; otherwise it is the starting faction's.
             var colonyLevel = Faction.OfPlayer?.def.techLevel ?? TechLevel.Undefined;
             __result.RemoveAll(p =>
             {
-                if (p.IsFinished || Find.ResearchManager.IsCurrentProject(p)) return false;
+                if (Find.ResearchManager.IsCurrentProject(p)) return false;
+                if (p.IsFinished) return settings.hideFinishedProjects;
                 if (settings.hideFutureTechLevels && colonyLevel != TechLevel.Undefined && p.techLevel > colonyLevel) return true;
                 return settings.hideUnavailableProjects && !p.CanStartNow;
             });
         }
 
-        /// <summary>Drops the research window's visible-project cache so it is rebuilt on its next draw.</summary>
+        private static readonly AccessTools.FieldRef<MainButtonDef, MainTabWindow> tabWindowRef =
+            AccessTools.FieldRefAccess<MainButtonDef, MainTabWindow>("tabWindowInt");
+
+        /// <summary>Drops the visible-project cache of the Research button's window and every open research window, so each is rebuilt on its next draw.</summary>
         public static void Invalidate()
         {
             if (visibleCacheField == null || Current.ProgramState != ProgramState.Playing) return;
-            if (MainButtonDefOf.Research?.TabWindow is MainTabWindow_Research window)
-                visibleCacheField.SetValue(window, null);
+            var button = MainButtonDefOf.Research;
+            if (button != null && tabWindowRef(button) is MainTabWindow_Research tabWindow)
+                visibleCacheField.SetValue(tabWindow, null);
+            var windows = Find.WindowStack?.Windows;
+            if (windows == null) return;
+            for (int i = 0; i < windows.Count; i++)
+                if (windows[i] is MainTabWindow_Research window) visibleCacheField.SetValue(window, null);
         }
     }
 }

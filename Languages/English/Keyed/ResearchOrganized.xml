@@ -10,12 +10,21 @@
 
   <!-- Settings -->
   <ResearchOrganized_SectionResearchWindow>Research Window</ResearchOrganized_SectionResearchWindow>
+  <ResearchOrganized_DisplayMode>Research Window</ResearchOrganized_DisplayMode>
+  <ResearchOrganized_DisplayModeTip>Classic is the game's own research window, organized by this mod. Rethemed is a full research window drawn with UI Rethemed - Core, with zoom, search, filters, a research queue, research times and a details panel. Takes effect when you close the settings.</ResearchOrganized_DisplayModeTip>
+  <ResearchOrganized_DisplayModeNoCoreTip>Classic is the game's own research window, organized by this mod. The Rethemed window needs UI Rethemed - Core.</ResearchOrganized_DisplayModeNoCoreTip>
+  <ResearchOrganized_DisplayModeClassic>Classic</ResearchOrganized_DisplayModeClassic>
+  <ResearchOrganized_DisplayModeRethemed>Rethemed</ResearchOrganized_DisplayModeRethemed>
+  <ResearchOrganized_RequiresCore>(needs UI Rethemed - Core)</ResearchOrganized_RequiresCore>
+  <ResearchOrganized_RequiresRethemed>Only in the Rethemed research window.</ResearchOrganized_RequiresRethemed>
   <ResearchOrganized_HideUnavailable>Hide Unavailable Projects</ResearchOrganized_HideUnavailable>
   <ResearchOrganized_HideUnavailableTip>Shows only finished projects and projects that can be started now. Projects missing a prerequisite, techprint, research bench or other requirement are hidden until they become available.</ResearchOrganized_HideUnavailableTip>
   <ResearchOrganized_HideFutureTechLevels>Hide Future Tech Levels</ResearchOrganized_HideFutureTechLevels>
   <ResearchOrganized_HideFutureTechLevelsTip>Hides unfinished projects above your colony's tech level. Your tech level comes from your starting faction, and rises as Node Research's emergence projects are completed.</ResearchOrganized_HideFutureTechLevelsTip>
+  <ResearchOrganized_HideFinished>Hide Finished Projects</ResearchOrganized_HideFinished>
+  <ResearchOrganized_HideFinishedTip>Hides projects you have already researched.</ResearchOrganized_HideFinishedTip>
   <ResearchOrganized_FullScreen>Full Screen Research Window</ResearchOrganized_FullScreen>
-  <ResearchOrganized_FullScreenTip>Makes the research window as tall as the screen allows and fits as many projects into each column as that height holds. The button beside the settings gear in the research window toggles this too.</ResearchOrganized_FullScreenTip>
+  <ResearchOrganized_FullScreenTip>Makes the research window as tall as the screen. The Classic and Rethemed windows each keep their own choice, and the full screen button in the window toggles it too.</ResearchOrganized_FullScreenTip>
   <ResearchOrganized_ShowTabCounts>Show Tab Project Counts</ResearchOrganized_ShowTabCounts>
   <ResearchOrganized_ShowTabCountsTip>Shows completed/total project counts next to each tab's name. Every tab's tooltip always shows project and research point totals, regardless of this setting.</ResearchOrganized_ShowTabCountsTip>
   <ResearchOrganized_SuppressEmergenceLines>Suppress Emergence Lines</ResearchOrganized_SuppressEmergenceLines>
@@ -35,7 +44,8 @@
 
   <ResearchOrganized_SectionColors>Colors</ResearchOrganized_SectionColors>
   <ResearchOrganized_ColorCards>Color Cards by Tech Level</ResearchOrganized_ColorCards>
-  <ResearchOrganized_ColorCardsTip>Tints each finished project card with its tech level's color. Turn off for vanilla colors.</ResearchOrganized_ColorCardsTip>
+  <ResearchOrganized_ColorCardsTip>Tints project cards with their tech level's color. Turn off for plain cards.</ResearchOrganized_ColorCardsTip>
+  <ResearchOrganized_ColorsOnCoreTip>In the Rethemed window, each era's color is picked on UI Rethemed - Core's settings page.</ResearchOrganized_ColorsOnCoreTip>
   <ResearchOrganized_RequiresColorCards>Requires Color Cards by Tech Level.</ResearchOrganized_RequiresColorCards>
   <ResearchOrganized_ColorUndefined>Undefined / Misc</ResearchOrganized_ColorUndefined>
   <ResearchOrganized_ColorAnimal>Animal / Primitive</ResearchOrganized_ColorAnimal>
@@ -56,4 +66,103 @@
   <ResearchOrganized_WriteLayoutLogTip>Writes every project's column, row and hub type, and each hub's placement decisions, to Player.log whenever the layout is built.</ResearchOrganized_WriteLayoutLogTip>
   <ResearchOrganized_ResetDefaults>Reset to Defaults</ResearchOrganized_ResetDefaults>
 
+  <!-- Research window: title bar, filters, canvas, cards and panels -->
+  <ResearchOrganized_TitleCounts>{0} / {1} projects researched</ResearchOrganized_TitleCounts>
+  <ResearchOrganized_SearchHint>Search projects and unlocks</ResearchOrganized_SearchHint>
+  <ResearchOrganized_FilterLocked>Locked</ResearchOrganized_FilterLocked>
+  <ResearchOrganized_FilterLockedTip>Shows projects that can't be started yet: missing a prerequisite, techprint, research bench or other requirement. Click to show or hide them.</ResearchOrganized_FilterLockedTip>
+  <ResearchOrganized_FilterFinished>Finished</ResearchOrganized_FilterFinished>
+  <ResearchOrganized_FilterFinishedTip>Shows projects you have already researched. Click to show or hide them.</ResearchOrganized_FilterFinishedTip>
+  <ResearchOrganized_FilterFuture>Future eras</ResearchOrganized_FilterFuture>
+  <ResearchOrganized_FilterFutureTip>Shows unfinished projects above your colony's tech level. Your tech level comes from your starting faction, and rises as Node Research's emergence projects are completed. Click to show or hide them.</ResearchOrganized_FilterFutureTip>
+  <ResearchOrganized_FitTip>Fit the whole tab in view</ResearchOrganized_FitTip>
+  <ResearchOrganized_ZoomInTip>Zoom in (or use the mouse wheel)</ResearchOrganized_ZoomInTip>
+  <ResearchOrganized_ZoomOutTip>Zoom out (or use the mouse wheel)</ResearchOrganized_ZoomOutTip>
+  <ResearchOrganized_Details>Details</ResearchOrganized_Details>
+  <ResearchOrganized_UnknownProject>(Unknown)</ResearchOrganized_UnknownProject>
+  <ResearchOrganized_HoverCost>Cost: {0}</ResearchOrganized_HoverCost>
+  <ResearchOrganized_HoverNeeds>Needs:</ResearchOrganized_HoverNeeds>
+  <ResearchOrganized_HoverUnlocks>Unlocks:</ResearchOrganized_HoverUnlocks>
+
+  <!-- Settings: research window and cards -->
+  <ResearchOrganized_OpenOnCurrent>Open on the Current Project</ResearchOrganized_OpenOnCurrent>
+  <ResearchOrganized_OpenOnCurrentTip>Brings the project being researched into view every time the window opens. When off, each tab stays where you left it.</ResearchOrganized_OpenOnCurrentTip>
+  <ResearchOrganized_CurvedLines>Curved Lines</ResearchOrganized_CurvedLines>
+  <ResearchOrganized_CurvedLinesTip>Draws the lines between projects as smooth curves. When off, they are straight.</ResearchOrganized_CurvedLinesTip>
+  <ResearchOrganized_HighlightChain>Highlight Whole Prerequisite Chain</ResearchOrganized_HighlightChain>
+  <ResearchOrganized_HighlightChainTip>Lights up every project the selected one needs, all the way back, not only its direct prerequisites.</ResearchOrganized_HighlightChainTip>
+  <ResearchOrganized_SectionCards>Cards</ResearchOrganized_SectionCards>
+  <ResearchOrganized_CardUnlockIcons>Unlock Icons</ResearchOrganized_CardUnlockIcons>
+  <ResearchOrganized_CardUnlockIconsTip>Shows up to three icons on each card for the buildings and items it unlocks.</ResearchOrganized_CardUnlockIconsTip>
+  <ResearchOrganized_CardChips>Techprint and Study Counters</ResearchOrganized_CardChips>
+  <ResearchOrganized_CardChipsTip>Shows techprints applied and things studied on cards that need them, in red until the requirement is met.</ResearchOrganized_CardChipsTip>
+  <ResearchOrganized_CardProgressStrip>Progress Strip</ResearchOrganized_CardProgressStrip>
+  <ResearchOrganized_CardProgressStripTip>Shows a thin progress bar along the bottom of cards that have progress.</ResearchOrganized_CardProgressStripTip>
+  <ResearchOrganized_CardHoverCard>Hover Card</ResearchOrganized_CardHoverCard>
+  <ResearchOrganized_HoverFoundation>Foundation: counts towards advancing to the next era.</ResearchOrganized_HoverFoundation>
+  <ResearchOrganized_Foundation>Foundation</ResearchOrganized_Foundation>
+
+  <!-- Research queue -->
+  <ResearchOrganized_Queue>Queue</ResearchOrganized_Queue>
+  <ResearchOrganized_QueueEmpty>Shift-click a project to queue it, along with any prerequisites it still needs. When the current project finishes, the first queued project that can start is researched next.</ResearchOrganized_QueueEmpty>
+  <ResearchOrganized_QueueOffResearchQueue>Research Queue chooses what to research, so this queue is off. Use Research Queue's window instead.</ResearchOrganized_QueueOffResearchQueue>
+  <ResearchOrganized_QueueOffSemiRandom>Semi Random Research's Prohibit normal project selection setting is on, so it chooses what to research and this queue is off. Turn that setting off to use the queue.</ResearchOrganized_QueueOffSemiRandom>
+  <ResearchOrganized_QueueClear>Clear queue</ResearchOrganized_QueueClear>
+  <ResearchOrganized_QueueClearTip>Removes every project from the queue. The current project keeps going.</ResearchOrganized_QueueClearTip>
+  <ResearchOrganized_QueueRemove>Remove from queue</ResearchOrganized_QueueRemove>
+  <ResearchOrganized_QueueRowTip>Click to show it in the tree. Drag to change its place in the queue.</ResearchOrganized_QueueRowTip>
+  <ResearchOrganized_QueueDoneIn>done in about {0}</ResearchOrganized_QueueDoneIn>
+  <ResearchOrganized_QueueStarted>Started researching {0} from the queue.</ResearchOrganized_QueueStarted>
+  <ResearchOrganized_QueuedAt>Queued #{0}</ResearchOrganized_QueuedAt>
+  <ResearchOrganized_Enqueue>Queue</ResearchOrganized_Enqueue>
+  <ResearchOrganized_Unqueue>Unqueue</ResearchOrganized_Unqueue>
+  <ResearchOrganized_EnqueueTip>Adds the project to the end of the queue, after any prerequisites it still needs, or takes it out again. Shift-click a card to do the same.</ResearchOrganized_EnqueueTip>
+
+  <!-- Details panel -->
+  <ResearchOrganized_Research>Research</ResearchOrganized_Research>
+  <ResearchOrganized_StopResearch>Stop research</ResearchOrganized_StopResearch>
+  <ResearchOrganized_Finished>Finished</ResearchOrganized_Finished>
+  <ResearchOrganized_Researching>Researching</ResearchOrganized_Researching>
+  <ResearchOrganized_Available>Available</ResearchOrganized_Available>
+  <ResearchOrganized_Locked>Locked</ResearchOrganized_Locked>
+  <ResearchOrganized_SectionNeeds>Needs</ResearchOrganized_SectionNeeds>
+  <ResearchOrganized_SectionUnlocks>Unlocks</ResearchOrganized_SectionUnlocks>
+  <ResearchOrganized_SectionLater>Unlocks with more research</ResearchOrganized_SectionLater>
+  <ResearchOrganized_SectionLeadsTo>Leads to</ResearchOrganized_SectionLeadsTo>
+  <ResearchOrganized_AnyResearchBench>A research bench</ResearchOrganized_AnyResearchBench>
+  <ResearchOrganized_Techprints>Techprints applied: {0} / {1}</ResearchOrganized_Techprints>
+  <ResearchOrganized_Study>Study {0}</ResearchOrganized_Study>
+  <ResearchOrganized_AlsoNeeds>Also needs: {0}</ResearchOrganized_AlsoNeeds>
+
+  <ResearchOrganized_EraBands>Era Bands</ResearchOrganized_EraBands>
+  <ResearchOrganized_EraBandsTip>On tabs laid out era by era, tints each era's columns and shows its name along the top.</ResearchOrganized_EraBandsTip>
+  <ResearchOrganized_ShowTimeLeft>Show Research Times</ResearchOrganized_ShowTimeLeft>
+  <ResearchOrganized_ShowTimeLeftTip>Shows roughly how long each project takes to research, on its card, hover card and details, how long the current project has left, and when each queued project should be done. Times use the colony's research pace over the last day, saved with the game, and appear after a quarter hour of research. With Semi Random Research - Continued, its measured pace is used instead, so both show the same times.</ResearchOrganized_ShowTimeLeftTip>
+  <ResearchOrganized_TimeLeft>about {0} left</ResearchOrganized_TimeLeft>
+  <ResearchOrganized_TimeTag>about {0}</ResearchOrganized_TimeTag>
+  <ResearchOrganized_HoverTime>Time: about {0} at the colony's recent research pace</ResearchOrganized_HoverTime>
+  <ResearchOrganized_HoverTimeUnknown>Time: shown once the colony has done a quarter hour of research</ResearchOrganized_HoverTimeUnknown>
+  <ResearchOrganized_PeriodHours>{0} hours</ResearchOrganized_PeriodHours>
+  <ResearchOrganized_PeriodDay>{0} day</ResearchOrganized_PeriodDay>
+  <ResearchOrganized_PeriodDays>{0} days</ResearchOrganized_PeriodDays>
+  <ResearchOrganized_PeriodYear>{0} year</ResearchOrganized_PeriodYear>
+  <ResearchOrganized_PeriodYears>{0} years</ResearchOrganized_PeriodYears>
+  <ResearchOrganized_TimeEstimating>time left: estimating</ResearchOrganized_TimeEstimating>
+  <ResearchOrganized_CardSize>Card Size</ResearchOrganized_CardSize>
+  <ResearchOrganized_CardSizeTip>Compact cards show the project's name only and fit more on screen; Large cards have room for bigger icons.</ResearchOrganized_CardSizeTip>
+  <ResearchOrganized_ColumnSpacing>Column Spacing</ResearchOrganized_ColumnSpacing>
+  <ResearchOrganized_ColumnSpacingTip>The gap between columns of cards in the research window, as a share of the usual gap. Lower fits more on screen; higher leaves more room for lines.</ResearchOrganized_ColumnSpacingTip>
+  <ResearchOrganized_RowSpacing>Row Spacing</ResearchOrganized_RowSpacing>
+  <ResearchOrganized_RowSpacingTip>The gap between cards stacked in a column, as a share of the usual gap.</ResearchOrganized_RowSpacingTip>
+  <ResearchOrganized_MaxPerColumn>Projects Per Column</ResearchOrganized_MaxPerColumn>
+  <ResearchOrganized_MaxPerColumnTip>The most projects stacked in one column before the layout starts another. Fewer makes a wider, shorter tree; more makes a taller, narrower one. The tree is laid out again when you close the settings.</ResearchOrganized_MaxPerColumnTip>
+  <ResearchOrganized_ResetValue>Reset to default</ResearchOrganized_ResetValue>
+  <ResearchOrganized_CardSizeButtonTip>Now {0}. Click to change.</ResearchOrganized_CardSizeButtonTip>
+  <ResearchOrganized_CardSizeCompact>Compact</ResearchOrganized_CardSizeCompact>
+  <ResearchOrganized_CardSizeNormal>Normal</ResearchOrganized_CardSizeNormal>
+  <ResearchOrganized_CardSizeLarge>Large</ResearchOrganized_CardSizeLarge>
+  <ResearchOrganized_OpenNodeResearch>Open Node Research</ResearchOrganized_OpenNodeResearch>
+  <ResearchOrganized_OpenSemiRandom>Open Semi Random Research</ResearchOrganized_OpenSemiRandom>
+  <ResearchOrganized_OpenResearchQueue>Open Research Queue</ResearchOrganized_OpenResearchQueue>
+  <ResearchOrganized_CardHoverCardTip>Shows a card with the project's description, cost, prerequisites and what it unlocks without further research when you hover over it.</ResearchOrganized_CardHoverCardTip>
 </LanguageData>

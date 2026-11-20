@@ -121,9 +121,17 @@ namespace ResearchOrganized
             }
 
             UnavailableProjectFilter.Patch(harmony);
+            ResearchRate.Patch(harmony);
+            ProjectQueue.Patch(harmony);
 
             OrganizeTabsAndLayout();
+
+            WindowHandover.Patch(harmony);
+            DisplayMode.Apply();
         }
+
+        /// <summary>Counts up after every layout pass, so the research window knows to re-read project positions.</summary>
+        public static int LayoutVersion { get; private set; }
 
         private static void OnGameFinalizeInit()
         {
@@ -182,6 +190,9 @@ namespace ResearchOrganized
                 // Copies researchViewX/Y into the private x/y the window draws from; its overlap nudge
                 // only touches cards closer than this layout ever places them.
                 ResearchProjectDef.GenerateNonOverlappingCoordinates();
+
+                LayoutVersion++;
+                ResearchOrganizedMod.Instance?.LayoutBuilt();
 
                 // Tells Node Research where its parked projects went, so its window re-collapses them.
                 NodeResearchCompat.SyncTabs();
