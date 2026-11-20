@@ -108,7 +108,7 @@ namespace ResearchOrganizedUIRethemed
             if (timeLeft)
             {
                 int ticks = estimate ? ResearchRate.TicksLeft(project) : -1;
-                if (ticks > 0) line += "   " + "ResearchOrganized_TimeLeft".Translate(ticks.ToStringTicksToPeriod());
+                if (ticks > 0) line += "   " + "ResearchOrganized_TimeLeft".Translate(ResearchRate.FormatPeriod(ticks));
                 else if (!estimate && project.knowledgeCategory == null) line += "   " + "ResearchOrganized_TimeEstimating".Translate();
             }
             progressText[slot] = line;

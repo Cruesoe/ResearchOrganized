@@ -1,13 +1,17 @@
+using System;
 using System.Collections.Generic;
+using System.Reflection;
 using HarmonyLib;
 using RimWorld;
+using RimWorld.Planet;
 using Verse;
 
 namespace ResearchOrganized
 {
     /// <summary>The colony's recent research speed, from the points colonists add to the current project, kept in hourly
     /// buckets over the last day. Points are stored before the tech-level cost factor, so any project's time can be worked
-    /// out from them. Lifetime: one game; saved with it by ProjectQueueComponent and cleared when another game is loaded.</summary>
+    /// out from them. With Semi Random Research - Continued active, its measured speed is used instead, so both mods show
+    /// the same times. Lifetime: one game; saved with it by ProjectQueueComponent and cleared when another game is loaded.</summary>
     internal static class ResearchRate
     {
         private const int BucketTicks = GenDate.TicksPerHour;
@@ -121,7 +125,7 @@ namespace ResearchOrganized
             EnsureGame();
             if (firstTick < 0 || Find.TickManager == null) return 0f;
             int tick = Find.TickManager.TicksGame;
-            int span = System.Math.Min(tick - firstTick, Buckets * BucketTicks);
+            int span = Math.Min(tick - firstTick, Buckets * BucketTicks);
             if (span < BucketTicks / 4) return 0f;
             int hour = tick / BucketTicks;
             float sum = 0f;
@@ -130,25 +134,104 @@ namespace ResearchOrganized
             return sum / span;
         }
 
-        public static bool HasEstimate => PointsPerTick() > 0f;
+        // Semi Random Research - Continued's rate tracker gives shown points per day for a research category, averaged over up
+        // to ten days of hourly samples. Its methods are resolved once; the tracker is looked up again for each world.
+        private const string SemiRandomPackageId = "cruesoe.semirandompfork.continued";
+        private const float SemiRandomMaxDays = 100000f;
+        private static bool semiRandomResolved;
+        private static Type semiRandomTrackerType;
+        private static MethodInfo semiRandomRateMethod;
+        private static Func<ResearchProjectDef, string> semiRandomCategoryKey;
+        private static World semiRandomWorld;
+        private static Func<string, float> semiRandomRate;
+        private static readonly Dictionary<string, float> semiRandomRates = new Dictionary<string, float>();
+        private static int semiRandomRatesHour = -1;
 
-        /// <summary>Points of work left on a standard research project, before cost factors; 0 when there is none to time.</summary>
-        public static float WorkLeft(ResearchProjectDef project)
+        private static void ResolveSemiRandom()
         {
-            if (project == null || project.knowledgeCategory != null || project.IsFinished || project.baseCost <= 0f) return 0f;
-            float left = project.Cost - project.ProgressReal;
-            return left > 0f ? left * CostFactor(project) : 0f;
+            semiRandomResolved = true;
+            if (!ModsConfig.IsActive(SemiRandomPackageId)) return;
+            semiRandomTrackerType = AccessTools.TypeByName("CM_Semi_Random_Research.ResearchRateTracker");
+            var rateMethod = semiRandomTrackerType != null
+                ? AccessTools.Method(semiRandomTrackerType, "GetCategoryAverageRate", new[] { typeof(string) })
+                : null;
+            if (rateMethod != null && !rateMethod.IsStatic && rateMethod.ReturnType == typeof(float)) semiRandomRateMethod = rateMethod;
+            var keyMethod = AccessTools.Method("CM_Semi_Random_Research.ResearchTracker:GetCategoryKey", new[] { typeof(ResearchProjectDef) });
+            if (keyMethod != null && keyMethod.IsStatic && keyMethod.ReturnType == typeof(string))
+                semiRandomCategoryKey = (Func<ResearchProjectDef, string>)Delegate.CreateDelegate(typeof(Func<ResearchProjectDef, string>), keyMethod);
         }
 
-        /// <summary>Ticks to research this much work at the recent pace; -1 when there is no estimate.</summary>
-        public static int TicksFor(float work)
+        /// <summary>Semi Random Research's rate for a category, in shown points per day, read once an hour; null without it.</summary>
+        private static float? SemiRandomDailyRate(string category)
         {
-            float rate = PointsPerTick();
-            if (rate <= 0f || work <= 0f) return -1;
-            return (int)System.Math.Min(work / rate, int.MaxValue);
+            if (!semiRandomResolved) ResolveSemiRandom();
+            if (semiRandomRateMethod == null || Find.World == null) return null;
+            if (semiRandomWorld != Find.World)
+            {
+                semiRandomWorld = Find.World;
+                semiRandomRate = null;
+                semiRandomRates.Clear();
+                foreach (WorldComponent component in Find.World.components)
+                {
+                    if (component == null || component.GetType() != semiRandomTrackerType) continue;
+                    semiRandomRate = (Func<string, float>)Delegate.CreateDelegate(typeof(Func<string, float>), component, semiRandomRateMethod);
+                    break;
+                }
+            }
+            if (semiRandomRate == null) return null;
+            int hour = Hour;
+            if (hour != semiRandomRatesHour)
+            {
+                semiRandomRatesHour = hour;
+                semiRandomRates.Clear();
+            }
+            if (!semiRandomRates.TryGetValue(category, out float rate))
+            {
+                try { rate = semiRandomRate(category); }
+                catch (Exception) { rate = 0f; }
+                semiRandomRates[category] = rate;
+            }
+            return rate;
         }
+
+        private static string CategoryKey(ResearchProjectDef project) => semiRandomCategoryKey?.Invoke(project) ?? "Standard";
+
+        /// <summary>Semi Random Research is active and its rate tracker was found, so its speed sets every estimate.</summary>
+        private static bool UsingSemiRandom => SemiRandomDailyRate("Standard").HasValue;
+
+        public static bool HasEstimate => UsingSemiRandom ? SemiRandomDailyRate("Standard") > 0f : PointsPerTick() > 0f;
 
         /// <summary>Ticks left on a standard research project at the recent pace; -1 when there is no estimate.</summary>
-        public static int TicksLeft(ResearchProjectDef project) => TicksFor(WorkLeft(project));
+        public static int TicksLeft(ResearchProjectDef project)
+        {
+            if (project == null || project.knowledgeCategory != null || project.IsFinished || project.baseCost <= 0f) return -1;
+            if (UsingSemiRandom)
+            {
+                // As Semi Random Research works it out: the shown points left over its category's points per day.
+                float rate = SemiRandomDailyRate(CategoryKey(project)) ?? 0f;
+                float remaining = project.CostApparent - project.ProgressApparent;
+                if (rate <= 0f || remaining <= 0f || remaining / rate > SemiRandomMaxDays) return -1;
+                return (int)Math.Min(remaining / rate * GenDate.TicksPerDay, int.MaxValue);
+            }
+            float left = project.Cost - project.ProgressReal;
+            float perTick = PointsPerTick();
+            if (left <= 0f || perTick <= 0f) return -1;
+            return (int)Math.Min(left * CostFactor(project) / perTick, int.MaxValue);
+        }
+
+        /// <summary>A time as Semi Random Research shows it: hours to one decimal under a day, else whole days and years.</summary>
+        public static string FormatPeriod(int ticks)
+        {
+            float days = ticks / (float)GenDate.TicksPerDay;
+            if (days < 1f) return "ResearchOrganized_PeriodHours".Translate((days * 24f).ToString("F1"));
+            int totalDays = Math.Max(1, (int)Math.Round(days));
+            int years = totalDays / GenDate.DaysPerYear;
+            int rest = totalDays % GenDate.DaysPerYear;
+            string dayLabel = rest == 1 ? "ResearchOrganized_PeriodDay".Translate(1).ToString() : "ResearchOrganized_PeriodDays".Translate(rest).ToString();
+            string yearLabel = years == 1 ? "ResearchOrganized_PeriodYear".Translate(1).ToString() : "ResearchOrganized_PeriodYears".Translate(years).ToString();
+            if (years <= 0) return dayLabel;
+            if (rest <= 0) return yearLabel;
+            return yearLabel + " " + dayLabel;
+        }
     }
 }

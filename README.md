@@ -34,7 +34,7 @@ The **Research Window** setting picks which window the Research button opens.
 - A foldable details panel on the right shows the selected project's requirements met and unmet, what it unlocks, what it leads to, and buttons to research or queue it; a bar along the top shows the current project's progress.
 - Search finds projects by name or by anything they unlock, and chips in the window show or hide locked, finished and future-era projects.
 - Era bands tint each era's columns, with the era's title pinned along the top, on tabs laid out era by era.
-- Research times: roughly how long each project takes to research is shown on its card, hover card and details, the progress bar shows how long the current project has left, and queue rows show when each project should be done, all at the colony's research pace over the last day (saved with the game).
+- Research times: roughly how long each project takes to research is shown on its card, hover card and details, the progress bar shows how long the current project has left, and queue rows show when each project should be done, all at the colony's research pace over the last day (saved with the game), or at Semi Random Research - Continued's measured pace when it is installed, so both show the same times.
 - Cards come in Compact, Normal and Large sizes, with adjustable column and row spacing and a choice of how many projects stack in each column.
 - Era colors are picked on UI Rethemed - Core's settings page.
 

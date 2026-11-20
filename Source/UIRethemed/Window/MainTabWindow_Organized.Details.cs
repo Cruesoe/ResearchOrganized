@@ -312,9 +312,9 @@ namespace ResearchOrganizedUIRethemed
             else { detailsStatus = TranslationCache.Get("ResearchOrganized_Locked"); detailsStatusColor = Theme.HighlightRed; }
             detailsProgress = project.ProgressApparentString + " / " + info.cost;
             int ticks = current && ResearchOrganizedMod.settings.showTimeLeft ? ResearchRate.TicksLeft(project) : -1;
-            if (ticks > 0) detailsProgress += ", " + "ResearchOrganized_TimeLeft".Translate(ticks.ToStringTicksToPeriod());
+            if (ticks > 0) detailsProgress += ", " + "ResearchOrganized_TimeLeft".Translate(ResearchRate.FormatPeriod(ticks));
             int time = ResearchOrganizedMod.settings.showTimeLeft ? ResearchRate.TicksLeft(project) : -1;
-            detailsTime = time > 0 ? "ResearchOrganized_TimeTag".Translate(time.ToStringTicksToPeriod(false, true)).ToString() : null;
+            detailsTime = time > 0 ? "ResearchOrganized_TimeTag".Translate(ResearchRate.FormatPeriod(time)).ToString() : null;
 
             float headerWidth = width + 16f - 24f;
             bool progress = !project.IsFinished && project.ProgressPercent > 0f || current;

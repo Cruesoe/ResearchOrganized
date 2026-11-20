@@ -114,19 +114,19 @@ namespace ResearchOrganizedUIRethemed
             notesStatsVersion = ResearchOrganizedMain.StatsVersion;
             notesHour = hour;
             queueNotes.Clear();
-            // Work left in front of each row: the current project's remainder, then each queued project in turn.
+            // Time in front of each row: the current project's remainder, then each queued project's own time in turn.
             var current = Find.ResearchManager.GetProject();
-            float ahead = ResearchRate.WorkLeft(current);
+            long ahead = current != null ? System.Math.Max(0, ResearchRate.TicksLeft(current)) : 0;
             bool timed = ResearchOrganizedMod.settings.showTimeLeft && ResearchRate.HasEstimate;
             for (int i = 0; i < items.Count; i++)
             {
                 var project = items[i];
-                float work = ResearchRate.WorkLeft(project);
-                ahead += work;
                 string cost = Info(project).cost;
-                if (timed)
-                    queueNotes.Add(cost + "  ·  " + ResearchRate.TicksFor(work).ToStringTicksToPeriod(false, true) + "  ·  "
-                        + "ResearchOrganized_QueueDoneIn".Translate(ResearchRate.TicksFor(ahead).ToStringTicksToPeriod(false)));
+                int own = timed ? ResearchRate.TicksLeft(project) : -1;
+                if (own > 0) ahead += own;
+                if (own > 0)
+                    queueNotes.Add(cost + "  ·  " + ResearchRate.FormatPeriod(own) + "  ·  "
+                        + "ResearchOrganized_QueueDoneIn".Translate(ResearchRate.FormatPeriod((int)System.Math.Min(ahead, int.MaxValue))));
                 else
                     queueNotes.Add(cost);
             }

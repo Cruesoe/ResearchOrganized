@@ -145,9 +145,9 @@ namespace ResearchOrganizedUIRethemed
         /// <summary>The hover card's time line: the estimate at the recent pace, or when one will appear; null when there is nothing to time.</summary>
         private static string HoverTime(ResearchProjectDef project)
         {
-            if (!ResearchOrganizedMod.settings.showTimeLeft || ResearchRate.WorkLeft(project) <= 0f) return null;
+            if (!ResearchOrganizedMod.settings.showTimeLeft || project.knowledgeCategory != null || project.IsFinished || project.baseCost <= 0f) return null;
             int ticks = ResearchRate.TicksLeft(project);
-            return ticks > 0 ? "ResearchOrganized_HoverTime".Translate(ticks.ToStringTicksToPeriod(false)) : "ResearchOrganized_HoverTimeUnknown".Translate();
+            return ticks > 0 ? "ResearchOrganized_HoverTime".Translate(ResearchRate.FormatPeriod(ticks)) : "ResearchOrganized_HoverTimeUnknown".Translate();
         }
 
         /// <summary>"a/b", cached by its two numbers.</summary>
@@ -369,7 +369,7 @@ namespace ResearchOrganizedUIRethemed
                 info.timeHour = hour;
                 info.timeStats = stats;
                 int ticks = ResearchRate.TicksLeft(project);
-                info.time = ticks > 0 ? ticks.ToStringTicksToPeriod(false, true) : null;
+                info.time = ticks > 0 ? ResearchRate.FormatPeriod(ticks) : null;
             }
             return info.time;
         }
