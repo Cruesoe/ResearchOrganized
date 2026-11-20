@@ -4,7 +4,6 @@
     <RootNamespace>ResearchOrganizedUIRethemed</RootNamespace>
     <AssemblyName>ResearchOrganizedUIRethemed</AssemblyName>
     <Nullable>disable</Nullable>
-    <UseHarmony>false</UseHarmony>
     <UnityModules>CoreModule;IMGUIModule;TextRenderingModule</UnityModules>
     <UIRethemedCoreDll Condition="'$(UIRethemedCoreDll)' == ''">$(UIRETHEMED_CORE_DLL)</UIRethemedCoreDll>
     <UIRethemedCoreDll Condition="'$(UIRethemedCoreDll)' == ''">C:\Program Files (x86)\Steam\steamapps\workshop\content\294100\3832843406\Versions\$(RimWorldGameVersion)\Assemblies\UIRethemedCore.dll</UIRethemedCoreDll>

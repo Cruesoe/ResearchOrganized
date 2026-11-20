@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Defs>
   <!-- Research: Organized's tab on UI Rethemed - Core's settings page. The mod reads these colors by key
-       (UIRethemedSkin.CategoryColor) while Match UI Rethemed theme is on; the defaults are the mod's own card colors. -->
+       (UIRethemedSkin.CategoryColor) in the Rethemed window; the defaults are the mod's own card colors. -->
   <UIRethemed.Core.ModThemeDef>
     <defName>ResearchOrganized_Theme</defName>
     <label>research: organized</label>

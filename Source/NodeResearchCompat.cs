@@ -73,6 +73,20 @@ namespace ResearchOrganized
             catch (Exception ex) { Log.Error($"[Research: Organized] Node Research restore error: {ex.Message}"); }
         }
 
+        private static MethodInfo restoreMethod;
+
+        /// <summary>Puts the projects Node Research parked on its Main tab back on their tabs, as its vanilla button does;
+        /// nothing happens when they aren't parked.</summary>
+        public static void RestoreTabs()
+        {
+            if (!Active || restoreMethod == null) return;
+            try
+            {
+                restoreMethod.Invoke(null, null);
+            }
+            catch (Exception ex) { Log.Error($"[Research: Organized] Node Research restore error: {ex.Message}"); }
+        }
+
         private static void Resolve()
         {
             if (resolved) return;
@@ -92,6 +106,7 @@ namespace ResearchOrganized
             isCollapsedField = collapsed;
 
             var restore = AccessTools.Method(startupType, "Restore");
+            restoreMethod = restore;
             if (restore != null)
             {
                 new Harmony(ResearchOrganizedMain.HarmonyId).Patch(restore,

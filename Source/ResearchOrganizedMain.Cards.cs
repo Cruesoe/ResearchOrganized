@@ -22,7 +22,7 @@ namespace ResearchOrganized
         private static readonly Color FoundationGold = new Color(0.75f, 0.62f, 0.32f, 0.9f);
         private const float FoundationNotchSize = 12f;
         private const int FoundationNotchTextureSize = 32;
-        private static readonly Texture2D FoundationNotchTex = BuildCornerNotchTexture(FoundationNotchTextureSize);
+        internal static readonly Texture2D FoundationNotchTex = BuildCornerNotchTexture(FoundationNotchTextureSize);
 
         private static readonly Dictionary<TechLevel, ColorSet> TabColors = new Dictionary<TechLevel, ColorSet>();
         private static readonly Dictionary<string, ColorSet> TabColorOverrides = new Dictionary<string, ColorSet>();
@@ -112,18 +112,7 @@ namespace ResearchOrganized
             }
             bool isFoundation = ResearchOrganizedLayout.IsFoundationTech(project);
             if (ResearchOrganizedLayout.cyclicNodes.Contains(project)) { borderColor = Color.red; borderSize = 2f; }
-            bool result;
-            // Vanilla passes an empty label and draws the card's text itself, so a themed face replaces only the background.
-            var skin = ResearchSkin.Active;
-            if (skin != null && skin.Card(rect, unfilledBgColor, bgColor, project.ProgressPercent, skin.ResearchColor(borderColor), borderSize > 1f))
-            {
-                if (doMouseOverSound) MouseoverSounds.DoRegion(rect);
-                result = active && Widgets.ButtonInvisible(rect, false);
-            }
-            else
-            {
-                result = Widgets.CustomButtonText(ref rect, label, bgColor, textColor, borderColor, unfilledBgColor, cacheHeight, borderSize, doMouseOverSound, active, project.ProgressPercent);
-            }
+            bool result = Widgets.CustomButtonText(ref rect, label, bgColor, textColor, borderColor, unfilledBgColor, cacheHeight, borderSize, doMouseOverSound, active, project.ProgressPercent);
             if (isFoundation)
             {
                 var notch = new Rect(rect.xMax - FoundationNotchSize, rect.yMin, FoundationNotchSize, FoundationNotchSize);
@@ -230,10 +219,10 @@ namespace ResearchOrganized
         private static ColorSet ResolveColorSet(ResearchProjectDef project)
         {
             string tabName = project.tab?.defName;
-            var skin = ResearchSkin.Active;
+            var skin = DisplayMode.RethemedActive ? ResearchSkin.Active : null;
             if (skin != null)
             {
-                // With the theme on, colors come from Core's palette for this mod, keyed like the settings above.
+                // In the Rethemed window, colors come from Core's palette for this mod, keyed like the settings above.
                 string key;
                 if (tabName != null && TabColorOverrides.ContainsKey(tabName)) key = AnomalyColorKey;
                 else if (tabName != null && TabToThemeMap.TryGetValue(tabName, out var tabLevel)) key = ColorKey(tabLevel);
@@ -246,6 +235,9 @@ namespace ResearchOrganized
             if (TabColors.TryGetValue(project.techLevel, out var byTechLevel)) return byTechLevel;
             return TabColors[TechLevel.Undefined];
         }
+
+        /// <summary>A project's card color: its era's, or its tab's override, from Core's palette in the Rethemed window.</summary>
+        internal static Color EraColor(ResearchProjectDef project) => ResolveColorSet(project).finished;
 
         private const string AnomalyColorKey = "Anomaly";
 

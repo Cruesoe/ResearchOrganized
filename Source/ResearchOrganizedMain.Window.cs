@@ -39,7 +39,7 @@ namespace ResearchOrganized
         private static ResearchProjectDef SelectedProject(MainTabWindow_Research window) =>
             researchWindowSelectedProjectRef == null || window == null ? null : researchWindowSelectedProjectRef(window);
 
-        private static System.Collections.IList TabRecords(MainTabWindow_Research window)
+        internal static System.Collections.IList TabRecords(MainTabWindow_Research window)
         {
             if (researchWindowTabsField == null || window == null) return null;
             if (window != researchWindowTabsOwner)
@@ -50,7 +50,7 @@ namespace ResearchOrganized
             return researchWindowTabs;
         }
 
-        private static ResearchTabDef TabRecordDef(object record)
+        internal static ResearchTabDef TabRecordDef(object record)
         {
             if (record == null || researchTabRecordDefField == null) return null;
             if (!tabRecordDefs.TryGetValue(record, out var def)) tabRecordDefs[record] = def = researchTabRecordDefField.GetValue(record) as ResearchTabDef;
@@ -140,7 +140,7 @@ namespace ResearchOrganized
             var gearRect = new Rect(right - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
             var toggleRect = new Rect(gearRect.x - SettingsButtonGap - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
 
-            if (WindowButton(gearRect, SettingsGearTex, "gear-six",TranslationCache.Get("ResearchOrganized_SettingsButtonTip")))
+            if (WindowButton(gearRect, SettingsGearTex, TranslationCache.Get("ResearchOrganized_SettingsButtonTip")))
             {
                 var mod = LoadedModManager.GetMod<ResearchOrganizedMod>();
                 if (mod != null) Find.WindowStack.Add(new Dialog_ModSettings(mod));
@@ -149,7 +149,7 @@ namespace ResearchOrganized
 
             bool fullScreen = ResearchOrganizedMod.settings.fullScreenResearch;
             string toggleTip = TranslationCache.Get(fullScreen ? "ResearchOrganized_ExitFullScreenTip" : "ResearchOrganized_EnterFullScreenTip");
-            if (WindowButton(toggleRect, fullScreen ? ExitFullScreenTex : EnterFullScreenTex, fullScreen ? "arrows-in" : "arrows-out", toggleTip))
+            if (WindowButton(toggleRect, fullScreen ? ExitFullScreenTex : EnterFullScreenTex, toggleTip))
             {
                 ResearchOrganizedMod.settings.fullScreenResearch = !fullScreen;
                 ResearchOrganizedMod.settings.Write();
@@ -157,17 +157,8 @@ namespace ResearchOrganized
             }
         }
 
-        /// <summary>An icon button in the research window: the UI Rethemed face (by Core icon name) when the theme is on, else the mod's own texture.</summary>
-        private static bool WindowButton(Rect rect, Texture2D texture, string themedIcon, string tip)
-        {
-            var skin = ResearchSkin.Active;
-            if (skin == null || !skin.IconButton(rect, themedIcon))
-                return Widgets.ButtonImage(rect, texture, SettingsButtonColor, GenUI.MouseoverColor, true, tip);
-            TooltipHandler.TipRegion(rect, tip);
-            if (!Widgets.ButtonInvisible(rect)) return false;
-            SoundDefOf.Tick_High.PlayOneShotOnCamera();
-            return true;
-        }
+        private static bool WindowButton(Rect rect, Texture2D texture, string tip) =>
+            Widgets.ButtonImage(rect, texture, SettingsButtonColor, GenUI.MouseoverColor, true, tip);
 
         /// <summary>
         /// Brings the research window, open or not, up to date after a re-layout. The window builds its
@@ -249,7 +240,7 @@ namespace ResearchOrganized
 
             var settings = ResearchOrganizedMod.settings;
             HashSet<ResearchTabDef> shown = null;
-            if (settings.hideUnavailableProjects || settings.hideFutureTechLevels)
+            if (settings.hideUnavailableProjects || settings.hideFutureTechLevels || settings.hideFinishedProjects)
             {
                 shown = new HashSet<ResearchTabDef>(visible.Select(p => p.tab).Where(t => t != null));
                 if (shown.Count == 0) shown = null;
@@ -334,7 +325,37 @@ namespace ResearchOrganized
         private static bool tabStatsValid;
 
         /// <summary>Drops the cached tab counts; they are rebuilt in one pass on next use.</summary>
-        public static void InvalidateTabStats() => tabStatsValid = false;
+        public static void InvalidateTabStats()
+        {
+            tabStatsValid = false;
+            StatsVersion++;
+        }
+
+        /// <summary>Counts up whenever research progress may have changed, so caches built from project state know to rebuild.</summary>
+        public static int StatsVersion { get; private set; }
+
+        /// <summary>Finished and total projects across every tab.</summary>
+        internal static void TotalCounts(out int finished, out int total)
+        {
+            finished = 0;
+            total = 0;
+            var tabs = DefDatabase<ResearchTabDef>.AllDefsListForReading;
+            if (tabs.Count == 0) return;
+            GetTabStats(tabs[0]);
+            foreach (var stats in tabStats.Values)
+            {
+                finished += stats.completedProjects;
+                total += stats.totalProjects;
+            }
+        }
+
+        /// <summary>A tab's finished and total project counts.</summary>
+        internal static void TabCounts(ResearchTabDef tab, out int finished, out int total)
+        {
+            var stats = GetTabStats(tab);
+            finished = stats.completedProjects;
+            total = stats.totalProjects;
+        }
 
         private static TabStats GetTabStats(ResearchTabDef tabDef)
         {

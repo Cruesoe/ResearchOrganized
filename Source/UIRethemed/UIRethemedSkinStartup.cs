@@ -9,6 +9,7 @@ namespace ResearchOrganizedUIRethemed
         static UIRethemedSkinStartup()
         {
             ResearchSkin.Register(new UIRethemedSkin());
+            DisplayMode.RegisterWindow(typeof(MainTabWindow_Organized), () => new MainTabWindow_Organized());
         }
     }
 }

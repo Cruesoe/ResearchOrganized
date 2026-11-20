@@ -4,7 +4,7 @@
   <author>Cruesoe</author>
   <packageId>cruesoe.research.organized</packageId>
   <modVersion>261115</modVersion>
-  <description>Sorts research projects into tech-level tabs and lays each tab out as a tidy, readable tree.
+  <description>Sorts research projects into tech-level tabs and lays each tab out as a tidy, readable tree, in the game's own research window or, with UI Rethemed - Core, a Rethemed research window of its own.
 
 Tabs
 - Projects are grouped into Primitive, Neolithic, Medieval, Industrial, High and Late Industrial, Spacer, Ultra, Archotech, Anomaly and Miscellaneous tabs.
@@ -18,21 +18,19 @@ Layout
 - Follow-ups sit to the right of what they depend on, and branches fill the free space beside their prerequisites instead of trailing off the end of the tab.
 - A project is raised to the tech level of its prerequisites, so a follow-up never sits in an earlier era than what it needs. Its research cost changes to match.
 - Projects caught in a circular dependency are outlined in red and named in the log.
+- Hide Unavailable Projects, Hide Future Tech Levels and Hide Finished Projects hide projects you can't start yet, those above your colony's tech level, and those already researched.
 
-Research window
-- Hide Unavailable Projects shows only finished projects and those you can start now.
-- Hide Future Tech Levels hides unfinished projects above your colony's tech level.
-- The window remembers where you scrolled, and a gear in it opens the mod settings.
-- Cards are tinted by tech level, with configurable colors that can also be turned off.
-- With UI Rethemed - Core, Match UI Rethemed Theme gives the research window (background, tabs, panels, project cards, buttons, progress bar and lines) and the settings page UI Rethemed's look, with era colors picked on Core's settings page.
+Two research windows (the Research Window setting)
+- Classic: the game's own research window, with cards tinted by tech level in colors you pick, a remembered scroll position, a settings gear and a full screen button.
+- Rethemed (needs UI Rethemed - Core): pan and zoom, cards with unlock icons, counters, progress and a hover card, curved lines with whole-chain highlight, era bands, a research queue in a foldable left panel (shift-click to queue, drag to reorder), a details panel, a progress bar along the top, research times, search and filter chips, and card size, spacing and projects-per-column settings.
 
 Compatibility
-- Node Research: foundation technologies get a gold corner mark, emergence nodes stay beside their branch without cluttering lines, and you can switch freely between its node view and these tabs.
+- Node Research: foundation technologies get a gold mark, emergence nodes stay beside their branch without cluttering lines, and you can switch freely between its node view and these tabs.
+- Semi Random Research - Continued and Research Queue: in Rethemed, their tree buttons open this window, with a button back in its title bar.
 - ProgressionLESS: loads after every mod in the suite, so their research lands in the right tabs.
 - VFE Tribals: its Basics tab takes the Primitive projects.
 - Save Our Ship 2: its Ship and Archotech tabs keep their own projects, even with Combine All Tabs on.
-- Semi Random Research: its button and the settings gear sit side by side.
-- Research Icons works alongside: columns widen to fit its wider cards.</description>
+- Research Icons works alongside the Classic window: columns widen to fit its wider cards.</description>
   <supportedVersions>
     <li>1.6</li>
     <li>1.7</li>
@@ -46,6 +44,7 @@ Compatibility
     </li>
   </modDependencies>
   <incompatibleWith>
+    <li>cruesoe.research.organized2</li>
     <li>GonDragon.TechTree</li>
     <li>Aelanna.ResearchTabColors</li>
     <li>zenlor.OrganizedResearchTech</li>

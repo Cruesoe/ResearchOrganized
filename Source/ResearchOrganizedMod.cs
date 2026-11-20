@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Verse;
@@ -10,6 +11,9 @@ namespace ResearchOrganized
 
         /// <summary>This mod, for UI Rethemed - Core to look up its palette.</summary>
         public static ResearchOrganizedMod Instance;
+
+        /// <summary>Counts up on every settings save, so the research window knows to rebuild what depends on them.</summary>
+        public static int SettingsVersion { get; private set; }
 
         private static readonly Color[] Palette = new Color[]
         {
@@ -24,6 +28,7 @@ namespace ResearchOrganized
         private const float SubOptionIndent = 24f;
         private const float ColorLabelWidth = 120f;
         private const float ResetButtonHeight = 32f;
+        private const string RequiresRethemedKey = "ResearchOrganized_RequiresRethemed";
 
         /// <summary>Values the layout was actually built with, so we know when to redo it.</summary>
         private bool appliedCombineAllTabs;
@@ -31,6 +36,8 @@ namespace ResearchOrganized
         private bool appliedSeparateEras;
         private int appliedMinorAnchorThreshold;
         private int appliedMajorAnchorThreshold;
+        private int appliedMaxPerColumn;
+        private bool appliedRethemed;
         private bool appliedWriteLayoutLog;
 
         private string minorThresholdBuffer;
@@ -48,6 +55,7 @@ namespace ResearchOrganized
             appliedSeparateEras = settings.separateEras;
             appliedMinorAnchorThreshold = settings.minorAnchorChildThreshold;
             appliedMajorAnchorThreshold = settings.majorAnchorChildThreshold;
+            appliedMaxPerColumn = settings.maxPerColumn;
             appliedWriteLayoutLog = settings.writeLayoutLog;
             minorThresholdBuffer = settings.minorAnchorChildThreshold.ToString();
             majorThresholdBuffer = settings.majorAnchorChildThreshold.ToString();
@@ -55,17 +63,25 @@ namespace ResearchOrganized
 
         public override string SettingsCategory() => "Research: Organized";
 
-        /// <summary>Saves, refreshes colors and the visibility filter, and rebuilds the layout when a structural setting changed.</summary>
+        /// <summary>Saves a setting changed from the research window and applies it at once, as closing the settings page does.</summary>
+        public static void SaveAndApply() => Instance.WriteSettings();
+
+        /// <summary>Saves, refreshes colors, the visibility filter and the Research button's window, and rebuilds the layout when a structural setting changed.</summary>
         public override void WriteSettings()
         {
+            bool rethemed = DisplayMode.RethemedActive;
             bool structureChanged = settings.combineAllTabs != appliedCombineAllTabs
                                  || settings.combineIndustrial != appliedCombineIndustrial
                                  || settings.separateEras != appliedSeparateEras
                                  || settings.minorAnchorChildThreshold != appliedMinorAnchorThreshold
                                  || settings.majorAnchorChildThreshold != appliedMajorAnchorThreshold
+                                 || (rethemed && settings.maxPerColumn != appliedMaxPerColumn)
+                                 || rethemed != appliedRethemed
                                  || (settings.writeLayoutLog && !appliedWriteLayoutLog);
 
             base.WriteSettings();
+            SettingsVersion++;
+            DisplayMode.Apply();
             ResearchOrganizedMain.RefreshColors();
             UnavailableProjectFilter.Invalidate();
 
@@ -76,10 +92,15 @@ namespace ResearchOrganized
                 appliedSeparateEras = settings.separateEras;
                 appliedMinorAnchorThreshold = settings.minorAnchorChildThreshold;
                 appliedMajorAnchorThreshold = settings.majorAnchorChildThreshold;
+                appliedMaxPerColumn = settings.maxPerColumn;
+                appliedRethemed = rethemed;
                 ResearchOrganizedMain.OrganizeTabsAndLayout();
             }
             appliedWriteLayoutLog = settings.writeLayoutLog;
         }
+
+        /// <summary>The window the current layout was built for, set once the first layout pass has run.</summary>
+        internal void LayoutBuilt() => appliedRethemed = DisplayMode.RethemedActive;
 
         /// <summary>Sections by column, built on first draw; each body draws into either page's listing.</summary>
         private List<SkinSettingsSection> leftSections;
@@ -95,12 +116,13 @@ namespace ResearchOrganized
             };
             rightSections = new List<SkinSettingsSection>
             {
+                new SkinSettingsSection("Cards", T("ResearchOrganized_SectionCards"), DrawCardsSection),
                 new SkinSettingsSection("Colors", T("ResearchOrganized_SectionColors"), DrawColorsSection),
                 new SkinSettingsSection("Layout", T("ResearchOrganized_SectionLayout"), DrawLayoutSection)
             };
         }
 
-        /// <summary>Two columns: research window and tabs on the left, colors and layout on the right, with the reset button below.</summary>
+        /// <summary>Two columns: research window and tabs on the left, cards, colors and layout on the right, with the reset button below.</summary>
         public override void DoSettingsWindowContents(Rect inRect)
         {
             BuildSections();
@@ -158,16 +180,79 @@ namespace ResearchOrganized
             }
         }
 
+        private static readonly string[] DisplayModeKeys = { "ResearchOrganized_DisplayModeClassic", "ResearchOrganized_DisplayModeRethemed" };
+
+        private static string DisplayModeLabel(int mode) => TranslationCache.Get(DisplayModeKeys[Mathf.Clamp(mode, 0, DisplayModeKeys.Length - 1)]);
+
+        /// <summary>The chosen window; Rethemed counts as Classic while UI Rethemed - Core is missing.</summary>
+        private static bool Rethemed => DisplayMode.RethemedActive;
+
+        /// <summary>Opens a menu of the display modes; Rethemed is greyed out without UI Rethemed - Core.</summary>
+        private static void ChooseDisplayMode()
+        {
+            var options = new List<FloatMenuOption>
+            {
+                new FloatMenuOption(DisplayModeLabel(DisplayMode.Classic), () => settings.displayMode = DisplayMode.Classic)
+            };
+            if (DisplayMode.RethemedAvailable)
+                options.Add(new FloatMenuOption(DisplayModeLabel(DisplayMode.Rethemed), () => settings.displayMode = DisplayMode.Rethemed));
+            else
+                options.Add(new FloatMenuOption(DisplayModeLabel(DisplayMode.Rethemed) + " " + TranslationCache.Get("ResearchOrganized_RequiresCore"), null));
+            Find.WindowStack.Add(new FloatMenu(options));
+        }
+
         private void DrawResearchWindowSection(Listing_Standard listing)
         {
-            // Only with UI Rethemed - Core, which loads the add-on that supplies the look.
-            Checkbox(listing, "ResearchOrganized_MatchUIRethemed", "ResearchOrganized_MatchUIRethemedTip", ref settings.matchUIRethemed,
-                disabled: !ResearchSkin.Available, disabledTipKey: "ResearchOrganized_MatchUIRethemedLockedTip");
-            Checkbox(listing, "ResearchOrganized_FullScreen", "ResearchOrganized_FullScreenTip", ref settings.fullScreenResearch);
+            ChoiceRow(listing, "ResearchOrganized_DisplayMode", DisplayModeLabel(Rethemed ? DisplayMode.Rethemed : DisplayMode.Classic),
+                DisplayMode.RethemedAvailable ? "ResearchOrganized_DisplayModeTip" : "ResearchOrganized_DisplayModeNoCoreTip", true, ChooseDisplayMode);
+
+            // Each window keeps its own full screen choice.
+            if (Rethemed) Checkbox(listing, "ResearchOrganized_FullScreen", "ResearchOrganized_FullScreenTip", ref settings.rethemedFullScreen);
+            else Checkbox(listing, "ResearchOrganized_FullScreen", "ResearchOrganized_FullScreenTip", ref settings.fullScreenResearch);
+
             Checkbox(listing, "ResearchOrganized_HideUnavailable", "ResearchOrganized_HideUnavailableTip", ref settings.hideUnavailableProjects);
             Checkbox(listing, "ResearchOrganized_HideFutureTechLevels", "ResearchOrganized_HideFutureTechLevelsTip", ref settings.hideFutureTechLevels);
+            Checkbox(listing, "ResearchOrganized_HideFinished", "ResearchOrganized_HideFinishedTip", ref settings.hideFinishedProjects);
             Checkbox(listing, "ResearchOrganized_ShowTabCounts", "ResearchOrganized_ShowTabCountsTip", ref settings.showTabProjectCounts);
             Checkbox(listing, "ResearchOrganized_SuppressEmergenceLines", "ResearchOrganized_SuppressEmergenceLinesTip", ref settings.suppressEmergenceLines);
+            Checkbox(listing, "ResearchOrganized_OpenOnCurrent", "ResearchOrganized_OpenOnCurrentTip", ref settings.openOnCurrentProject, disabled: !Rethemed, disabledTipKey: RequiresRethemedKey);
+            Checkbox(listing, "ResearchOrganized_CurvedLines", "ResearchOrganized_CurvedLinesTip", ref settings.curvedLines, disabled: !Rethemed, disabledTipKey: RequiresRethemedKey);
+            Checkbox(listing, "ResearchOrganized_HighlightChain", "ResearchOrganized_HighlightChainTip", ref settings.highlightChain, disabled: !Rethemed, disabledTipKey: RequiresRethemedKey);
+            Checkbox(listing, "ResearchOrganized_EraBands", "ResearchOrganized_EraBandsTip", ref settings.eraBands, disabled: !Rethemed, disabledTipKey: RequiresRethemedKey);
+            Checkbox(listing, "ResearchOrganized_ShowTimeLeft", "ResearchOrganized_ShowTimeLeftTip", ref settings.showTimeLeft, disabled: !Rethemed, disabledTipKey: RequiresRethemedKey);
+        }
+
+        /// <summary>Labels of the card sizes, smallest first, as the setting stores them.</summary>
+        internal static readonly string[] CardSizeKeys = { "ResearchOrganized_CardSizeCompact", "ResearchOrganized_CardSizeNormal", "ResearchOrganized_CardSizeLarge" };
+
+        internal static string CardSizeLabel(int size) => TranslationCache.Get(CardSizeKeys[Mathf.Clamp(size, 0, CardSizeKeys.Length - 1)]);
+
+        /// <summary>Opens a menu of the card sizes; picking one saves it at once.</summary>
+        internal static void ChooseCardSize()
+        {
+            var options = new List<FloatMenuOption>();
+            for (int i = 0; i < CardSizeKeys.Length; i++)
+            {
+                int size = i;
+                options.Add(new FloatMenuOption(CardSizeLabel(size), () =>
+                {
+                    settings.cardSize = size;
+                    SaveAndApply();
+                }));
+            }
+            Find.WindowStack.Add(new FloatMenu(options));
+        }
+
+        private void DrawCardsSection(Listing_Standard listing)
+        {
+            bool rethemed = Rethemed;
+            ChoiceRow(listing, "ResearchOrganized_CardSize", CardSizeLabel(settings.cardSize), rethemed ? "ResearchOrganized_CardSizeTip" : RequiresRethemedKey, rethemed, ChooseCardSize);
+            Slider(listing, "ResearchOrganized_ColumnSpacing", "ResearchOrganized_ColumnSpacingTip", ref settings.columnSpacing, 0.5f, 3f, 0.05f, 1f, PercentText, rethemed);
+            Slider(listing, "ResearchOrganized_RowSpacing", "ResearchOrganized_RowSpacingTip", ref settings.rowSpacing, 0.5f, 3f, 0.05f, 1f, PercentText, rethemed);
+            Checkbox(listing, "ResearchOrganized_CardUnlockIcons", "ResearchOrganized_CardUnlockIconsTip", ref settings.cardUnlockIcons, disabled: !rethemed, disabledTipKey: RequiresRethemedKey);
+            Checkbox(listing, "ResearchOrganized_CardChips", "ResearchOrganized_CardChipsTip", ref settings.cardChips, disabled: !rethemed, disabledTipKey: RequiresRethemedKey);
+            Checkbox(listing, "ResearchOrganized_CardProgressStrip", "ResearchOrganized_CardProgressStripTip", ref settings.cardProgressStrip, disabled: !rethemed, disabledTipKey: RequiresRethemedKey);
+            Checkbox(listing, "ResearchOrganized_CardHoverCard", "ResearchOrganized_CardHoverCardTip", ref settings.cardHoverCard, disabled: !rethemed, disabledTipKey: RequiresRethemedKey);
         }
 
         private void DrawTabsSection(Listing_Standard listing)
@@ -194,30 +279,35 @@ namespace ResearchOrganized
 
         private void DrawColorsSection(Listing_Standard listing)
         {
-
             bool useColors = !settings.disableCustomColors;
             Checkbox(listing, "ResearchOrganized_ColorCards", "ResearchOrganized_ColorCardsTip", ref useColors);
             settings.disableCustomColors = !useColors;
 
-            // With the theme on, card colors are picked on UI Rethemed - Core's settings page instead.
-            string paletteLockKey = !useColors ? "ResearchOrganized_RequiresColorCards"
-                : ResearchSkin.Active != null ? "ResearchOrganized_ColorsOnCoreTip" : null;
-            if (ResearchSkin.Active != null && useColors) SubNote(listing, "ResearchOrganized_ColorsOnCoreTip");
-            DrawColorPalette(listing, "ResearchOrganized_ColorUndefined", ref settings.colorUndefined, paletteLockKey);
-            DrawColorPalette(listing, "ResearchOrganized_ColorAnimal", ref settings.colorAnimal, paletteLockKey);
-            DrawColorPalette(listing, "ResearchOrganized_ColorNeolithic", ref settings.colorNeolithic, paletteLockKey);
-            DrawColorPalette(listing, "ResearchOrganized_ColorMedieval", ref settings.colorMedieval, paletteLockKey);
-            DrawColorPalette(listing, "ResearchOrganized_ColorIndustrial", ref settings.colorIndustrial, paletteLockKey);
-            DrawColorPalette(listing, "ResearchOrganized_ColorSpacer", ref settings.colorSpacer, paletteLockKey);
-            DrawColorPalette(listing, "ResearchOrganized_ColorUltra", ref settings.colorUltra, paletteLockKey);
-            DrawColorPalette(listing, "ResearchOrganized_ColorArchotech", ref settings.colorArchotech, paletteLockKey);
-            DrawColorPalette(listing, "ResearchOrganized_ColorAnomaly", ref settings.colorAnomaly, paletteLockKey);
+            // The Rethemed window takes its era colors from Core's palette, picked on Core's settings page.
+            if (Rethemed)
+            {
+                if (useColors) SubNote(listing, "ResearchOrganized_ColorsOnCoreTip");
+                return;
+            }
+
+            DrawColorPalette(listing, "ResearchOrganized_ColorUndefined", ref settings.colorUndefined, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorAnimal", ref settings.colorAnimal, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorNeolithic", ref settings.colorNeolithic, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorMedieval", ref settings.colorMedieval, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorIndustrial", ref settings.colorIndustrial, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorSpacer", ref settings.colorSpacer, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorUltra", ref settings.colorUltra, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorArchotech", ref settings.colorArchotech, useColors);
+            DrawColorPalette(listing, "ResearchOrganized_ColorAnomaly", ref settings.colorAnomaly, useColors);
         }
 
         private void DrawLayoutSection(Listing_Standard listing)
         {
             NumericField(listing, "ResearchOrganized_MinorAnchor", "ResearchOrganized_MinorAnchorTip", ref settings.minorAnchorChildThreshold, ref minorThresholdBuffer, 1f);
             NumericField(listing, "ResearchOrganized_MajorAnchor", "ResearchOrganized_MajorAnchorTip", ref settings.majorAnchorChildThreshold, ref majorThresholdBuffer, 2f);
+            float perColumn = settings.maxPerColumn;
+            Slider(listing, "ResearchOrganized_MaxPerColumn", "ResearchOrganized_MaxPerColumnTip", ref perColumn, 6f, 30f, 1f, 16f, WholeText, Rethemed);
+            settings.maxPerColumn = Mathf.RoundToInt(perColumn);
             Checkbox(listing, "ResearchOrganized_WriteLayoutLog", "ResearchOrganized_WriteLayoutLogTip", ref settings.writeLayoutLog);
         }
 
@@ -253,6 +343,68 @@ namespace ResearchOrganized
             listing.Gap(listing.verticalSpacing);
         }
 
+        /// <summary>A label with a button showing the current choice, which opens <paramref name="choose"/>; greyed and inert while disabled.</summary>
+        private void ChoiceRow(Listing_Standard listing, string key, string current, string tipKey, bool enabled, Action choose)
+        {
+            Rect row = listing.GetRect(RowHeight + 4f);
+            Rect button = new Rect(row.xMax - 120f, row.y, 120f, row.height);
+            if (!enabled) GUI.color = Color.gray;
+            Text.Anchor = TextAnchor.MiddleLeft;
+            Widgets.Label(new Rect(row.x, row.y, row.width - 128f, row.height), T(key));
+            Text.Anchor = TextAnchor.UpperLeft;
+            var skin = ResearchSkin.Active;
+            bool clicked = skin != null && skin.Button(button, current, SkinTone.Gray, enabled)
+                ? Widgets.ButtonInvisible(button)
+                : Widgets.ButtonText(button, current, true, true, enabled);
+            GUI.color = Color.white;
+            if (clicked && enabled) choose();
+            TooltipHandler.TipRegion(row, T(tipKey));
+            listing.Gap(listing.verticalSpacing);
+        }
+
+        private static readonly Dictionary<int, string> numberTexts = new Dictionary<int, string>();
+        private static readonly Func<float, string> PercentText = value => CachedNumber(Mathf.RoundToInt(value * 100f), "%");
+        private static readonly Func<float, string> WholeText = value => CachedNumber(Mathf.RoundToInt(value), "");
+
+        private static string CachedNumber(int value, string suffix)
+        {
+            int key = suffix.Length > 0 ? value + 100000 : value;
+            if (!numberTexts.TryGetValue(key, out string text)) numberTexts[key] = text = value + suffix;
+            return text;
+        }
+
+        /// <summary>A slider row with a reset button once the value is moved off <paramref name="usual"/>; while disabled, a greyed row showing the value.</summary>
+        private void Slider(Listing_Standard listing, string key, string tipKey, ref float value, float min, float max, float step, float usual,
+            Func<float, string> text, bool enabled)
+        {
+            if (!enabled)
+            {
+                Rect locked = listing.GetRect(RowHeight);
+                GUI.color = Color.gray;
+                Widgets.Label(locked, T(key));
+                Text.Anchor = TextAnchor.MiddleRight;
+                Widgets.Label(locked, text(value));
+                Text.Anchor = TextAnchor.UpperLeft;
+                GUI.color = Color.white;
+                TooltipHandler.TipRegion(locked, T(RequiresRethemedKey));
+                listing.Gap(listing.verticalSpacing);
+                return;
+            }
+
+            var skin = ResearchSkin.Active;
+            if (skin != null && skin.Slider(listing, T(key), T(tipKey), ref value, min, max, step, usual, text, T("ResearchOrganized_ResetValue"))) return;
+
+            Rect rect = listing.GetRect(RowHeight);
+            Widgets.Label(rect, T(key));
+            Text.Anchor = TextAnchor.MiddleRight;
+            Widgets.Label(rect, text(value));
+            Text.Anchor = TextAnchor.UpperLeft;
+            TooltipHandler.TipRegion(rect, T(tipKey));
+            Rect bar = listing.GetRect(RowHeight);
+            value = Widgets.HorizontalSlider(bar, value, min, max, true, null, null, null, step);
+            listing.Gap(listing.verticalSpacing);
+        }
+
         /// <summary>A dimmed line of explanation under a section's first row.</summary>
         private void SubNote(Listing_Standard listing, string key)
         {
@@ -271,15 +423,13 @@ namespace ResearchOrganized
             listing.Gap(listing.verticalSpacing);
         }
 
-        /// <summary>A row of color swatches; with <paramref name="lockedTipKey"/> it is greyed and inert, with that key as its tooltip.</summary>
-        private void DrawColorPalette(Listing_Standard listing, string key, ref Color selectedColor, string lockedTipKey)
+        private void DrawColorPalette(Listing_Standard listing, string key, ref Color selectedColor, bool enabled)
         {
             Rect rect = listing.GetRect(RowHeight);
-            bool enabled = lockedTipKey == null;
             if (!enabled)
             {
                 GUI.color = Color.gray;
-                TooltipHandler.TipRegion(rect, T(lockedTipKey));
+                TooltipHandler.TipRegion(rect, T("ResearchOrganized_RequiresColorCards"));
             }
             Widgets.Label(new Rect(rect.x, rect.y + 2f, ColorLabelWidth, rect.height - 2f), T(key));
 
