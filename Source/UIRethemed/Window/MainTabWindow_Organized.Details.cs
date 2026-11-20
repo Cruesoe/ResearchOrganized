@@ -73,7 +73,7 @@ namespace ResearchOrganizedUIRethemed
                 metIcon = CoreWidgets.Icon("check-circle");
                 unmetIcon = CoreWidgets.Icon("x-circle");
                 playIcon = CoreWidgets.Icon("play");
-                stopIcon = CoreWidgets.Icon("stop");
+                stopIcon = CoreWidgets.Icon("pause");
                 queueAddIcon = CoreWidgets.Icon("list-plus");
             }
             var settings = ResearchOrganizedMod.settings;
