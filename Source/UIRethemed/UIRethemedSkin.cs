@@ -96,7 +96,7 @@ namespace ResearchOrganizedUIRethemed
         {
             if (!icons.TryGetValue(icon, out Texture texture))
                 icons[icon] = texture = CoreWidgets.Icon(icon);
-            CoreWidgets.IconButton(rect, texture, null, null, false, null, true, Mathf.Round(rect.width * 0.75f));
+            CoreWidgets.HeaderButtonFace(rect, texture, Theme.HighlightGray, 14f);
         }
 
         public override bool Button(Rect rect, string label, SkinTone tone, bool enabled)

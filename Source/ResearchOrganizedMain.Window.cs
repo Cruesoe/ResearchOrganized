@@ -140,7 +140,7 @@ namespace ResearchOrganized
             var gearRect = new Rect(right - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
             var toggleRect = new Rect(gearRect.x - SettingsButtonGap - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
 
-            if (WindowButton(gearRect, SettingsGearTex, "gear", TranslationCache.Get("ResearchOrganized_SettingsButtonTip")))
+            if (WindowButton(gearRect, SettingsGearTex, "gear-six",TranslationCache.Get("ResearchOrganized_SettingsButtonTip")))
             {
                 var mod = LoadedModManager.GetMod<ResearchOrganizedMod>();
                 if (mod != null) Find.WindowStack.Add(new Dialog_ModSettings(mod));
