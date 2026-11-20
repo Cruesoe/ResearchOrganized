@@ -115,14 +115,14 @@ namespace ResearchOrganized
         /// <summary>The current game hour, so callers can refresh cached estimates once an hour.</summary>
         public static int Hour => Find.TickManager != null ? Find.TickManager.TicksGame / BucketTicks : 0;
 
-        /// <summary>Research points per tick, before cost factors, over the last day; 0 until there is at least an hour of data.</summary>
+        /// <summary>Research points per tick, before cost factors, over the last day; 0 until there is at least a quarter hour of data.</summary>
         private static float PointsPerTick()
         {
             EnsureGame();
             if (firstTick < 0 || Find.TickManager == null) return 0f;
             int tick = Find.TickManager.TicksGame;
             int span = System.Math.Min(tick - firstTick, Buckets * BucketTicks);
-            if (span < BucketTicks) return 0f;
+            if (span < BucketTicks / 4) return 0f;
             int hour = tick / BucketTicks;
             float sum = 0f;
             for (int i = 0; i < Buckets; i++)

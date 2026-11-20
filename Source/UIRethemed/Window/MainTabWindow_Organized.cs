@@ -42,8 +42,33 @@ namespace ResearchOrganizedUIRethemed
 
         protected override float Margin => 0f;
 
+        private const float MinHeight = 520f;
+
         public override Vector2 InitialSize =>
-            new Vector2(UI.screenWidth, ResearchOrganizedMod.settings.rethemedFullScreen ? UI.screenHeight - 35f : Mathf.Min(UI.screenHeight - 35f, 760f));
+            new Vector2(UI.screenWidth, ResearchOrganizedMod.settings.rethemedFullScreen ? UI.screenHeight - 35f : FittedHeight());
+
+        /// <summary>Out of full screen, just tall enough for the window's bars and the tallest tab, within the screen.</summary>
+        private float FittedHeight()
+        {
+            float panelWidth = SidePanel.Width(ResearchOrganizedMod.settings.detailsFolded, PanelWidth);
+            float treeWidth = UI.screenWidth - Gap * 4f - QueuePanelWidth - panelWidth;
+            float chrome = Gap + TitleHeight + Gap + ActiveBarHeight + Gap + TabStripHeight(treeWidth) + Gap + FilterBarHeight + Gap + Gap;
+            return Mathf.Clamp(chrome + TallestTabHeight(), MinHeight, UI.screenHeight - 35f);
+        }
+
+        private int sizedLayout = -1;
+        private int sizedSettings = -1;
+
+        /// <summary>Out of full screen, refits the window once the layout or settings change while it is open.</summary>
+        private void RefitIfChanged()
+        {
+            int layout = ResearchOrganizedMain.LayoutVersion, settingsVersion = ResearchOrganizedMod.SettingsVersion;
+            if (layout == sizedLayout && settingsVersion == sizedSettings) return;
+            bool first = sizedLayout < 0;
+            sizedLayout = layout;
+            sizedSettings = settingsVersion;
+            if (!first && !ResearchOrganizedMod.settings.rethemedFullScreen) SetInitialSizeAndPosition();
+        }
 
         protected ResearchProjectDef Selected
         {
@@ -64,6 +89,7 @@ namespace ResearchOrganizedUIRethemed
         public override void DoWindowContents(Rect inRect)
         {
             windowRect.width = UI.screenWidth;
+            if (Event.current.type == EventType.Layout) RefitIfChanged();
             ResearchOrganizedMain.RefreshTabStripIfDirty(this);
             ResearchOrganizedMain.UpdateTabLabelsWithCounts(this);
 

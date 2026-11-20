@@ -137,11 +137,12 @@
   <ResearchOrganized_EraBands>Era Bands</ResearchOrganized_EraBands>
   <ResearchOrganized_EraBandsTip>On tabs laid out era by era, tints each era's columns and shows its name along the top.</ResearchOrganized_EraBandsTip>
   <ResearchOrganized_ShowTimeLeft>Show Research Times</ResearchOrganized_ShowTimeLeft>
-  <ResearchOrganized_ShowTimeLeftTip>Shows roughly how long each project takes to research, on its card, hover card and details, how long the current project has left, and when each queued project should be done. Times use the colony's research pace over the last day, are saved with the game, and appear after an hour of research.</ResearchOrganized_ShowTimeLeftTip>
+  <ResearchOrganized_ShowTimeLeftTip>Shows roughly how long each project takes to research, on its card, hover card and details, how long the current project has left, and when each queued project should be done. Times use the colony's research pace over the last day, are saved with the game, and appear after a quarter hour of research.</ResearchOrganized_ShowTimeLeftTip>
   <ResearchOrganized_TimeLeft>about {0} left</ResearchOrganized_TimeLeft>
   <ResearchOrganized_TimeTag>about {0}</ResearchOrganized_TimeTag>
   <ResearchOrganized_HoverTime>Time: about {0} at the colony's recent research pace</ResearchOrganized_HoverTime>
-  <ResearchOrganized_HoverTimeUnknown>Time: shown once the colony has done an hour of research</ResearchOrganized_HoverTimeUnknown>
+  <ResearchOrganized_HoverTimeUnknown>Time: shown once the colony has done a quarter hour of research</ResearchOrganized_HoverTimeUnknown>
+  <ResearchOrganized_TimeEstimating>time left: estimating</ResearchOrganized_TimeEstimating>
   <ResearchOrganized_CardSize>Card Size</ResearchOrganized_CardSize>
   <ResearchOrganized_CardSizeTip>Compact cards show the project's name only and fit more on screen; Large cards have room for bigger icons.</ResearchOrganized_CardSizeTip>
   <ResearchOrganized_ColumnSpacing>Column Spacing</ResearchOrganized_ColumnSpacing>

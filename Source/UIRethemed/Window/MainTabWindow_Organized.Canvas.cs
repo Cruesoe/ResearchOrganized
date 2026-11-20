@@ -167,6 +167,29 @@ namespace ResearchOrganizedUIRethemed
             centerPending = Selected;
         }
 
+        private readonly Dictionary<ResearchTabDef, Vector2> tabRows = new Dictionary<ResearchTabDef, Vector2>();
+
+        /// <summary>The canvas height the tallest tab needs at full zoom: its cards, the margin round them and the era titles.</summary>
+        private float TallestTabHeight()
+        {
+            UpdateMetrics();
+            tabRows.Clear();
+            foreach (var project in VisibleResearchProjects)
+            {
+                if (project.tab == null) continue;
+                float top = PosY(project);
+                tabRows[project.tab] = tabRows.TryGetValue(project.tab, out Vector2 rows)
+                    ? new Vector2(Mathf.Min(rows.x, top), Mathf.Max(rows.y, top))
+                    : new Vector2(top, top);
+            }
+            float tallest = 0f;
+            foreach (Vector2 rows in tabRows.Values) tallest = Mathf.Max(tallest, rows.y - rows.x);
+            tabRows.Clear();
+            float height = tallest + M.height + CanvasMargin * 2f;
+            if (ResearchOrganizedMod.settings.eraBands) height += EraLabelHeight;
+            return height;
+        }
+
         private void RefreshTabProjects()
         {
             var visible = VisibleResearchProjects;
