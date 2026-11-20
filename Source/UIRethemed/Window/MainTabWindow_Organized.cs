@@ -14,6 +14,7 @@ namespace ResearchOrganizedUIRethemed
     /// a foldable details panel and the active project bar. A subclass of the vanilla window, so everything that finds
     /// the research window by type and calls Select on it keeps working, and vanilla's own starting logic is reused.
     /// </summary>
+    [StaticConstructorOnStartup]
     public partial class MainTabWindow_Organized : MainTabWindow_Research
     {
         private const string FailsafePart = "ResearchOrganized.Window";

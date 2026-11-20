@@ -44,11 +44,12 @@ namespace ResearchOrganized
         /// <summary>A new Rethemed window, or null when it isn't in use.</summary>
         public static MainTabWindow_Research CreateWindow() => RethemedActive ? createWindow?.Invoke() : null;
 
-        /// <summary>Points the Research button at the chosen window, unless Node Research has taken it or Semi Random Research decides.</summary>
+        /// <summary>Points the Research button at the chosen window while it shows one of this mod's windows. Node Research's own
+        /// window, and Semi Random Research's while it owns the button, are left alone.</summary>
         public static void Apply()
         {
             var button = MainButtonDefOf.Research;
-            if (button == null || WindowHandover.NodeResearchActive || WindowHandover.SemiRandomActive) return;
+            if (button == null || WindowHandover.NodeResearchActive) return;
             Type wanted = RethemedActive ? windowType : typeof(MainTabWindow_Research);
             bool ours = button.tabWindowClass == typeof(MainTabWindow_Research) || (windowType != null && button.tabWindowClass == windowType);
             if (!ours || button.tabWindowClass == wanted) return;
