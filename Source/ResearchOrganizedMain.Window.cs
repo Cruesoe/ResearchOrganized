@@ -6,6 +6,7 @@ using HarmonyLib;
 using RimWorld;
 using UnityEngine;
 using Verse;
+using Verse.Sound;
 
 namespace ResearchOrganized
 {
@@ -139,7 +140,7 @@ namespace ResearchOrganized
             var gearRect = new Rect(right - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
             var toggleRect = new Rect(gearRect.x - SettingsButtonGap - SettingsButtonSize, top, SettingsButtonSize, SettingsButtonSize);
 
-            if (Widgets.ButtonImage(gearRect, SettingsGearTex, SettingsButtonColor, GenUI.MouseoverColor, true, TranslationCache.Get("ResearchOrganized_SettingsButtonTip")))
+            if (WindowButton(gearRect, SettingsGearTex, "gear", TranslationCache.Get("ResearchOrganized_SettingsButtonTip")))
             {
                 var mod = LoadedModManager.GetMod<ResearchOrganizedMod>();
                 if (mod != null) Find.WindowStack.Add(new Dialog_ModSettings(mod));
@@ -148,12 +149,24 @@ namespace ResearchOrganized
 
             bool fullScreen = ResearchOrganizedMod.settings.fullScreenResearch;
             string toggleTip = TranslationCache.Get(fullScreen ? "ResearchOrganized_ExitFullScreenTip" : "ResearchOrganized_EnterFullScreenTip");
-            if (Widgets.ButtonImage(toggleRect, fullScreen ? ExitFullScreenTex : EnterFullScreenTex, SettingsButtonColor, GenUI.MouseoverColor, true, toggleTip))
+            if (WindowButton(toggleRect, fullScreen ? ExitFullScreenTex : EnterFullScreenTex, fullScreen ? "arrows-in" : "arrows-out", toggleTip))
             {
                 ResearchOrganizedMod.settings.fullScreenResearch = !fullScreen;
                 ResearchOrganizedMod.settings.Write();
                 Event.current.Use();
             }
+        }
+
+        /// <summary>An icon button in the research window: the UI Rethemed face (by Core icon name) when the theme is on, else the mod's own texture.</summary>
+        private static bool WindowButton(Rect rect, Texture2D texture, string themedIcon, string tip)
+        {
+            var skin = ResearchSkin.Active;
+            if (skin == null || !skin.IconButton(rect, themedIcon))
+                return Widgets.ButtonImage(rect, texture, SettingsButtonColor, GenUI.MouseoverColor, true, tip);
+            TooltipHandler.TipRegion(rect, tip);
+            if (!Widgets.ButtonInvisible(rect)) return false;
+            SoundDefOf.Tick_High.PlayOneShotOnCamera();
+            return true;
         }
 
         /// <summary>

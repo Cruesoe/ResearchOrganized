@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Loaded only with UI Rethemed - Core (LoadFolders.xml), so it may reference Core; the main assembly never does. -->
+  <PropertyGroup>
+    <RootNamespace>ResearchOrganizedUIRethemed</RootNamespace>
+    <AssemblyName>ResearchOrganizedUIRethemed</AssemblyName>
+    <Nullable>disable</Nullable>
+    <UseHarmony>false</UseHarmony>
+    <UnityModules>CoreModule;IMGUIModule;TextRenderingModule</UnityModules>
+    <UIRethemedCoreDll Condition="'$(UIRethemedCoreDll)' == ''">$(UIRETHEMED_CORE_DLL)</UIRethemedCoreDll>
+    <UIRethemedCoreDll Condition="'$(UIRethemedCoreDll)' == ''">C:\Program Files (x86)\Steam\steamapps\workshop\content\294100\3832843406\Versions\$(RimWorldGameVersion)\Assemblies\UIRethemedCore.dll</UIRethemedCoreDll>
+    <ModAssemblies>$(ModRepoRoot)$(RimWorldGameVersion)\Mods\UIRethemedCore\Assemblies\</ModAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ResearchOrganized.csproj" Private="false" />
+    <Reference Include="UIRethemedCore">
+      <HintPath>$(UIRethemedCoreDll)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="UIRethemedCoreVerifyReference" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(UIRethemedCoreDll)')"
+           Text="UIRethemedCore.dll not found at '$(UIRethemedCoreDll)'. Subscribe to UI Rethemed - Core (Workshop 3832843406), set UIRETHEMED_CORE_DLL, or pass -p:UIRethemedCoreDll=..." />
+  </Target>
+</Project>

@@ -5,6 +5,7 @@ using HarmonyLib;
 using RimWorld;
 using UnityEngine;
 using Verse;
+using Verse.Sound;
 
 namespace ResearchOrganized
 {
@@ -111,7 +112,18 @@ namespace ResearchOrganized
             }
             bool isFoundation = ResearchOrganizedLayout.IsFoundationTech(project);
             if (ResearchOrganizedLayout.cyclicNodes.Contains(project)) { borderColor = Color.red; borderSize = 2f; }
-            bool result = Widgets.CustomButtonText(ref rect, label, bgColor, textColor, borderColor, unfilledBgColor, cacheHeight, borderSize, doMouseOverSound, active, project.ProgressPercent);
+            bool result;
+            // Vanilla passes an empty label and draws the card's text itself, so a themed face replaces only the background.
+            var skin = ResearchSkin.Active;
+            if (skin != null && skin.Card(rect, unfilledBgColor, bgColor, project.ProgressPercent, borderColor, borderSize > 1f))
+            {
+                if (doMouseOverSound) MouseoverSounds.DoRegion(rect);
+                result = active && Widgets.ButtonInvisible(rect, false);
+            }
+            else
+            {
+                result = Widgets.CustomButtonText(ref rect, label, bgColor, textColor, borderColor, unfilledBgColor, cacheHeight, borderSize, doMouseOverSound, active, project.ProgressPercent);
+            }
             if (isFoundation)
             {
                 var notch = new Rect(rect.xMax - FoundationNotchSize, rect.yMin, FoundationNotchSize, FoundationNotchSize);
@@ -218,10 +230,39 @@ namespace ResearchOrganized
         private static ColorSet ResolveColorSet(ResearchProjectDef project)
         {
             string tabName = project.tab?.defName;
+            var skin = ResearchSkin.Active;
+            if (skin != null)
+            {
+                // With the theme on, colors come from Core's palette for this mod, keyed like the settings above.
+                string key;
+                if (tabName != null && TabColorOverrides.ContainsKey(tabName)) key = AnomalyColorKey;
+                else if (tabName != null && TabToThemeMap.TryGetValue(tabName, out var tabLevel)) key = ColorKey(tabLevel);
+                else key = ColorKey(project.techLevel);
+                var themed = skin.CategoryColor(key);
+                if (themed.HasValue) return GenerateColorSet(themed.Value);
+            }
             if (tabName != null && TabColorOverrides.TryGetValue(tabName, out var tabOverride)) return tabOverride;
             if (tabName != null && TabToThemeMap.TryGetValue(tabName, out var techLevel)) return TabColors[techLevel];
             if (TabColors.TryGetValue(project.techLevel, out var byTechLevel)) return byTechLevel;
             return TabColors[TechLevel.Undefined];
+        }
+
+        private const string AnomalyColorKey = "Anomaly";
+
+        /// <summary>The ModThemeDef color key for a tech level; levels without their own color use "Undefined".</summary>
+        private static string ColorKey(TechLevel level)
+        {
+            switch (level)
+            {
+                case TechLevel.Animal: return "Animal";
+                case TechLevel.Neolithic: return "Neolithic";
+                case TechLevel.Medieval: return "Medieval";
+                case TechLevel.Industrial: return "Industrial";
+                case TechLevel.Spacer: return "Spacer";
+                case TechLevel.Ultra: return "Ultra";
+                case TechLevel.Archotech: return "Archotech";
+                default: return "Undefined";
+            }
         }
 
     }

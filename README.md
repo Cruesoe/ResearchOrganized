@@ -11,6 +11,7 @@ Sorts research projects into tech-level tabs and lays each tab out as a tidy, re
 - **Hide Unavailable Projects** shows only finished projects and those you can start now; **Hide Future Tech Levels** hides unfinished projects above your colony's tech level.
 - A project is raised to the tech level of its prerequisites, so a follow-up never sits in an earlier era than what it needs. Its research cost changes to match.
 - Cards are tinted by tech level, with configurable colors that can also be turned off.
+- With UI Rethemed - Core, **Match UI Rethemed Theme** gives the project cards, the window's buttons and the settings page UI Rethemed's look, with era colors picked on Core's settings page.
 - Tab tooltips show completed projects and research points, and the counts can be shown on the tabs too.
 - Empty tabs are hidden.
 - Projects caught in a circular dependency are outlined in red and named in the log.

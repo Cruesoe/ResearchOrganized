@@ -37,6 +37,10 @@
   <ResearchOrganized_ColorCards>Color Cards by Tech Level</ResearchOrganized_ColorCards>
   <ResearchOrganized_ColorCardsTip>Tints each finished project card with its tech level's color. Turn off for vanilla colors.</ResearchOrganized_ColorCardsTip>
   <ResearchOrganized_RequiresColorCards>Requires Color Cards by Tech Level.</ResearchOrganized_RequiresColorCards>
+  <ResearchOrganized_ColorsOnCoreTip>While Match UI Rethemed Theme is on, each era's color is picked on UI Rethemed - Core's settings page.</ResearchOrganized_ColorsOnCoreTip>
+  <ResearchOrganized_MatchUIRethemed>Match UI Rethemed Theme</ResearchOrganized_MatchUIRethemed>
+  <ResearchOrganized_MatchUIRethemedTip>Gives the project cards, the settings gear and full screen buttons, and this settings page UI Rethemed's look: rounded cards, its buttons and its settings cards. Era colors are then picked on UI Rethemed - Core's settings page.</ResearchOrganized_MatchUIRethemedTip>
+  <ResearchOrganized_MatchUIRethemedLockedTip>Needs UI Rethemed - Core.</ResearchOrganized_MatchUIRethemedLockedTip>
   <ResearchOrganized_ColorUndefined>Undefined / Misc</ResearchOrganized_ColorUndefined>
   <ResearchOrganized_ColorAnimal>Animal / Primitive</ResearchOrganized_ColorAnimal>
   <ResearchOrganized_ColorNeolithic>Neolithic</ResearchOrganized_ColorNeolithic>

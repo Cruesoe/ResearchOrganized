@@ -24,6 +24,7 @@ Research window
 - Hide Future Tech Levels hides unfinished projects above your colony's tech level.
 - The window remembers where you scrolled, and a gear in it opens the mod settings.
 - Cards are tinted by tech level, with configurable colors that can also be turned off.
+- With UI Rethemed - Core, Match UI Rethemed Theme gives the project cards, the window's buttons and the settings page UI Rethemed's look, with era colors picked on Core's settings page.
 
 Compatibility
 - Node Research: foundation technologies get a gold corner mark, emergence nodes stay beside their branch without cluttering lines, and you can switch freely between its node view and these tabs.
@@ -84,5 +85,6 @@ Compatibility
     <li>ferny.progressionproduction</li>
     <li>ferny.progressionrobotics2</li>
     <li>ferny.progressionstorage</li>
+    <li>LazyFridayStudio.UIRethemed.Core</li>
   </loadAfter>
 </ModMetaData>

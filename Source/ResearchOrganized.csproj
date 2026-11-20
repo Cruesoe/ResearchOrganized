@@ -3,6 +3,12 @@
   <PropertyGroup>
     <RootNamespace>ResearchOrganized</RootNamespace>
     <AssemblyName>ResearchOrganized</AssemblyName>
-    <UnityModules>CoreModule;IMGUIModule</UnityModules>
+    <UnityModules>CoreModule;IMGUIModule;TextRenderingModule</UnityModules>
   </PropertyGroup>
+
+  <!-- The UI Rethemed add-on is its own project, built against UI Rethemed - Core. -->
+  <ItemGroup>
+    <Compile Remove="UIRethemed\**" />
+    <None Remove="UIRethemed\**" />
+  </ItemGroup>
 </Project>
