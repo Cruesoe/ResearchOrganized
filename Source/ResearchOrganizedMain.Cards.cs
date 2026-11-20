@@ -115,7 +115,7 @@ namespace ResearchOrganized
             bool result;
             // Vanilla passes an empty label and draws the card's text itself, so a themed face replaces only the background.
             var skin = ResearchSkin.Active;
-            if (skin != null && skin.Card(rect, unfilledBgColor, bgColor, project.ProgressPercent, borderColor, borderSize > 1f))
+            if (skin != null && skin.Card(rect, unfilledBgColor, bgColor, project.ProgressPercent, skin.ResearchColor(borderColor), borderSize > 1f))
             {
                 if (doMouseOverSound) MouseoverSounds.DoRegion(rect);
                 result = active && Widgets.ButtonInvisible(rect, false);

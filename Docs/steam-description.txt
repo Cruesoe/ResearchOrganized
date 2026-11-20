@@ -25,7 +25,7 @@ In some cases the result is not strictly linear, but I believe it makes the tree
 [*][b]Combine Industrial[/b]: merges High and Late Industrial back into one Industrial tab. Off by default.
 [*][b]Color Cards by Tech Level[/b]: pick each era's color, or turn the colors off.
 [*][b]Suppress Emergence Lines[/b]: hides lines to Node Research's emergence nodes unless one end is selected. On by default.
-[*][b]Match UI Rethemed Theme[/b]: with UI Rethemed - Core, gives the project cards, the window's buttons and the settings page UI Rethemed's look, with era colors picked on Core's settings page. On by default; needs UI Rethemed - Core.
+[*][b]Match UI Rethemed Theme[/b]: with UI Rethemed - Core, gives the research window (background, tabs, panels, project cards, buttons, progress bar and lines) and the settings page UI Rethemed's look, with era colors picked on Core's settings page. On by default; needs UI Rethemed - Core.
 [/list]
 
 [h2]Compatibility[/h2]

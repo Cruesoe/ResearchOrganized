@@ -134,7 +134,7 @@ namespace ResearchOrganized
             Rect resetRect = new Rect(inRect.x, inRect.yMax - ResetButtonHeight, 200f, ResetButtonHeight);
             string resetLabel = T("ResearchOrganized_ResetDefaults");
             skin = ResearchSkin.Active;
-            bool reset = skin != null && skin.Button(resetRect, resetLabel, true)
+            bool reset = skin != null && skin.Button(resetRect, resetLabel, SkinTone.Gray, true)
                 ? Widgets.ButtonInvisible(resetRect)
                 : Widgets.ButtonText(resetRect, resetLabel);
             if (reset)
