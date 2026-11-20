@@ -167,6 +167,19 @@ namespace ResearchOrganizedUIRethemed
             centerPending = Selected;
         }
 
+        /// <summary>Keeps the tree filling the canvas: a tree wider or taller than the canvas can't be dragged past its edges,
+        /// and one that fits sits against the top-left corner.</summary>
+        private void KeepTreeInView(ZoomView view, Rect local)
+        {
+            Rect tree = view.ToScreen(tabBounds);
+            if (tree.width <= local.width) view.offset.x += local.x - tree.x;
+            else if (tree.x > local.x) view.offset.x += local.x - tree.x;
+            else if (tree.xMax < local.xMax) view.offset.x += local.xMax - tree.xMax;
+            if (tree.height <= local.height) view.offset.y += local.y - tree.y;
+            else if (tree.y > local.y) view.offset.y += local.y - tree.y;
+            else if (tree.yMax < local.yMax) view.offset.y += local.yMax - tree.yMax;
+        }
+
         private readonly Dictionary<ResearchTabDef, Vector2> tabRows = new Dictionary<ResearchTabDef, Vector2>();
 
         /// <summary>The canvas height the tallest tab needs at full zoom: its cards, the margin round them and the era titles.</summary>
@@ -406,6 +419,7 @@ namespace ResearchOrganizedUIRethemed
             {
                 HandleCardClick(view, local);
                 view.HandleInput(local);
+                KeepTreeInView(view, local);
                 DrawEraBands(view, local);
                 if (Event.current.type == EventType.Repaint) DrawLines(view, local);
                 DrawCards(view, local);

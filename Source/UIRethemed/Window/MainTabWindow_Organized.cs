@@ -20,7 +20,7 @@ namespace ResearchOrganizedUIRethemed
         private const string FailsafePart = "ResearchOrganized.Window";
         private const float TitleHeight = 40f;
         private const float Gap = 6f;
-        private const float ActiveBarHeight = 40f;
+        private const float ActiveBarHeight = 64f;
         private const float PanelWidth = 380f;
 
         private static readonly AccessTools.FieldRef<MainTabWindow_Research, ResearchProjectDef> selectedProjectRef =
